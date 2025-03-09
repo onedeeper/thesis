@@ -29,13 +29,5 @@ This project uses the TD-Brain dataset, which requires a Data Usage Agreement (D
 2. Once approved, download the dataset
 3. Place the data in the `data/` directory following the structure below:
 
-data/
-└── tdbrain-dataset/
-    └── derivatives/
-        ├── sub-19694366/
-        │   └── ses-1/
-        │       └── eeg/
-        │           ├── sub-19694366ses-1task-restECeeg.csv
-        │           └── sub-19694366ses-1task-restEOeeg.csv
-        ├── sub-19696913/
-        └── sub-19698310/
+![Alt text](data_dir_structure.png)
+
