@@ -23,7 +23,6 @@ var/
 # Data directories
 /data/*
 !/data/.gitkeep
-!/data/README.md
 
 # Jupyter Notebooks
 .ipynb_checkpoints
