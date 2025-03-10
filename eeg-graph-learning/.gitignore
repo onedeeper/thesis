@@ -43,3 +43,6 @@ var/
 env/
 venv/
 ENV/
+
+#  misc
+create_directory_structure.py
