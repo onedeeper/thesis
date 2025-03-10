@@ -31,3 +31,47 @@ This project uses the TD-Brain dataset, which requires a Data Usage Agreement (D
 
 ![Alt text](data_dir_structure.png)
 
+## Testing
+
+### Test Configuration
+
+The test suite can use either synthetic data (generated automatically) or your own EEG data files for testing. By default, it will create synthetic test data, but you can configure it to use your own EEG data files.
+
+#### Using Custom Test Data
+
+To use your own EEG data file for testing, set the `EEG_TEST_FILE_PATH` environment variable to the path of your test file:
+
+```bash
+# Bash/Zsh
+export EEG_TEST_FILE_PATH="/path/to/your/eeg/test/file.csv"
+
+# Windows Command Prompt
+set EEG_TEST_FILE_PATH=C:\path\to\your\eeg\test\file.csv
+
+# Windows PowerShell
+$env:EEG_TEST_FILE_PATH="C:\path\to\your\eeg\test\file.csv"
+```
+
+The test file should be a CSV file with the following characteristics:
+- Channels as columns
+- Time points as rows
+- 33 channels (26 EEG + 7 other)
+- Sampling frequency of 500 Hz
+
+If `EEG_TEST_FILE_PATH` is not set or the file doesn't exist, the test suite will automatically generate synthetic test data.
+
+#### Running Tests
+
+To run the test suite:
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/test_preprocessing.py
+
+# Run tests with verbose output
+pytest -v
+```
+
