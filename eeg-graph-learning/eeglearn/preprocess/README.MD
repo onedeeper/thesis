@@ -1,5 +1,8 @@
 # EEG Preprocessing Module
 
+Originally written by Tuurr Smolders 
+Updated by Udesh Habaraduwa 
+
 ## Overview
 This module provides a comprehensive pipeline for preprocessing EEG data from the TDBRAIN dataset, implementing various cleaning and artifact removal techniques.
 
