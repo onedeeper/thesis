@@ -14,7 +14,7 @@ This repository contains the implementation of graph-based machine learning mode
 `cd eeg-graph-learning`
 
 ###  Create and activate the conda environment
-`conda env create -f environment.yml`
+`conda env create -f environment.yml` \
 `conda activate eeg-graph-learning`
 
 Install the package in development mode \
