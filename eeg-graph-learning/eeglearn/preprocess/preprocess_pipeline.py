@@ -140,7 +140,7 @@ def preprocess_pipeline(
         files_to_process = [files_to_process[i] for i in random_indices]
     
     with Pool(processes=n_processes) as pool:
-        results = pool.map(process_file, files_to_process[:10])
+        results = pool.map(process_file, files_to_process)
     
     print(f"Completed processing {len(results)} files")
     
