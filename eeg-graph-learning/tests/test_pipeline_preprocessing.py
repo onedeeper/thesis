@@ -34,34 +34,23 @@ class TestProcessFile:
         self.epochs_length = 2.0
         self.line_noise = [50, 100, 150]
         self.sfreq = 500
-        # Check if environment variable is set
-        env_file_path = os.environ.get('EEG_TEST_FILE_PATH')
-        env_file_path = False
-        if env_file_path and os.path.exists(env_file_path):
-            # Use the file path from the environment variable
-            print(f"Using test EEG file from environment: {env_file_path}")
-            return str(env_file_path)
-        else:
-            # Create synthetic data as fallback
-            print("No environment variable found. Creating synthetic test data...")
+
+        # Only create synthetic data if using the default filepath
+        if self.filepath == default_filepath:
             n_channels = 33
             n_timepoints = 1000
             
             # Create synthetic data
             data = np.random.randn(n_channels, n_timepoints)
             
-            # Create a temp directory for the test file
-            temp_dir = Path("tests/test_data")
+            # Save to default filepath
+            temp_dir = Path(os.path.dirname(default_filepath))
             temp_dir.mkdir(exist_ok=True, parents=True)
-            temp_file = temp_dir / f"synthetic_test_eeg_{self.ID}_{self.sessID}_{self.cond}.csv"
+            temp_file = Path(default_filepath)
             
-            # Format data as a DataFrame
-            ch_names = [f'EEG{i:03d}' for i in range(1, n_channels + 1)]
-            df = pd.DataFrame(data.T, columns=ch_names)  # Transpose to have channels as columns
-            
-            # Save to CSV
+            # Format like your real data
+            df = pd.DataFrame(data.T)  # Transpose because your code expects channels as columns
             df.to_csv(temp_file, index=False)
-        
         
         yield  # This allows the test to run
         
@@ -96,3 +85,55 @@ class TestProcessFile:
         # Verify return value
         assert result == (self.ID, self.sessID, self.cond)
     
+    @patch('eeglearn.preprocess.preprocessing.Preproccesing')
+    @patch('eeglearn.preprocess.preprocessing.PdfPages')
+    @patch('eeglearn.preprocess.preprocessing.close')
+    def test_process_file_with_plots(self, mock_close, mock_pdfpages, mock_preprocessing, setup_test_environment):
+        """Test process_file with plots enabled"""
+        # Setup mock preprocessing with figures
+        mock_instance = MagicMock()
+        mock_fig1 = MagicMock(spec=Figure)
+        mock_fig2 = MagicMock(spec=Figure)
+        mock_instance.figs = [mock_fig1, mock_fig2]
+        mock_preprocessing.return_value = mock_instance
+        
+        # Setup mock PDF context
+        mock_pdf_context = MagicMock()
+        mock_pdfpages.return_value.__enter__.return_value = mock_pdf_context
+        
+        # Set plots to True
+        plots = True
+        
+        # Create arguments tuple
+        args = (self.filepath, self.ID, self.sessID, self.cond, 
+                self.epochs_length, self.line_noise, self.sfreq, 
+                plots, self.preprocessed_dir)
+        
+        # Call function
+        process_file(args)
+        
+        # Verify PDF was created and figures were saved
+        expected_pdf = f'{self.preprocessed_dir}/{self.ID}/{self.sessID}/eeg/{self.ID}_{self.sessID}_{self.cond}_preprocessing_plots.pdf'
+        mock_pdfpages.assert_called_once_with(expected_pdf)
+        assert mock_pdf_context.savefig.call_count == 2
+        
+        # Verify figures were closed
+        mock_close.assert_called_once_with('all')
+        
+        # Verify figs attribute was deleted
+        assert not hasattr(mock_instance, 'figs')
+    
+    @patch('eeglearn.preprocess.preprocessing.Preproccesing')
+    def test_process_file_error_handling(self, mock_preprocessing, setup_test_environment):
+        """Test error handling in process_file"""
+        # Make preprocessing raise an exception
+        mock_preprocessing.side_effect = Exception("Test error")
+        
+        # Create arguments tuple
+        args = (self.filepath, self.ID, self.sessID, self.cond, 
+                self.epochs_length, self.line_noise, self.sfreq, 
+                False, self.preprocessed_dir)
+        
+        # Call function and check if exception is propagated
+        with pytest.raises(Exception, match="Test error"):
+            process_file(args)
