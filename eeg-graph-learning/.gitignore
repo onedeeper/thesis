@@ -45,4 +45,4 @@ venv/
 ENV/
 
 #  misc
-./create_directory_structure.py
+create_directory_structure.py
