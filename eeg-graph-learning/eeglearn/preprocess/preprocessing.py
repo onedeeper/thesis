@@ -246,7 +246,7 @@ class Preproccesing:
 
 if __name__ == '__main__':
     preprocess = Preproccesing(
-            filename='/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/data/TDBRAIN-dataset/derivatives/sub-19694366/ses-1/eeg/sub-19694366_ses-1_task-restEO_eeg.csv',
+            filename='/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/tests/test_data/TDBRAIN-dataset/derivatives/sub-19694366/sub-19694366_ses-1_task-restEC_eeg.csv',
             epochs_length=0,
             line_noise=[],
             sfreq=500,

@@ -39,14 +39,14 @@ def process_file(args):
     )
     
     # Define directory and subdirectories for preprocessed data
-    save_dir = f'{preprocessed_dir}/{ID}/{sessID}/eeg'
-    save_path_data = f'{save_dir}/{ID}_{sessID}_{cond}_preprocessed.npy'
+    save_dir = Path(preprocessed_dir) / ID / sessID / 'eeg'
+    save_path_data = save_dir / f'{ID}_{sessID}_{cond}_preprocessed.npy'
     
     # Create directory if it does not exist
     os.makedirs(os.path.dirname(save_path_data), exist_ok=True)
     
     if plots == True:
-        save_path_plots = f'{save_dir}/{ID}_{sessID}_{cond}_preprocessing_plots.pdf'
+        save_path_plots = save_dir / f'{ID}_{sessID}_{cond}_preprocessing_plots.pdf'
         # Save plots in pdf file
         figs = preprocessed_data.figs
         with PdfPages(save_path_plots) as pdf:
