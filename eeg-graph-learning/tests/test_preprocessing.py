@@ -6,7 +6,6 @@ from eeglearn.preprocess.preprocessing import Preproccesing
 import os
 import uuid
 
-
 # Fixtures are reusable test resources
 @pytest.fixture
 def sample_eeg_data():
@@ -38,6 +37,13 @@ def sample_eeg_data():
         
         # Save to CSV
         df.to_csv(temp_file, index=False)
+        
+        # Register a finalizer to delete the file after the test
+        def finalizer():
+            if temp_file.exists():
+                temp_file.unlink()
+                
+        request.addfinalizer(finalizer)
         
         return str(temp_file)
 
