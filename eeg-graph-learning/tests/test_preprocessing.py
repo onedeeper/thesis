@@ -38,13 +38,6 @@ def sample_eeg_data():
         # Save to CSV
         df.to_csv(temp_file, index=False)
         
-        # Register a finalizer to delete the file after the test
-        def finalizer():
-            if temp_file.exists():
-                temp_file.unlink()
-                
-        request.addfinalizer(finalizer)
-        
         return str(temp_file)
 
 def test_preprocessing_initialization(sample_eeg_data):

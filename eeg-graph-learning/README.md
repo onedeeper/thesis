@@ -26,10 +26,13 @@ Install the package in development mode \
 This project uses the TD-Brain dataset, which requires a Data Usage Agreement (DUA).
 
 1. Apply for access to the TD-Brain dataset : https://www.brainclinics.com/resources/tdbrain-dataset
-2. Once approved, download the dataset
-3. Place the data in the `data/` directory following the structure below:
+2. Once approved, download the dataset. You may use the sample dataset  (~7Gb) or the full dataset (~100 gb) with this code.
+3. Add the files into the `data` directory following the structure below:
 
 ![Alt text](data_dir_structure.png)
+
+4. Navigate to `eeglearn/preprocess`
+5. Run `python preprocess_pipeline.py`. Parameters like sampling frequency can be changed at the bottom of the file. Refer to the README in preprocess for the steps that are applied.
 
 ## Testing
 
@@ -44,12 +47,12 @@ To use your own EEG data file for testing, set the `EEG_TEST_FILE_PATH` environm
 ```bash
 # Bash/Zsh
 export EEG_TEST_FILE_PATH="/path/to/your/eeg/test/file.csv"
-
+export EEG_CLEANED_DIR_PATH="tests/test_data/cleaned" 
 # Windows Command Prompt
-set EEG_TEST_FILE_PATH=C:\path\to\your\eeg\test\file.csv
+set EEG_TEST_FILE_PATH="C:\path\to\your\eeg\test\file.csv"
+set EEG_CLEANED_DI_PATH= "C:\path\to\your\cleaned\test\dir"
 
-# Windows PowerShell
-$env:EEG_TEST_FILE_PATH="C:\path\to\your\eeg\test\file.csv"
+
 ```
 
 The test file should be a CSV file with the following characteristics:

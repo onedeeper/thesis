@@ -26,7 +26,6 @@ var/
 
 /tests/test_data/*
 !/tests/test_data/.gitkeep
-/tests/test_preproccessing_pipeline.py
 
 # Jupyter Notebooks
 .ipynb_checkpoints

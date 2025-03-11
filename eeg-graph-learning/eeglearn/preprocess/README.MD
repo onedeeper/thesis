@@ -34,6 +34,16 @@ This module provides a comprehensive pipeline for preprocessing EEG data from th
   - Parallel processing of multiple subjects/sessions
   - Output saving in standardized format
 
+### `save_to_torch.py`
+- Functionality to save preprocessed EEG data in PyTorch format.
+- This script processes the preprocessed data and saves it as `.pt` files, which can be easily loaded into PyTorch for further analysis or model training.
+- **Usage**:
+  - The script retrieves file paths of preprocessed EEG data, checks for existing epochs, and saves them in a specified directory.
+  - It requires the following parameters:
+    - `eeg_dir`: Directory containing the preprocessed EEG data.
+    - `save_dir`: Directory where the `.pt` files will be saved.
+  - The script can be run directly, and it will automatically handle the processing of all relevant files in the specified directories.
+
 ### `preprocess_and_save.py`
 - Entry point for the preprocessing pipeline
 - Configures preprocessing parameters:
