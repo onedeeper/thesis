@@ -20,46 +20,46 @@ from mne.preprocessing import ICA
 from pyprep.prep_pipeline import PrepPipeline
 #from .plotting import get_plots
 from eeglearn.preprocess.plotting import get_plots
-mne.set_log_level('WARNING')
+import warnings
+import logging
+
+# Configure logging
+logging.getLogger('pyprep').setLevel(logging.ERROR)
+mne.set_log_level('ERROR')  # Make MNE logging more quiet
+
+# Suppress specific RuntimeWarnings about head frame origin
+warnings.filterwarnings('ignore', message='.*more than 20 mm from head frame origin.*')
 
 class Preproccesing:
-    '''
-        Create a object for preprocessing data, including:
+    """
+    Create an object for preprocessing EEG data from the TDBRAIN dataset.
 
-        NAME:
-            Preprocessing
+    This class handles the preprocessing of EEG data, including applying the PREP pipeline,
+    ICA artifact correction, bandpass filtering, and optional epoching. It also provides
+    functionality to generate plots at different stages of the preprocessing.
 
-        DESCRIPTION:
-          Preprocessing
-        =================
+    Args:
+        filename (str): The name of the file to be preprocessed. Input files can be in .csv or .edf format.
+        epochs_length (float, optional): Length of epochs in seconds. If 0, no epoching is applied. Defaults to 0.
+        line_noise (list, optional): List of frequencies for line noise removal. An empty list means no line noise removal. Defaults to [].
+        sfreq (float, optional): Sampling frequency in Hz. Defaults to 500.
+        plots (bool, optional): If True, plots will be generated and saved. Defaults to False.
 
-        Parameters
-        -----------------------------------------------------------------------
-        filename:       name of the file that should be preprocesed, input files can
-                        be in .csv or .edf format
-        epochs_length:  length of epochs in seconds, 0 = no epoching
-        line_noise:     list of frequencies for line noise removal,
-                        empty list = no line noise removal
-        sfreq:          sampling frequency in Hz
+    Provides:
+        - Preprocessing of data according to the following pipeline:
+            - PREP (see readme for source and details)
+            - ICA for ECG, EOG, and EMG artifact correction
+            - Bandpass filtering (1-100Hz)
+            - Epoching (optional)
+        - Plots of the data at different steps in the preprocessing pipeline.
 
-        -----------------------------------------------------------------------
-        Provides
-            1. preprocesses data according to the following pipeline:
-                - PREP (see readme for source and details)
-                - ICA for ECG, EOG and EMG artifact correction
-                - bandpass filtering (1-100Hz)
-                - epoching (optional)
-            2. plots data at different steps in the preprocessing pipeline
-
-        Returns:
-        -----------------------------------------------------------------------
-        A Preprocessing object including information about
-        - bad channels after each step in the PREP pipeline
-        - preprocessed data
-        - preprocessed epochs (if epoching is applied)
-        - plots of the data at different steps in the preprocessing pipeline
-
-        '''
+    Returns:
+        Preproccesing: An object containing information about:
+            - Bad channels after each step in the PREP pipeline
+            - Preprocessed data
+            - Preprocessed epochs (if epoching is applied)
+            - Plots of the data at different steps in the preprocessing pipeline
+    """
 
     def __init__(
             self,
@@ -115,7 +115,7 @@ class Preproccesing:
         eeg_data = pd.read_csv(filename, sep=',')
         eeg_data = eeg_data.transpose().to_numpy() # transpose data because MNE expects one channel per row instead of per column
         raw = mne.io.RawArray(eeg_data, info) # load data as MNE object, with the previously created 'info'
-        print('\n', 'RAW DATA LOADED', '\n')
+        #print('\n', 'RAW DATA LOADED', '\n')
 
         if plots == True:
             # plot non-preprocessed data
@@ -131,7 +131,7 @@ class Preproccesing:
             "line_freqs": line_noise,  # frequencies for line noise removal
         }
         prep = PrepPipeline(raw, prep_params, montage)  # documentation: https://pyprep.readthedocs.io/en/latest/_modules/pyprep/prep_pipeline.html#PrepPipeline
-        print('\n', "'PREP' OBJECT CREATED", '\n')
+        #print('\n', "'PREP' OBJECT CREATED", '\n')
 
         # run/fit PREP, applying the following steps to the raw data:
         #   1. 1Hz high pass filtering
@@ -139,7 +139,7 @@ class Preproccesing:
         #   3. rereferencing
         #   4. detect and interpolate bad channels
         prep.fit()
-        print('\n', "'PREP' PIPELINE APPLIED", '\n')
+        #print('\n', "'PREP' PIPELINE APPLIED", '\n')
 
         # store preprocessed data & bad channels as attributes
         self.prep_data = prep.raw
@@ -162,28 +162,28 @@ class Preproccesing:
         # the unfiltered signal, because filtering is a linear operation.
         filt_raw = raw.copy().filter(l_freq=1, h_freq=None)
 
+        self.status = []
+
         # creating & fitting ICA object
         try:
             ica = ICA(n_components=15, max_iter="auto")  # n PCA components
             ica.fit(filt_raw)
-            print('\n', "ICA FITTED", '\n')
+            self.status.append("ICA FITTED")
         except Exception as e: # sometimes n_components is too high, so in that case we try again with a lower number
-            print(e)
-            print('\n', "TOO MANY COMPONENTS FOR ICA FITTING, TRYING AGAIN WITH LOWER NUMBER OF COMPONENTS", '\n')
-            #print(self.still_bad_channels)
+            self.status.append("TOO MANY COMPONENTS FOR ICA FITTING, TRYING AGAIN WITH LOWER NUMBER OF COMPONENTS")
             n_components = 15 - len(self.still_bad_channels)
             ica = ICA(n_components=n_components, max_iter="auto")  # n PCA components
             ica.fit(filt_raw)
-            print('\n', "ICA FITTED", '\n')
+            self.status.append("ICA FITTED WITH LOWER NUMBER OF COMPONENTS")
 
 
         # automatically detect ICs that best capture EOG signal
         try:
             ica.exclude = []
             eog_indices, eog_scores = ica.find_bads_eog(raw)
-            print('\n', "EOG ARTIFACTS DETECTED", '\n')
+            self.status.append("EOG ARTIFACTS DETECTED")
         except:
-            print('\n', "SOMETHING WRONG WITH EOG SIGNAL, SO NO EOG ARTIFACTS DETECTED", '\n')
+            self.status.append("SOMETHING WRONG WITH EOG SIGNAL, SO NO EOG ARTIFACTS DETECTED")
             eog_indices = []
             eog_scores = []
 
@@ -191,9 +191,9 @@ class Preproccesing:
         try:
             ica.exclude = []
             ecg_indices, ecg_scores = ica.find_bads_ecg(raw)
-            print('\n', "ECG ARTIFACTS DETECTED", '\n')
+            self.status.append("ECG ARTIFACTS DETECTED")
         except:
-            print('\n', "SOMETHING WRONG WITH ECG SIGNAL, SO NO ECG ARTIFACTS DETECTED", '\n')
+            self.status.append("SOMETHING WRONG WITH ECG SIGNAL, SO NO ECG ARTIFACTS DETECTED")
             ecg_indices = []
             ecg_scores = []
 
@@ -201,15 +201,15 @@ class Preproccesing:
         try:
             ica.exclude = []
             emg_indices, emg_scores = ica.find_bads_muscle(raw)
-            print('\n', "EMG ARTIFACTS DETECTED", '\n')
+            self.status.append("EMG ARTIFACTS DETECTED")
         except:
-            print('\n', "SOMETHING WRONG WITH EMG SIGNAL, SO NO EMG ARTIFACTS DETECTED", '\n')
+            self.status.append("SOMETHING WRONG WITH EMG SIGNAL, SO NO EMG ARTIFACTS DETECTED")
             emg_indices = []
             emg_scores = []
 
         # repair all artifacts with ICA
         ica.apply(raw, exclude = eog_indices + ecg_indices + emg_indices)
-        print('\n', "ICA APPLIED", '\n')
+        self.status.append("ICA APPLIED")
 
         if plots == True:
             # plot data after ICA
@@ -241,7 +241,8 @@ class Preproccesing:
                 )  # Epochs object with PREP preprocessing and ICA applied
         else:
             self.preprocessed_epochs = 'No epoching applied'
-        print('\n', "EPOCHING APPLIED", '\n')
+            self.status.append("NO EPOCHING APPLIED")
+        self.status.append("EPOCHING APPLIED")
 
 
 if __name__ == '__main__':
@@ -252,3 +253,4 @@ if __name__ == '__main__':
             sfreq=500,
             plots=True
         )
+    print(preprocess.status)
