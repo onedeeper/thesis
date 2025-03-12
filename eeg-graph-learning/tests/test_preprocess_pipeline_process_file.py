@@ -10,7 +10,7 @@ import pandas as pd
 from pathlib import Path
 
 # Import the function to test
-from eeglearn.preprocess.preprocess_pipeline import process_file, preprocess_pipeline
+from eeglearn.preprocess.clean import process_file, clean_pipeline
 
 class TestProcessFile:
     

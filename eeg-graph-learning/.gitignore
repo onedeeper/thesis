@@ -25,6 +25,7 @@ var/
 !/data/.gitkeep
 
 /tests/test_data/*
+/tests/test_clean.py
 !/tests/test_data/.gitkeep
 
 # Jupyter Notebooks
