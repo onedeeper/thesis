@@ -24,6 +24,10 @@ var/
 /data/*
 !/data/.gitkeep
 
+/tests/test_data/*
+/tests/test_clean.py
+!/tests/test_data/.gitkeep
+
 # Jupyter Notebooks
 .ipynb_checkpoints
 
@@ -39,3 +43,6 @@ var/
 env/
 venv/
 ENV/
+
+#  misc
+create_directory_structure.py

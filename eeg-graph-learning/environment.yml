@@ -22,3 +22,4 @@ dependencies:
     - tensorboard==2.15.1
     - pytest==7.4.4
     - optuna==3.5.0
+    - pyprep==0.4.3
