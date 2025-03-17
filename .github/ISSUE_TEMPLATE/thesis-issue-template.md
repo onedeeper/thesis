@@ -1,5 +1,5 @@
 ---
-name: Custom issue template
+name: Thesis issue template
 about: Documenting issues and fixes
 title: ''
 labels: ''
