@@ -64,6 +64,7 @@ def process_file(filepath, save_dir):
     try:
         eeg_data = np.load(filepath, allow_pickle=True)
         epochs = eeg_data.preprocessed_epochs.get_data()
+        #print(epochs.shape)
         save_path = save_dir / f"{participant_id}.pt"
         torch.save(epochs, save_path)
     except Exception as e:

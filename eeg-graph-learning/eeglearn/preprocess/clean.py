@@ -181,6 +181,7 @@ def clean_pipeline(
     # sample number to process
     if num_samples > 0:
         # random indices to process
+        print(f' WARNING: Processing {num_samples} samples. Set num_samples to 0 in preprocess_pipeline.py to process all samples.')
         random_indices = np.random.choice(len(files_to_process), num_samples, replace=False)
         files_to_process = [files_to_process[i] for i in random_indices]
     

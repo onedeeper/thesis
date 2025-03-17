@@ -135,6 +135,32 @@ def test_process_file_error_handling():
         pt_files = list(temp_dir.glob("*.pt"))
         assert len(pt_files) == 0, "No files should be created when processing fails"
 
+def test_epoch_data_shape():
+    """
+    Test the shape of the epoch data.
+    """
+    # Path to the real test eeg file
+    test_data_path = os.environ.get('EEG_CLEANED_TEST_FILE')
+    if not test_data_path:
+        pytest.skip("Environment variable EEG_CLEANED_TEST_FILE not set")
+    
+    # dummy save diretory
+    save_dir = Path(tempfile.mkdtemp())
+
+    # process the file
+    process_file(test_data_path, save_dir)
+
+    # extract subject id from the file path
+    subject_id = os.path.basename(test_data_path).split('_')[0]
+
+    # load the saved file
+    saved_file = save_dir / f"{subject_id}.pt"
+
+    # load the saved file
+    loaded_data = torch.load(saved_file)
+
+    # check the shape of the data
+    assert loaded_data.shape == (12, 33, 4975)
 
 if __name__ == '__main__':
     pytest.main([__file__])

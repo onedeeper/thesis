@@ -27,7 +27,6 @@ esac
 
 echo "Detected operating system: ${OS_TYPE}"
 
-
 # Set up conda environment based on OS
 if [ "$OS_TYPE" = "Windows" ]; then
     # For Windows (Git Bash, MSYS2, Cygwin)
@@ -50,7 +49,12 @@ echo "Activating conda environment..."
 conda activate eeg-graph-learning > /dev/null 2>&1
 
 # Run the preprocessing pipeline
+echo "Activating conda environment..."
+conda activate eeg-graph-learning > /dev/null 2>&1
 echo "Running preprocessing pipeline..."
-python -m eeglearn.preprocess.preprocess_pipeline
-
-echo "Preprocessing completed successfully!" 
+if python -m eeglearn.preprocess.preprocess_pipeline; then
+    echo "Preprocessing completed successfully!"
+else
+    echo "Error: Preprocessing failed with exit code $?"
+    exit 1
+fi

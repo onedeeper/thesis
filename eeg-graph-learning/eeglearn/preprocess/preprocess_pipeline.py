@@ -55,7 +55,6 @@ if __name__ == '__main__':
     plots = True # set to True to create and store plots during preprocessing
     n_processes = 4 # number of processes to use for parallel processing
     num_samples = 4 # number of samples to process, comment out for all samples
-
     clean_pipeline(derivates_dir = derivates_dir,
                         preprocessed_dir = preprocessed_dir,
                         sfreq = sfreq,

@@ -113,6 +113,7 @@ class Preproccesing:
         
         # read raw EEG data
         eeg_data = pd.read_csv(filename, sep=',')
+        #print(eeg_data.shape)
         eeg_data = eeg_data.transpose().to_numpy() # transpose data because MNE expects one channel per row instead of per column
         raw = mne.io.RawArray(eeg_data, info) # load data as MNE object, with the previously created 'info'
         #print('\n', 'RAW DATA LOADED', '\n')
