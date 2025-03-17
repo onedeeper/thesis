@@ -54,7 +54,7 @@ if __name__ == '__main__':
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal, comment out for no line noise removal
     plots = True # set to True to create and store plots during preprocessing
     n_processes = 4 # number of processes to use for parallel processing
-    num_samples = 4 # number of samples to process, comment out for all samples
+    num_samples = 10 # number of samples to process, comment out for all samples
     clean_pipeline(derivates_dir = derivates_dir,
                         preprocessed_dir = preprocessed_dir,
                         sfreq = sfreq,
@@ -64,4 +64,19 @@ if __name__ == '__main__':
                         conditions = conditions,
                         sessions = sessions,
                         plots = plots)
-        
+    
+    project_root = Path(__file__).resolve().parent.parent.parent
+
+    # Define data directories using Path objects
+    save_dir = project_root / 'data' / 'data_cleaned_torch'
+    eeg_dir = project_root / 'data' / 'cleaned'
+
+    # Ensure the directories exist
+    save_dir.mkdir(parents=True, exist_ok=True)
+    eeg_dir.mkdir(parents=True, exist_ok=True)
+
+    get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'], session='ses-1')
+
+    # save to torch
+    filepaths = get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'], session='ses-1')
+    preprocess_and_save_data(filepaths,save_dir, n_processes)
