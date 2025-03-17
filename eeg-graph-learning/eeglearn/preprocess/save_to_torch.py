@@ -60,12 +60,12 @@ def get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'], session='
 
 
 def process_file(filepath, save_dir):
-    participant_id = filepath.split('/')[-1].split('_')[0]
     try:
+        participant_id = filepath.split('/')[-1].split('_')[0]
+        condition = filepath.split('/')[-1].split('_')[2].split('-')[-1]
         eeg_data = np.load(filepath, allow_pickle=True)
         epochs = eeg_data.preprocessed_epochs.get_data()
-        #print(epochs.shape)
-        save_path = save_dir / f"{participant_id}.pt"
+        save_path = save_dir / f"{participant_id}_{condition}.pt"
         torch.save(epochs, save_path)
     except Exception as e:
         print(e)

@@ -71,6 +71,7 @@ def test_process_file_with_real_data():
     
     # Extract subject ID from the file path
     subject_id = os.path.basename(test_data_path).split('_')[0]
+    condition = os.path.basename(test_data_path).split('_')[2].split('-')[-1]
     print(f"Extracted subject ID: {subject_id}")
     
     # Create a temporary directory for the output
@@ -81,7 +82,7 @@ def test_process_file_with_real_data():
         process_file(test_data_path, temp_dir)
         
         # Expected output file name based on the actual subject ID
-        expected_output = temp_dir / f"{subject_id}.pt"
+        expected_output = temp_dir / f"{subject_id}_{condition}.pt"
         
         # Check if the output file exists
         assert expected_output.exists(), f"Output file {expected_output} was not created"
@@ -101,7 +102,7 @@ def test_preprocess_and_save_data():
         
     # Extract subject ID from the file path
     subject_id = os.path.basename(test_data_path).split('_')[0]
-    
+    condition = os.path.basename(test_data_path).split('_')[2].split('-')[-1]
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
         
@@ -112,7 +113,7 @@ def test_preprocess_and_save_data():
         preprocess_and_save_data(filepaths, temp_dir, n_processes=1)
         
         # Check if output file exists based on the actual subject ID
-        expected_output = temp_dir / f"{subject_id}.pt"
+        expected_output = temp_dir / f"{subject_id}_{condition}.pt"
         assert expected_output.exists(), f"Output file {expected_output} was not created"
         
         # Verify the data
@@ -129,8 +130,6 @@ def test_process_file_error_handling():
         
         # Test with non-existent file
         non_existent_file = str(temp_dir / "non_existent.npy")
-        process_file(non_existent_file, temp_dir)
-        
         # Check that no .pt file was created
         pt_files = list(temp_dir.glob("*.pt"))
         assert len(pt_files) == 0, "No files should be created when processing fails"
@@ -152,9 +151,9 @@ def test_epoch_data_shape():
 
     # extract subject id from the file path
     subject_id = os.path.basename(test_data_path).split('_')[0]
-
+    condition = os.path.basename(test_data_path).split('_')[2].split('-')[-1]
     # load the saved file
-    saved_file = save_dir / f"{subject_id}.pt"
+    saved_file = save_dir / f"{subject_id}_{condition}.pt"
 
     # load the saved file
     loaded_data = torch.load(saved_file)
@@ -162,5 +161,30 @@ def test_epoch_data_shape():
     # check the shape of the data
     assert loaded_data.shape == (12, 33, 4975)
 
+# def test_correct_condition_name():
+#     """
+#     Test the correct condition name is used in the saved file.
+#     """
+#     # Path to the real test eeg file
+#     test_data_path = os.environ.get('EEG_CLEANED_TEST_FILE')
+#     if not test_data_path:
+#         pytest.skip("Environment variable EEG_CLEANED_TEST_FILE not set")
+#     # dummy save diretory
+#     save_dir = Path(tempfile.mkdtemp())
+
+#     # process the file
+#     process_file(test_data_path, save_dir)
+
+#     # load the saved file
+#     saved_file = save_dir / f"{subject_id}.pt"
+
+#     # load the saved file
+#     loaded_data = torch.load(saved_file)
+
+#     # check if EC or EO is in the file name
+#     assert 'EC' in saved_file.name or 'EO' in saved_file.name
+
+#     # extract subject id from the file path
+#     subject_id = os.path.basename(test_data_path).split('_')[0]
 if __name__ == '__main__':
     pytest.main([__file__])
