@@ -44,13 +44,6 @@ This module provides a comprehensive pipeline for preprocessing EEG data from th
     - `save_dir`: Directory where the `.pt` files will be saved.
   - The script can be run directly, and it will automatically handle the processing of all relevant files in the specified directories.
 
-### `preprocess_and_save.py`
-- Entry point for the preprocessing pipeline
-- Configures preprocessing parameters:
-  - Sampling frequency (500 Hz)
-  - Line noise removal
-  - Epoch length
-  - Session and condition selection
 
 ## Usage
 The pipeline is designed for the TDBRAIN dataset with specific channel configurations and preprocessing steps. Main parameters can be configured through a dictionary including:

@@ -156,8 +156,9 @@ def clean_pipeline(
         for file in files:
             if not any(sample_id in file for sample_id in sample_ids):  # Filter participants to include
                 if '.csv' in file:
-                    if any(session in file for session in sessions) & any(condition in file for condition in conditions):
+                    if any(session in file for session in sessions) and any(condition in file for condition in conditions):
                         filepath = os.path.join(subdir, file)
+                        #print(filepath.split('/')[-1])
                         
                         # Split file name to obtain ID, session number, and condition
                         ID = str(file.split('_')[0])
@@ -183,8 +184,8 @@ def clean_pipeline(
         # random indices to process
         print(f' WARNING: Processing {num_samples} samples. Set num_samples to 0 in preprocess_pipeline.py to process all samples.')
         random_indices = np.random.choice(len(files_to_process), num_samples, replace=False)
-        files_to_process = [files_to_process[i] for i in random_indices]
-    
+        files_to_process = files_to_process[:num_samples]
+
     # if there are fewer files than the number of processes, set the number of processes to the number of files
     if len(files_to_process) < n_processes:
         n_processes = len(files_to_process)

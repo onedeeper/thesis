@@ -65,18 +65,3 @@ if __name__ == '__main__':
                         sessions = sessions,
                         plots = plots)
         
-    project_root = Path(__file__).resolve().parent.parent.parent
-
-    # Define data directories using Path objects
-    save_dir = project_root / 'data' / 'data_cleaned_torch'
-    eeg_dir = project_root / 'data' / 'cleaned'
-
-    # Ensure the directories exist
-    save_dir.mkdir(parents=True, exist_ok=True)
-    eeg_dir.mkdir(parents=True, exist_ok=True)
-
-    get_filepaths(eeg_dir, save_dir, recording_condition='EC', session='ses-1')
-
-
-    filepaths = get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'], session='ses-1')
-    preprocess_and_save_data(filepaths,save_dir, n_processes)
