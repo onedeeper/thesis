@@ -226,7 +226,9 @@ class PowerSpectrum(Dataset):
                      desc="Computing spectrums"))
 
 if __name__ == "__main__":
-    dataset = PowerSpectrum(cleaned_path="/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/data/cleaned",
+    # Find the path to the cleaned data from root directory
+    cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
+    dataset = PowerSpectrum(cleaned_path=cleaned_path,
                             full_time_series=False,
                             method='multitaper',
                             plots=True,
@@ -239,5 +241,5 @@ if __name__ == "__main__":
                             verbose=False)
     print(len(dataset))
     print(dataset[9][0].shape, dataset[9][1].shape)
-    for i in range(len(dataset[:10])):
-        print(dataset[i][0].shape, dataset[i][1].shape)
+    for i in range(len(dataset)):
+        print(dataset[i][0].shape, dataset[i][1].shape) 
