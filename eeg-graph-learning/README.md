@@ -123,6 +123,8 @@ export EEG_TEST_FILE_PATH="/path/to/your/eeg/test/file.csv"
 # This is should be the result of running the
 # clean_pipeline function in preprocess_pipeline.
 export EEG_CLEANED_TEST_FILE ="/path/to/your/eeg/test/file.npy"
+
+export EEG_TEST_CLEANED_FOLDER_PATH ="/path/to/cleaned/
 ```
 
 The test file should be a CSV file with the following characteristics:
