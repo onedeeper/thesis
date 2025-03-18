@@ -23,3 +23,4 @@ dependencies:
     - pytest==7.4.4
     - optuna==3.5.0
     - pyprep==0.4.3
+    - openpyxl==3.1.5

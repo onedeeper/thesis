@@ -50,7 +50,13 @@ This project uses the TD-Brain dataset, which requires a Data Usage Agreement (D
 
 ![Alt text](data_dir_structure.png)
 
-4. You can run the preprocessing pipeline in two ways:
+4. Place the participant metadata file in the following location:
+   ```
+   data/TDBRAIN_participants_V2.xlsx
+   ```
+   This file contains important metadata about participants and is used for various analyses.
+
+5. You can run the preprocessing pipeline in two ways:
 
    a. Using the clean.sh script (recommended):
       

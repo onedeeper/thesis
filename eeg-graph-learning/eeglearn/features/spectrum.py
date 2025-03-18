@@ -11,9 +11,10 @@ from eeglearn.preprocess.preprocessing import Preproccesing
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas 
 import mne
 import re
-from eeglearn.utils.io import get_participant_id_condition_from_string
+from eeglearn.utils.utils import get_participant_id_condition_from_string
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
+from eeglearn.utils.utils import get_labels_dict
 
 class PowerSpectrum(Dataset):
     """
@@ -32,7 +33,8 @@ class PowerSpectrum(Dataset):
     """
     
     def __init__(self, 
-                 cleaned_path, 
+                 cleaned_path,
+                 get_labels = True, 
                  plots=False,
                  full_time_series=False,
                  method='welch',
@@ -97,6 +99,10 @@ class PowerSpectrum(Dataset):
                     self.participant_npy_files.append(file)
                     self.folders_and_files.append((participant_folder, file))
 
+        # load the labels file
+        if get_labels:
+            self.labels_dict = get_labels_dict(labels_file)
+
     def __len__(self):
         """
         Return the number of participants in the dataset.
@@ -124,19 +130,20 @@ class PowerSpectrum(Dataset):
             self.run_spectrum_parallel()
         try:
             participant_id, condition =  get_participant_id_condition_from_string(self.participant_npy_files[idx])
+            label = self.labels_dict[participant_id]
             if self.full_time_series:
                 spectra = torch.load(self.spectrum_save_dir / f'psd_{participant_id}_{condition}.pt')
                 freqs = torch.load(self.spectrum_save_dir / f'freqs_{participant_id}_{condition}.pt')
             else:
                 spectra = torch.load(self.spectrum_save_dir_epoched / f'psd_{participant_id}_{condition}.pt')
                 freqs = torch.load(self.spectrum_save_dir_epoched / f'freqs_{participant_id}_{condition}.pt')
-            return spectra, freqs
+            return spectra, freqs, label
         except IndexError:
             print(f'Spectrum for {self.participant_npy_files[idx]} not found')
-            return None, None
+            return None, None, None
         except FileNotFoundError:
             print(f'Spectrum for {self.participant_npy_files[idx]} not found')
-            return None, None
+            return None, None, None
 
     def plot_psd(self, psd_object, xscale='linear'):
         """
@@ -214,7 +221,7 @@ class PowerSpectrum(Dataset):
         The PSD data is computed for the frequency range specified by fmin and fmax.
         
         Returns:
-            dict: A dictionary containing the computed PSD data for each participant and condition,
+            dict: A dictionary containing the computed PSD data for each participant condition and label,
                   or None during development.
         """
         self.ran_spectrum = True
@@ -228,7 +235,10 @@ class PowerSpectrum(Dataset):
 if __name__ == "__main__":
     # Find the path to the cleaned data from root directory
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
+    # find the path to the labels file data
+    labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / 'TDBRAIN_participants_V2.xlsx'
     dataset = PowerSpectrum(cleaned_path=cleaned_path,
+                            get_labels=True,
                             full_time_series=False,
                             method='multitaper',
                             plots=True,
@@ -240,6 +250,5 @@ if __name__ == "__main__":
                             proj=False,
                             verbose=False)
     print(len(dataset))
-    print(dataset[9][0].shape, dataset[9][1].shape)
     for i in range(len(dataset)):
-        print(dataset[i][0].shape, dataset[i][1].shape) 
+        print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
