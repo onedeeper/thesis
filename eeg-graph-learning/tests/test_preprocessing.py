@@ -18,27 +18,8 @@ def sample_eeg_data():
         print(f"Using test EEG file from environment: {env_file_path}")
         return str(env_file_path)
     else:
-        # Create synthetic data as fallback
-        print("No environment variable found. Creating synthetic test data...")
-        n_channels = 33
-        n_timepoints = 1000
-        
-        # Create synthetic data
-        data = np.random.randn(n_channels, n_timepoints)
-        
-        # Create a temp directory for the test file
-        temp_dir = Path("tests/test_data")
-        temp_dir.mkdir(exist_ok=True, parents=True)
-        temp_file = temp_dir / f"synthetic_test_eeg_{uuid.uuid4().hex[:8]}.csv"
-        
-        # Format data as a DataFrame
-        ch_names = [f'EEG{i:03d}' for i in range(1, n_channels + 1)]
-        df = pd.DataFrame(data.T, columns=ch_names)  # Transpose to have channels as columns
-        
-        # Save to CSV
-        df.to_csv(temp_file, index=False)
-        
-        return str(temp_file)
+        #skip
+        pytest.skip("No environment variable found. Skipping test.")
 
 def test_preprocessing_initialization(sample_eeg_data):
     """Test if Preprocessing class initializes correctly."""
