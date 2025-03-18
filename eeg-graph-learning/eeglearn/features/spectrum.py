@@ -43,4 +43,3 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
     print(dir(train_loader))
-    #print(dataset[0].shape)
