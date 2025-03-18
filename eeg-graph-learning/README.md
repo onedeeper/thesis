@@ -107,6 +107,9 @@ The test suite can use either synthetic data (generated automatically) or your o
 
 To use your own EEG data file for testing, set the `EEG_TEST_FILE_PATH` environment variable to the path of your test file:
 
+Place a cleaned .npy file here : tests/test_data/data/cleaned/{subject_id}/ses-1/eeg/*
+Place a csv file here: tests/test_data/TDBRAIN-dataset/derivatives/{subject_id}/ses-1/eeg/*
+
 ```bash
 # Bash/Zsh
 export EEG_TEST_FILE_PATH="/path/to/your/eeg/test/file.csv"
