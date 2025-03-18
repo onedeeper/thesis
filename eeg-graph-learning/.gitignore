@@ -24,8 +24,9 @@ var/
 /data/*
 !/data/.gitkeep
 
+tests/test_data/data/cleaned/sub-19740274/ses-1/eeg/*
+tests/test_data/TDBRAIN-dataset/derivatives/sub-88046393/ses-1/eeg/*
 /tests/test_data/*
-/tests/test_clean.py
 !/tests/test_data/.gitkeep
 
 # Jupyter Notebooks
