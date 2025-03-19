@@ -28,7 +28,10 @@ from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.preprocess import plotting
 
 
-def get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'], session='ses-1'):
+def get_filepaths(eeg_dir : str, 
+                  save_dir : str, 
+                  recording_condition : list[str] = ['EC', 'EO'], 
+                  session : str = 'ses-1') -> list[str]:
     """
     Retrieve file paths of EEG data for a specific recording condition.
 
@@ -59,7 +62,8 @@ def get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'], session='
     return file_paths
 
 
-def process_file(filepath, save_dir):
+def process_file(filepath : str, 
+                 save_dir : str) -> None:
     try:
         participant_id = filepath.split('/')[-1].split('_')[0]
         condition = filepath.split('/')[-1].split('_')[2].split('-')[-1]
@@ -72,7 +76,9 @@ def process_file(filepath, save_dir):
         print(f"Error with {participant_id}")
 
 # epoch data and save to disk
-def preprocess_and_save_data(filepaths, save_dir, n_processes):
+def preprocess_and_save_data(filepaths : list[str], 
+                            save_dir : str, 
+                            n_processes : int ):
     os.makedirs(save_dir, exist_ok=True)
     process_file_with_save_dir = partial(process_file, save_dir=save_dir)
     

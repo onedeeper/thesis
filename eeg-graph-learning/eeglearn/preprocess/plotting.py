@@ -25,8 +25,13 @@ matplotlib.use('Agg')  # use backend so plots dont get displayed while code is r
 mne.set_log_level('WARNING')
 
 
-def get_plots(raw, step, scalings={'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ecg': 'auto'},
-              xscale='linear', baseline_correction=False, channel=[6], plot_ica_overlay=False, ica=''):
+def get_plots(raw : mne.io.Raw, step : str, 
+              scalings : dict[str, float] = {'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ecg': 'auto'},
+              xscale : str = 'linear', 
+              baseline_correction : bool = False, 
+              channel : list[int] = [6], 
+              plot_ica_overlay : bool = False, 
+              ica : mne.preprocessing.ICA = None) -> plt.Figure:
     """
     Functions to plot raw data, power spectral density, time frequency
     decomposition and optionally the reconstructed signal after ICA with the
@@ -46,7 +51,7 @@ def get_plots(raw, step, scalings={'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ec
     - fig: figure object containing the raw data, power spectral density and time frequency decomposition
     """
 
-    def plot_raw(raw, scalings={'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ecg': 'auto'}):
+    def plot_raw(raw : mne.io.Raw, scalings : dict[str, float] = {'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ecg': 'auto'}):
         ## plotting raw data
         with mne.viz.use_browser_backend('matplotlib'):
             fig = raw.plot(n_channels=33, scalings=scalings, title='title', show_scrollbars=False, show=False)
@@ -55,17 +60,17 @@ def get_plots(raw, step, scalings={'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ec
             fig = np.asarray(fig.buffer_rgba())
         return fig
 
-    def plot_psd(raw, xscale='linear'):
+    def plot_psd(spectrum : mne.time_frequency.Spectrum, xscale : str = 'linear'):
         ## plotting power spectral density
         with mne.viz.use_browser_backend('matplotlib'):
-            fig = raw.compute_psd(fmin=0.5, fmax=130).plot(picks='eeg', xscale=xscale, dB=True, show=False)
+            fig = spectrum.plot(picks='eeg', xscale=xscale, dB=True, show=False)
             fig = FigureCanvas(fig)
             fig.draw()
             fig = np.asarray(fig.buffer_rgba())
 
         return fig
 
-    def plot_tfr(raw, axes, channel=[6], baseline_correction=False):
+    def plot_tfr(raw : mne.io.Raw, axes : plt.Axes, channel : list[int] = [6], baseline_correction : bool = False):
         ## plotting time frequency decomposition
         # define frequencies of interest
         freqs = np.array([  # 5 steps per frequency band
@@ -97,7 +102,7 @@ def get_plots(raw, step, scalings={'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ec
 
         return
 
-    def plot_ica(raw, ica):
+    def plot_ica(raw : mne.io.Raw, ica : mne.preprocessing.ICA):
         ## plotting ICA components
         with mne.viz.use_browser_backend('matplotlib'):
             fig = ica.plot_overlay(raw, picks='eeg', show=False)
@@ -109,7 +114,7 @@ def get_plots(raw, step, scalings={'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ec
 
     ## create combined figure
     fig_raw = plot_raw(raw, scalings=scalings)
-    fig_psd = plot_psd(raw, xscale=xscale)
+    fig_psd = plot_psd(spectrum, xscale=xscale)
 
     if plot_ica_overlay == True:
         fig_ica = plot_ica(raw, ica)
