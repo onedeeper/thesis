@@ -109,29 +109,51 @@ This project uses the TD-Brain dataset, which requires a Data Usage Agreement (D
 
 The test suite can use either synthetic data (generated automatically) or your own EEG data files for testing. By default, it will create synthetic test data, but you can configure it to use your own EEG data files.
 
-#### Using Custom Test Data
+#### Using the Test Environment Setup Script
 
-To use your own EEG data file for testing, set the `EEG_TEST_FILE_PATH` environment variable to the path of your test file:
+We provide a script to easily set up all required test environment variables:
 
-Place a cleaned .npy file here : 
+```bash
+# Run the setup script (must be sourced to persist variables)
+source setup_test_env.sh
+```
 
-tests/test_data/data/cleaned/{subject_id}/ses-1/eeg/your_file
+This script sets the following environment variables:
+- `EEG_TEST_FILE_PATH`: Path to the raw EEG test file (CSV)
+- `EEG_CLEANED_TEST_FILE`: Path to a preprocessed EEG test file (NPY)
+- `EEG_TEST_CLEANED_FOLDER_PATH`: Path to the directory containing cleaned test data
+- `EEG_TEST_DERIVATIVES_DIR`: Path to the derivatives directory containing raw test data
 
+You should customize the paths in this script to match your local environment:
+1. Open `setup_test_env.sh` in your editor
+2. Update the paths for each variable to point to your test data
+3. Save the file and run it with `source setup_test_env.sh`
 
-Place a csv file here: 
+#### Manual Environment Variable Setup
 
-tests/test_data/TDBRAIN-dataset/derivatives/{subject_id}/ses-1/eeg/your_file
+If you prefer to set the environment variables manually:
 
 ```bash
 # Bash/Zsh
 export EEG_TEST_FILE_PATH="/path/to/your/eeg/test/file.csv"
-
-# This is should be the result of running the
-# clean_pipeline function in preprocess_pipeline.
-export EEG_CLEANED_TEST_FILE ="/path/to/your/eeg/test/file.npy"
-
-export EEG_TEST_CLEANED_FOLDER_PATH ="/path/to/cleaned/
+export EEG_CLEANED_TEST_FILE="/path/to/your/eeg/test/file.npy"
+export EEG_TEST_CLEANED_FOLDER_PATH="/path/to/cleaned/"
+export EEG_TEST_DERIVATIVES_DIR="/path/to/derivatives/"
 ```
+
+#### Test Data Structure
+
+Place test files in the following locations:
+
+- Cleaned .npy file: 
+  ```
+  tests/test_data/data/cleaned/{subject_id}/ses-1/eeg/your_file.npy
+  ```
+
+- Raw CSV file: 
+  ```
+  tests/test_data/TDBRAIN-dataset/derivatives/{subject_id}/ses-1/eeg/your_file.csv
+  ```
 
 The test file should be a CSV file with the following characteristics:
 - Channels as columns
@@ -139,7 +161,7 @@ The test file should be a CSV file with the following characteristics:
 - 33 channels (26 EEG + 7 other)
 - Sampling frequency of 500 Hz
 
-If `EEG_TEST_FILE_PATH` is not set or the file doesn't exist, the test suite will automatically generate synthetic test data.
+If the environment variables are not set or the files don't exist, the test suite will automatically generate synthetic test data.
 
 #### Running Tests
 

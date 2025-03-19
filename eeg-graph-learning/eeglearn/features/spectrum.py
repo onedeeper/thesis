@@ -28,19 +28,20 @@ class PowerSpectrum(Dataset):
     """
     
     def __init__(self, 
-                 cleaned_path,
-                 get_labels = True, 
-                 plots=False,
-                 full_time_series=False,
-                 method='welch',
-                 fmin=0.5, 
-                 fmax=130, 
-                 tmin=None,
-                 tmax=None,
-                 picks=None,
-                 exclude=[],
-                 proj=False,
-                 verbose=False):
+                 cleaned_path : str,
+                 get_labels : bool = True, 
+                 plots : bool = False,
+                 full_time_series : bool = False,
+                 method : str = 'welch',
+                 fmin : float = 0.5, 
+                 fmax : float = 130, 
+                 tmin : float = None,
+                 tmax : float = None,
+                 picks : list[str] = None,
+                 exclude : list[str] = [],
+                 proj : bool = False,
+                 verbose : bool = False
+                 ) -> None:
         """
         Initialize the PowerSpectrum dataset.
         Does not accept n_jobs as an argument as this will cause nested multiprocessing.
@@ -96,9 +97,9 @@ class PowerSpectrum(Dataset):
 
         # load the labels file
         if get_labels:
-            self.labels_dict = get_labels_dict(labels_file)
+            self.labels_dict = get_labels_dict()
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Return the number of participants in the dataset.
         
@@ -107,7 +108,7 @@ class PowerSpectrum(Dataset):
         """
         return len(self.participant_npy_files)
     
-    def __getitem__(self, idx):
+    def __getitem__(self, idx : int) -> tuple[torch.Tensor, torch.Tensor, str]:
         """
         Get spectral data for a specific participant based on index.
         
@@ -140,7 +141,7 @@ class PowerSpectrum(Dataset):
             print(f'Spectrum for {self.participant_npy_files[idx]} not found')
             return None, None, None
 
-    def plot_psd(self, psd_object, xscale='linear'):
+    def plot_psd(self, psd_object : mne.time_frequency.Spectrum, xscale : str = 'linear') -> plt.Figure:
         """
         Plot the power spectral density (PSD) of an EEG dataset.
         
@@ -157,7 +158,7 @@ class PowerSpectrum(Dataset):
 
         return fig
     
-    def get_spectrum(self, folder_path, file_name):
+    def get_spectrum(self, folder_path : str, file_name : str) -> tuple[torch.Tensor, torch.Tensor, str]:
         """
         Compute power spectrum density representations for all participants and conditions.
         
@@ -207,7 +208,7 @@ class PowerSpectrum(Dataset):
                 plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
                 plt.close()
                 
-    def run_spectrum_parallel(self):
+    def run_spectrum_parallel(self) -> None:
         """ 
         Compute power spectrum density representations for all participants and conditions.
         

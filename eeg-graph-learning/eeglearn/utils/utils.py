@@ -18,7 +18,7 @@ def get_participant_id_condition_from_string(file_path):
 
     return participant_id, condition
 
-def get_labels_dict(labels_file):
+def get_labels_dict() -> dict[str, str]:
     """
     Get indications for each participant from the details excel file.
     """

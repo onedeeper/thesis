@@ -63,12 +63,12 @@ class Preproccesing:
 
     def __init__(
             self,
-            filename, # path to the .csv file containing the EEG data
-            epochs_length = 0, # length of epochs in seconds, 0 = no epoching
-            line_noise = [], # frequencies for line noise removal, empty list = no line noise removal
-            sfreq = 500, # sampling frequency in Hz
-            plots = False # if True, plots will be made and saved
-    ):
+            filename : str, # path to the .csv file containing the EEG data
+            epochs_length : float = 0, # length of epochs in seconds, 0 = no epoching
+            line_noise : list[int] = [], # frequencies for line noise removal, empty list = no line noise removal
+            sfreq : float = 500, # sampling frequency in Hz
+            plots : bool = False # if True, plots will be made and saved
+    ) -> None:
         ## Set montage based on channel names and locations provided in Van Dijk et al., (2022) (Copied from Anne van Duijvenbode)
         ch_types = ['eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',\
                 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', \

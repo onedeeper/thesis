@@ -77,7 +77,7 @@ def test_power_spectrum_computation(setup_and_cleanup_test_dirs):
     ps.get_spectrum(folder_path, file_name)
     
     # Extract participant_id and condition for verification
-    from eeglearn.utils.io import get_participant_id_condition_from_string
+    from eeglearn.utils.utils import get_participant_id_condition_from_string
     participant_id, condition = get_participant_id_condition_from_string(file_name)
     
     # Check that files were created
@@ -118,7 +118,7 @@ def test_power_spectrum_getitem(setup_and_cleanup_test_dirs):
         pytest.skip("No .npy files found in the test directory")
     
     # Force computation by accessing an item
-    spectra, freqs = ps[0]
+    spectra, freqs, label = ps[0]
     
     # Check that computation ran and data was returned
     assert ps.ran_spectrum is True, "Spectrum computation should have run"
@@ -150,7 +150,7 @@ def test_power_spectrum_epoched(setup_and_cleanup_test_dirs):
         pytest.skip("No .npy files found in the test directory")
     
     # Force computation by accessing an item
-    spectra, freqs = ps[0]
+    spectra, freqs , label = ps[0]
     
     # Check that computation ran
     assert ps.ran_spectrum is True, "Spectrum computation should have run"

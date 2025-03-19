@@ -11,7 +11,7 @@ from multiprocessing import Pool, cpu_count
 from eeglearn.preprocess.preprocessing import Preproccesing  # Fixed import statement
 from eeglearn.preprocess.save_to_torch import get_filepaths, preprocess_and_save_data
 
-def process_file(args):
+def process_file(args : tuple) -> tuple[str, str, str]:
     """
     Process a single file in the TDBRAIN dataset.
 
@@ -75,18 +75,17 @@ def process_file(args):
     
     return ID, sessID, cond  # Return identifiers for tracking
 
-def clean_pipeline(
-                        derivates_dir,
-                        preprocessed_dir,
-                        sfreq,
-                        epochs_length =  0, 
-                        line_noise = [],
-                        n_processes = cpu_count() - 1,
-                        num_samples = 0,
-                        conditions = ['EO', 'EC'],
-                        sessions = ['ses-1'],
-                        plots = False,
-                        exclude_dirs = []):
+def clean_pipeline(derivates_dir : str,
+                   preprocessed_dir : str,
+                   sfreq : float,
+                   epochs_length : float = 0, 
+                   line_noise : list[int] = [],
+                   n_processes : int = cpu_count() - 1,
+                   num_samples : int = 0,
+                   conditions : list[str] = ['EO', 'EC'],
+                   sessions : list[str] = ['ses-1'],
+                   plots : bool = False,
+                   exclude_dirs : list[str] = []) -> None:
     
     """Preprocesses EEG data from the TDBRAIN dataset
 

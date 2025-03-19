@@ -103,10 +103,11 @@ class TestClean:
         assert hasattr(preprocessed_data, 'preprocessed_raw')
         assert hasattr(preprocessed_data, 'status')
     
+    # decorate the multiprocessing pool to prevent actual processing
     @patch('eeglearn.preprocess.clean.Pool')
     def test_clean_pipeline_with_mock(self, mock_pool, setup_clean_pipeline_test):
         """Test clean_pipeline with mocked Pool to prevent actual processing."""
-        # Setup mock pool
+        # Setup mock pool to prevent actuall preprocessing
         mock_pool_instance = MagicMock()
         mock_pool.return_value.__enter__.return_value = mock_pool_instance
         
