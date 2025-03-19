@@ -167,6 +167,9 @@ class PowerSpectrum(Dataset):
         participant_id, condition = get_participant_id_condition_from_string(file_name)     
         data = np.load(folder_path / file_name, allow_pickle=True) 
         # from the epoched data, compute the psd
+        # check shape of the epoched and full time series data
+        
+
         if self.full_time_series:
             psd = data.preprocessed_raw.compute_psd(method=self.method,
                                                 fmin=self.fmin,
@@ -207,6 +210,13 @@ class PowerSpectrum(Dataset):
                 plt.tight_layout()
                 plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
                 plt.close()
+        print("--------------------------------")
+        print("full time series data shape: ", data.preprocessed_raw.get_data().shape)
+        print("epoched data shape: ", data.preprocessed_epochs.get_data().shape)
+        # bad channels
+        print("bad channels: ", data.still_bad_channels)
+        print("spectrum shape: ", spectra.shape)
+        print("--------------------------------")
                 
     def run_spectrum_parallel(self) -> None:
         """ 
@@ -242,9 +252,9 @@ if __name__ == "__main__":
                             fmax=130,
                             tmin=None,
                             tmax=None,
-                            picks=None,
+                            picks=['eeg'],
                             proj=False,
                             verbose=False)
     print(len(dataset))
-    for i in range(len(dataset)):
-        print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
+    # for i in range(len(dataset)):
+    #     print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 

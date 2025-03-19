@@ -39,7 +39,7 @@ def process_file(args : tuple) -> tuple[str, str, str]:
         PermissionError: If there are insufficient permissions to read/write directories.
     """
     
-    filepath, ID, sessID, cond, epochs_length, line_noise, sfreq, plots, preprocessed_dir = args
+    filepath, Id, sessID, cond, epochs_length, line_noise, sfreq, plots, preprocessed_dir = args
     
     
     # Create Preprocessing object
@@ -52,14 +52,14 @@ def process_file(args : tuple) -> tuple[str, str, str]:
     )
     
     # Define directory and subdirectories for preprocessed data
-    save_dir = Path(preprocessed_dir) / ID / sessID / 'eeg'
-    save_path_data = save_dir / f'{ID}_{sessID}_{cond}_preprocessed.npy'
+    save_dir = Path(preprocessed_dir) / Id / sessID / 'eeg'
+    save_path_data = save_dir / f'{Id}_{sessID}_{cond}_preprocessed.npy'
     
     # Create directory if it does not exist
     os.makedirs(os.path.dirname(save_path_data), exist_ok=True)
     
     if plots == True:
-        save_path_plots = save_dir / f'{ID}_{sessID}_{cond}_preprocessing_plots.pdf'
+        save_path_plots = save_dir / f'{Id}_{sessID}_{cond}_preprocessing_plots.pdf'
         # Save plots in pdf file
         figs = preprocessed_data.figs
         with PdfPages(save_path_plots) as pdf:
@@ -73,7 +73,7 @@ def process_file(args : tuple) -> tuple[str, str, str]:
         pickle.dump(preprocessed_data, output, pickle.HIGHEST_PROTOCOL)
     
     
-    return ID, sessID, cond  # Return identifiers for tracking
+    return Id, sessID, cond  # Return identifiers for tracking
 
 def clean_pipeline(derivates_dir : str,
                    preprocessed_dir : str,
@@ -139,57 +139,60 @@ def clean_pipeline(derivates_dir : str,
     
 
     # In case of crashes/interruptions, starting from the last subject in the preprocessed directory
-    subs = [s for s in os.listdir(preprocessed_dir) if os.path.isdir(os.path.join(preprocessed_dir, s))]
+    all_subjects = os.listdir(derivates_dir)
+    subs = [s for s in all_subjects if os.path.isdir(os.path.join(preprocessed_dir, s))]
     subs = np.sort(subs)
     sample_ids = subs.tolist()
     print(f'subjects already preprocessed: {len(sample_ids)}')
-
     # Collect all files to process
     files_to_process = []
     total_files = 0
-    
+    samples_to_collect = set(all_subjects[:num_samples])
+    samples_to_process = []
+    subs_left_to_process = len(all_subjects) - len(sample_ids)
+    print(f"Found {subs_left_to_process} subjects to process")
     for subdir, dirs, files in os.walk(derivates_dir):  # Iterate through all files
         dirs[:] = [d for d in dirs if d not in exclude_dirs]  # Exclude directories
         total_files += len(files)
-        
         for file in files:
             if not any(sample_id in file for sample_id in sample_ids):  # Filter participants to include
                 if '.csv' in file:
                     if any(session in file for session in sessions) and any(condition in file for condition in conditions):
                         filepath = os.path.join(subdir, file)
-                        #print(filepath.split('/')[-1])
                         
                         # Split file name to obtain ID, session number, and condition
-                        ID = str(file.split('_')[0])
+                        Id = str(file.split('_')[0])
                         sessID = str(file.split('_')[1])
                         cond = str(file.split('_')[2])
                         
                         # Add to list of files to process
                         files_to_process.append((
-                            filepath, ID, sessID, cond, 
+                            filepath, Id, sessID, cond, 
                             epochs_length, line_noise, sfreq, plots, 
                             preprocessed_dir
                         ))
-    
-    print(f"Found {len(files_to_process)} files to process")
-    
+                        if Id in samples_to_collect:
+                            samples_to_process.append((
+                                filepath, Id, sessID, cond, 
+                                epochs_length, line_noise, sfreq, plots, 
+                                preprocessed_dir
+                            ))
+    print(f"Found {len(files_to_process)} EEG files to process")
     if not files_to_process:
         print("No files to process. Exiting.")
         return
     
     
     # sample number to process
-    if num_samples > 0:
-        # random indices to process
-        print(f' WARNING: Processing {num_samples} samples. Set num_samples to 0 in preprocess_pipeline.py to process all samples.')
-        random_indices = np.random.choice(len(files_to_process), num_samples, replace=False)
-        files_to_process = files_to_process[:num_samples]
-
-    # if there are fewer files than the number of processes, set the number of processes to the number of files
-    if len(files_to_process) < n_processes:
-        n_processes = len(files_to_process)
-        print(f" n files < n processes, n_processes set to {n_processes}")
+    if len(samples_to_process) > 0:
+        print(f' WARNING: Processing {num_samples}/{subs_left_to_process} subjects. Set num_samples to 0 in preprocess_pipeline.py to process all subjects.')
+        files_to_process = samples_to_process
+        # if there are fewer files than the number of processes, set the number of processes to the number of files
+        if len(files_to_process) < n_processes:
+            n_processes = len(files_to_process)
+            print(f" n files < n processes, n_processes set to {n_processes}")
     else:
+        print('Cleaning all subjects')
         print(f"Starting parallel processing with {n_processes} processes")    
     
     with Pool(processes=n_processes) as pool:

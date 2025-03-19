@@ -60,10 +60,10 @@ def get_plots(raw : mne.io.Raw, step : str,
             fig = np.asarray(fig.buffer_rgba())
         return fig
 
-    def plot_psd(spectrum : mne.time_frequency.Spectrum, xscale : str = 'linear'):
+    def plot_psd(raw : mne.io.Raw, xscale : str = 'linear'):
         ## plotting power spectral density
         with mne.viz.use_browser_backend('matplotlib'):
-            fig = spectrum.plot(picks='eeg', xscale=xscale, dB=True, show=False)
+            fig = raw.compute_psd(fmin=0.5, fmax=130).plot(picks='eeg', xscale=xscale, dB=True, show=False)
             fig = FigureCanvas(fig)
             fig.draw()
             fig = np.asarray(fig.buffer_rgba())
@@ -114,7 +114,7 @@ def get_plots(raw : mne.io.Raw, step : str,
 
     ## create combined figure
     fig_raw = plot_raw(raw, scalings=scalings)
-    fig_psd = plot_psd(spectrum, xscale=xscale)
+    fig_psd = plot_psd(raw, xscale=xscale)
 
     if plot_ica_overlay == True:
         fig_ica = plot_ica(raw, ica)
