@@ -31,7 +31,6 @@ if __name__ == '__main__':
     # Get the project root directory (2 levels up from this file)
     project_root = Path(__file__).parent.parent.parent
 
-
     # Use Path to join paths correctly
     derivates_dir = str(project_root / 'data' / 'TDBRAIN-dataset' / 'derivatives')
     print(f'Reading data from: {derivates_dir}')
@@ -54,16 +53,16 @@ if __name__ == '__main__':
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal, comment out for no line noise removal
     plots = True # set to True to create and store plots during preprocessing
     n_processes = 4 # number of processes to use for parallel processing
-    num_samples = 10 # number of samples to process, comment out for all samples
+    num_samples = 4 # number of samples to process, set to 0 for all samples
     clean_pipeline(derivates_dir = derivates_dir,
                         preprocessed_dir = preprocessed_dir,
                         sfreq = sfreq,
                         epochs_length = epochs_length,
                         line_noise = line_noise,
-                        num_samples = num_samples,
                         conditions = conditions,
                         sessions = sessions,
-                        plots = plots)
+                        plots = plots,
+                        num_samples = num_samples)
     
     project_root = Path(__file__).resolve().parent.parent.parent
 

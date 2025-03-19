@@ -12,7 +12,7 @@ def sample_eeg_data():
     """Create a sample EEG dataset for testing or use existing one from environment variable."""
     # Check if environment variable is set
     env_file_path = os.environ.get('EEG_TEST_FILE_PATH')
-    
+ 
     if env_file_path and os.path.exists(env_file_path):
         # Use the file path from the environment variable
         print(f"Using test EEG file from environment: {env_file_path}")
