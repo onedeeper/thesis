@@ -82,7 +82,7 @@ class PowerSpectrum(Dataset):
         # Ensure the directories exist
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
         if not self.full_time_series:
-            self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
+            self.spectrum_save_dir.mkdir(parents=True, exist_ok=True)
         else:
             self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
         # Get the actual numer of numpy files to process
@@ -167,6 +167,9 @@ class PowerSpectrum(Dataset):
         participant_id, condition = get_participant_id_condition_from_string(file_name)     
         data = np.load(folder_path / file_name, allow_pickle=True) 
         # from the epoched data, compute the psd
+        # check shape of the epoched and full time series data
+        
+
         if self.full_time_series:
             psd = data.preprocessed_raw.compute_psd(method=self.method,
                                                 fmin=self.fmin,
@@ -207,6 +210,13 @@ class PowerSpectrum(Dataset):
                 plt.tight_layout()
                 plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
                 plt.close()
+        print("--------------------------------")
+        print("full time series data shape: ", data.preprocessed_raw.get_data().shape)
+        print("epoched data shape: ", data.preprocessed_epochs.get_data().shape)
+        # bad channels
+        print("bad channels: ", data.still_bad_channels)
+        print("spectrum shape: ", spectra.shape)
+        print("--------------------------------")
                 
     def run_spectrum_parallel(self) -> None:
         """ 
@@ -235,16 +245,16 @@ if __name__ == "__main__":
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / 'TDBRAIN_participants_V2.xlsx'
     dataset = PowerSpectrum(cleaned_path=cleaned_path,
                             get_labels=True,
-                            full_time_series=False,
+                            full_time_series=True,
                             method='multitaper',
                             plots=True,
                             fmin=0.5,
                             fmax=130,
                             tmin=None,
                             tmax=None,
-                            picks=None,
+                            picks=['eeg'],
                             proj=False,
                             verbose=False)
     print(len(dataset))
-    for i in range(len(dataset)):
-        print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
+    # for i in range(len(dataset)):
+    #     print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
