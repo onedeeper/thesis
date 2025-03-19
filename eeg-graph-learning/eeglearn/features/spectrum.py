@@ -82,7 +82,7 @@ class PowerSpectrum(Dataset):
         # Ensure the directories exist
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
         if not self.full_time_series:
-            self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
+            self.spectrum_save_dir.mkdir(parents=True, exist_ok=True)
         else:
             self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
         # Get the actual numer of numpy files to process
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / 'TDBRAIN_participants_V2.xlsx'
     dataset = PowerSpectrum(cleaned_path=cleaned_path,
                             get_labels=True,
-                            full_time_series=False,
+                            full_time_series=True,
                             method='multitaper',
                             plots=True,
                             fmin=0.5,
