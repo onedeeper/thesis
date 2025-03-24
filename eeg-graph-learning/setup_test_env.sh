@@ -3,17 +3,17 @@
 # Set up test environment variables for EEG Graph Learning project
 # Run this script with: source setup_test_env.sh
 
-# Path to test EEG file
-export EEG_TEST_FILE_PATH="/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/tests/test_data/TDBRAIN-dataset/derivatives/sub-88046393/ses-1/eeg/sub-88046393_ses-1_task-restEC_eeg.csv"
+# Path to test EEG file - REPLACE WITH YOUR OWN PATH
+export EEG_TEST_FILE_PATH="/path/to/your/test/data/sub-XXXXXXXX/ses-X/eeg/sub-XXXXXXXX_ses-X_task-restEC_eeg.csv"
 
-# Path to preprocessed test file
-export EEG_CLEANED_TEST_FILE="/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/tests/test_data/data/cleaned/sub-19740274/ses-1/eeg/sub-19740274_ses-1_task-restEC_preprocessed.npy"
+# Path to preprocessed test file - REPLACE WITH YOUR OWN PATH
+export EEG_CLEANED_TEST_FILE="/path/to/your/data/cleaned/sub-XXXXXXXX/ses-X/eeg/sub-XXXXXXXX_ses-X_task-restEC_preprocessed.npy"
 
-# Path to folder containing cleaned test data
-export EEG_TEST_CLEANED_FOLDER_PATH="/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/tests/test_data/data/cleaned"
+# Path to folder containing cleaned test data - REPLACE WITH YOUR OWN PATH
+export EEG_TEST_CLEANED_FOLDER_PATH="/path/to/your/data/cleaned"
 
-# Path to the derivatives directory
-export EEG_TEST_DERIVATIVES_DIR="/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/tests/test_data/TDBRAIN-dataset/derivatives"
+# Path to the derivatives directory - REPLACE WITH YOUR OWN PATH
+export EEG_TEST_DERIVATIVES_DIR="/path/to/your/test/data/TDBRAIN-dataset/derivatives"
 
 # Print confirmation message
 echo "Test environment variables have been set:"
