@@ -17,17 +17,34 @@ class PowerSpectrum(Dataset):
     
     This class inherits from torch.utils.data.Dataset and provides functionality to 
     compute power spectral density (PSD) features from preprocessed EEG data. It handles
-    loading data files and computing spectral features within specified frequency bands.
+    loading data files, computing spectral features within specified frequency bands,
+    and saving results for future use.
     
     Attributes:
         data_path (str): Path to directory containing preprocessed EEG data.
-        file_list (list): List of participant folders available in the data_path.
+        participant_list (list): List of participants available in the data_path.
         fmin (float): Minimum frequency (Hz) for spectral analysis.
         fmax (float): Maximum frequency (Hz) for spectral analysis.
         full_time_series (bool): Whether to use the full time series or epochs.
+        tmin (float): Start time for analysis (in seconds) or None to use beginning of data.
+        tmax (float): End time for analysis (in seconds) or None to use end of data.
+        picks (list): Channels to include in the analysis.
+        exclude (list): Channels to exclude from the analysis.
+        proj (bool): Whether to apply projection.
+        method (str): Method to use for PSD computation ('welch', 'multitaper').
+        verbose (bool): Whether to print detailed information during processing.
+        plots (bool): Whether to generate and save PSD plots.
+        plot_save_dir (Path): Directory to save PSD plots.
+        spectrum_save_dir (Path): Directory to save spectrum data for full time series.
+        spectrum_save_dir_epoched (Path): Directory to save spectrum data for epoched data.
+        folders_and_files (list): List of tuples with folder paths and file names to process.
+        participant_npy_files (list): List of .npy files to process.
+        ran_spectrum (bool): Flag indicating whether spectrum calculation has been run.
+        ignore_bad_channels (bool): Whether to ignore bad channels during spectrum computation.
     """
     
     def __init__(self, 
+                 include_bad_channels : bool,
                  cleaned_path : str,
                  get_labels : bool = True, 
                  plots : bool = False,
@@ -40,19 +57,31 @@ class PowerSpectrum(Dataset):
                  picks : list[str] = None,
                  exclude : list[str] = [],
                  proj : bool = False,
-                 verbose : bool = False
+                 verbose : bool = False,
                  ) -> None:
         """
         Initialize the PowerSpectrum dataset.
-        Does not accept n_jobs as an argument as this will cause nested multiprocessing.
         
         Args:
+            ignore_bad_channels (bool): Whether to ignore bad channels during spectrum computation.
             cleaned_path (str): Path to directory containing preprocessed EEG data.
-            fmin (float, optional): Minimum frequency (Hz) for spectral analysis. Defaults to 0.5 Hz.
-            fmax (float, optional): Maximum frequency (Hz) for spectral analysis. Defaults to 130 Hz.
+            get_labels (bool, optional): Whether to load participant labels. Defaults to True.
+            plots (bool, optional): Whether to generate and save PSD plots. Defaults to False.
             full_time_series (bool, optional): Whether to use the full time series instead of epochs. 
                                               Defaults to False.
-            other arugments, refer : https://mne.tools/1.8/generated/mne.time_frequency.Spectrum.html
+            method (str, optional): Method to use for PSD computation. Options include 'welch',
+                                  'multitaper', etc. Defaults to 'welch'.
+            fmin (float, optional): Minimum frequency (Hz) for spectral analysis. Defaults to 0.5 Hz.
+            fmax (float, optional): Maximum frequency (Hz) for spectral analysis. Defaults to 130 Hz.
+            tmin (float, optional): Start time for analysis (in seconds). Defaults to None.
+            tmax (float, optional): End time for analysis (in seconds). Defaults to None.
+            picks (list[str], optional): Channels to include in the analysis. Defaults to None.
+            exclude (list[str], optional): Channels to exclude from the analysis. Defaults to [].
+            proj (bool, optional): Whether to apply projection. Defaults to False.
+            verbose (bool, optional): Whether to print detailed information. Defaults to False.
+            
+        Note:
+            This method does not accept n_jobs as an argument as this will cause nested multiprocessing.
         """
         self.data_path = cleaned_path
         self.participant_list = os.listdir(self.data_path)
@@ -68,8 +97,7 @@ class PowerSpectrum(Dataset):
         self.verbose = verbose
         self.ran_spectrum = False
         self.plots = plots
-        # run the spectrum function
-        # save the results in a new folder
+        self.include_bad_channels = include_bad_channels
 
         # create the folder to save the plots and the spectra
         # Get the project root directory (2 levels up from this file)
@@ -81,7 +109,7 @@ class PowerSpectrum(Dataset):
         self.spectrum_save_dir_epoched = project_root / 'data' / 'psd' / 'spectra_epoched'
         # Ensure the directories exist
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
-        if not self.full_time_series:
+        if self.full_time_series:
             self.spectrum_save_dir.mkdir(parents=True, exist_ok=True)
         else:
             self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
@@ -101,25 +129,31 @@ class PowerSpectrum(Dataset):
 
     def __len__(self) -> int:
         """
-        Return the number of participants in the dataset.
+        Return the number of EEG data files in the dataset.
         
         Returns:
-            int: The number of participant folders in the data path.
+            int: The number of .npy files across all participant folders.
         """
         return len(self.participant_npy_files)
     
     def __getitem__(self, idx : int) -> tuple[torch.Tensor, torch.Tensor, str]:
         """
-        Get spectral data for a specific participant based on index.
+        Get spectral data for a specific file based on index.
         
         This method computes the spectrum if it hasn't been computed already,
-        then returns the data for the participant at the specified index.
+        then returns the data for the file at the specified index.
         
         Args:
-            idx (int): Index of the participant in the file_list.
+            idx (int): Index of the file in the participant_npy_files list.
             
         Returns:
-            torch.Tensor: The spectral data for the requested participant.
+            tuple: Contains:
+                - torch.Tensor: The spectral data (PSD values).
+                - torch.Tensor: The frequency values corresponding to the PSD data.
+                - str: The participant label (if get_labels is True).
+                
+        Note:
+            If the spectrum file is not found, returns (None, None, None).
         """
         # make sure the spectrum is computed first
         if not self.ran_spectrum:
@@ -146,8 +180,14 @@ class PowerSpectrum(Dataset):
         Plot the power spectral density (PSD) of an EEG dataset.
         
         This method uses MNE's plotting functions to visualize the PSD of the EEG data.
-        It allows for customization of the x-axis scale (linear or logarithmic) and
-        the display of decibel (dB) units.
+        It allows for customization of the x-axis scale and displays PSD in decibel (dB) units.
+        
+        Args:
+            psd_object (mne.time_frequency.Spectrum): The PSD object from MNE.
+            xscale (str, optional): Scale for the x-axis ('linear' or 'log'). Defaults to 'linear'.
+            
+        Returns:
+            numpy.ndarray: The figure as a numpy array for saving to a file.
         """
         with mne.viz.use_browser_backend('matplotlib'):
             #print(type(raw))
@@ -160,10 +200,25 @@ class PowerSpectrum(Dataset):
     
     def get_spectrum(self, folder_path : str, file_name : str) -> tuple[torch.Tensor, torch.Tensor, str]:
         """
-        Compute power spectrum density representations for all participants and conditions.
+        Compute power spectrum density for a single EEG data file.
         
-        This method iterates through all participant folders and processes each .npy file
-        to extract the power spectral density features using MNE's compute_psd method."""   
+        This method loads an EEG data file, computes the power spectral density using 
+        the specified method, and saves the results to disk. If plots is True, it also 
+        generates and saves a visualization of the PSD.
+        
+        Args:
+            folder_path (str): Path to the folder containing the EEG data file.
+            file_name (str): Name of the EEG data file (.npy).
+            
+        Returns:
+            tuple: Contains:
+                - torch.Tensor: The spectral data (PSD values).
+                - torch.Tensor: The frequency values corresponding to the PSD data.
+                - str: The participant ID and condition.
+                
+        Note:
+            This method prints information about data shapes and bad channels for debugging.
+        """
         participant_id, condition = get_participant_id_condition_from_string(file_name)     
         data = np.load(folder_path / file_name, allow_pickle=True) 
         # from the epoched data, compute the psd
@@ -171,6 +226,8 @@ class PowerSpectrum(Dataset):
         
 
         if self.full_time_series:
+            if self.include_bad_channels:
+                data.preprocessed_raw.info['bads'] = []
             psd = data.preprocessed_raw.compute_psd(method=self.method,
                                                 fmin=self.fmin,
                                                 fmax=self.fmax, 
@@ -192,13 +249,17 @@ class PowerSpectrum(Dataset):
                 plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
                 plt.close()
         else:
+            if self.include_bad_channels:
+                data.preprocessed_epochs.info['bads'] = []
             psd = data.preprocessed_epochs.compute_psd(method=self.method,
                                                 fmin=self.fmin,
                                                 fmax=self.fmax, 
                                                 tmin=self.tmin,
                                                 tmax=self.tmax,
                                                 picks=self.picks,
-                                                exclude=self.exclude)
+                                                exclude=self.exclude,
+                                                proj=self.proj,
+                                                verbose=self.verbose)
             spectra, freqs = psd.get_data(return_freqs=True)
             torch.save(spectra, f'{self.spectrum_save_dir_epoched}/psd_{participant_id}_{condition}.pt')
             torch.save(freqs, f'{self.spectrum_save_dir_epoched}/freqs_{participant_id}_{condition}.pt')
@@ -210,25 +271,17 @@ class PowerSpectrum(Dataset):
                 plt.tight_layout()
                 plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
                 plt.close()
-        print("--------------------------------")
-        print("full time series data shape: ", data.preprocessed_raw.get_data().shape)
-        print("epoched data shape: ", data.preprocessed_epochs.get_data().shape)
-        # bad channels
-        print("bad channels: ", data.still_bad_channels)
-        print("spectrum shape: ", spectra.shape)
-        print("--------------------------------")
                 
     def run_spectrum_parallel(self) -> None:
         """ 
-        Compute power spectrum density representations for all participants and conditions.
+        Compute power spectrum density for all participants and conditions in parallel.
         
-        This method iterates through all participant folders and processes each .npy file
-        to extract the power spectral density features using MNE's compute_psd method.
-        The PSD data is computed for the frequency range specified by fmin and fmax.
+        This method uses multiprocessing to parallelize the computation of PSD features
+        across all EEG data files. It leverages the get_spectrum method for individual
+        file processing and uses a process pool to distribute the workload.
         
-        Returns:
-            dict: A dictionary containing the computed PSD data for each participant condition and label,
-                  or None during development.
+        The method sets ran_spectrum to True to indicate that spectrum computation has been
+        performed, preventing redundant calculations when __getitem__ is called.
         """
         self.ran_spectrum = True
         processes = cpu_count() - 1
@@ -245,6 +298,7 @@ if __name__ == "__main__":
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / 'TDBRAIN_participants_V2.xlsx'
     dataset = PowerSpectrum(cleaned_path=cleaned_path,
                             get_labels=True,
+                            include_bad_channels=True,
                             full_time_series=True,
                             method='multitaper',
                             plots=True,
@@ -256,5 +310,5 @@ if __name__ == "__main__":
                             proj=False,
                             verbose=False)
     print(len(dataset))
-    # for i in range(len(dataset)):
-    #     print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
+    for i in range(len(dataset)):
+        print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
