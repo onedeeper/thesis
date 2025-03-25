@@ -79,7 +79,18 @@ def process_file(filepath : str,
 # epoch data and save to disk
 def preprocess_and_save_data(filepaths : list[str], 
                             save_dir : str, 
-                            n_processes : int ):
+                            n_processes : int ) -> None:
+    """
+    Process and save multiple EEG data files to PyTorch format in parallel.
+    
+    Args:
+        filepaths (list[str]): List of file paths to process
+        save_dir (str): Directory where processed data will be saved
+        n_processes (int): Number of parallel processes to use
+        
+    Returns:
+        None: Files are saved to disk
+    """
     os.makedirs(save_dir, exist_ok=True)
     process_file_with_save_dir = partial(process_file, save_dir=save_dir)
     

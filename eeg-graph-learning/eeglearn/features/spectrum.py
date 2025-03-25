@@ -294,8 +294,8 @@ class PowerSpectrum(Dataset):
                      desc="Computing spectrums"))
 
 if __name__ == "__main__":
-    # Set seed for reproducibility
-    Config.set_global_seed()
+    # Set seed for reproducibility - only verbose in the main process
+    Config.set_global_seed(verbose=True)
     
     # Find the path to the cleaned data from root directory
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'

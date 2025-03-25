@@ -29,8 +29,8 @@ from eeglearn.config import Config
 
 
 if __name__ == '__main__':
-    # Set seed for reproducibility
-    Config.set_global_seed()
+    # Set seed for reproducibility - only verbose in the main process
+    Config.set_global_seed(verbose=True)
     
     # Get the project root directory (2 levels up from this file)
     project_root = Path(__file__).parent.parent.parent

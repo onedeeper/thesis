@@ -5,7 +5,7 @@ import os
 import sklearn
 import optuna
 
-def set_seed(seed=42, deterministic=True):
+def set_seed(seed=42, deterministic=True, verbose=False) -> int:
     """
     Set random seeds for reproducibility across multiple libraries
     
@@ -16,6 +16,13 @@ def set_seed(seed=42, deterministic=True):
     deterministic : bool
         Whether to set PyTorch to use deterministic algorithms
         May impact performance, but ensures reproducibility
+    verbose : bool
+        Whether to print a message when setting the seed (default: False)
+        
+    Returns:
+    --------
+    int
+        The random seed that was set
     """
     # Python's built-in random
     random.seed(seed)
@@ -52,4 +59,6 @@ def set_seed(seed=42, deterministic=True):
     except ImportError:
         pass
         
-    print(f"✅ Random seed set to {seed}") 
+    if verbose:
+        print(f"✅ Random seed set to {seed}")
+    return seed 

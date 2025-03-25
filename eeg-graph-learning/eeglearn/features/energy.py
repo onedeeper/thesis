@@ -98,7 +98,7 @@ class Energy(Dataset):
     def plot_energy(self,):
         pass
 
-    def get_energy(self, folder_path, file_name):
+    def get_energy(self, folder_path:  Path, file_name: str) -> np.ndarray:
         participant_id, condition = get_participant_id_condition_from_string(file_name)     
         data = np.load(folder_path / file_name, allow_pickle=True) 
         filtered_data = []
@@ -122,13 +122,11 @@ class Energy(Dataset):
             raise ValueError(f"Inf values found in band_matrix for {file_name}")
         return band_matrix
         
-    def get_permutations(self, data) -> list[str]:
+    def get_permutations(self, data : np.ndarray) -> list[str]:
         """
         Get all the permutations of the data.
         """
         permutations_of_bands = list(permutations(range(len(self.freq_bands))))
-     
-
         # permute the data
         permuted_data = []
         for permutation in permutations_of_bands:
