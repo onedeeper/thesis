@@ -10,6 +10,7 @@ from eeglearn.utils.utils import get_participant_id_condition_from_string
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 from eeglearn.utils.utils import get_labels_dict
+from eeglearn.preprocess.plotting import get_plots
 
 class Energy(Dataset):
     """
@@ -31,6 +32,7 @@ class Energy(Dataset):
                  get_labels : bool = True,
                  plots : bool = False,
                  verbose : bool = False,
+                 picks : list[str] = None,
                  include_bad_channels : bool = True,
                  full_time_series : bool = False,
                  ) -> None:
@@ -40,17 +42,25 @@ class Energy(Dataset):
         self.plots = plots
         self.verbose = verbose
         self.include_bad_channels = include_bad_channels
+        self.picks = picks
         if get_labels:
             self.labels_dict = get_labels_dict()
-        self.freq_bands = freq_bands
-        self.full_time_series = full_time_series
-        # freq bands
-        self.delta_band = [1,3]
-        self.theta_band = [4,7]
-        self.alpha_band = [8,13]
-        self.beta_band = [14,30]
-        self.gamma_band = [31,50]
         
+        # Define all available frequency bands
+        self.all_freq_bands = {
+            'delta': [1, 3],
+            'theta': [4, 7],
+            'alpha': [8, 13],
+            'beta': [14, 30],
+            'gamma': [31, 50]
+        }
+        
+        # Validate and set the requested frequency bands
+        if not all(band in self.all_freq_bands for band in freq_bands):
+            raise ValueError(f"Invalid frequency band. Available bands are: {list(self.all_freq_bands.keys())}")
+        self.freq_bands = [[band, self.all_freq_bands[band]] for band in freq_bands]
+        
+        self.full_time_series = full_time_series
         # create the folder to save the plots and the spectra
         # Get the project root directory (2 levels up from this file)
         project_root = Path(__file__).resolve().parent.parent.parent
@@ -93,17 +103,44 @@ class Energy(Dataset):
     def get_energy(self, folder_path, file_name):
         participant_id, condition = get_participant_id_condition_from_string(file_name)     
         data = np.load(folder_path / file_name, allow_pickle=True) 
-        # delta band energy
-        delta_band_energy = data.preprocessed_raw.filter(l_freq=1, h_freq=3)
+        filtered_data = []
+        band_energy = []
+        # get only the requested bands
+        for i, band in enumerate(self.freq_bands):
+            # Bandpass filter for the requested band. Returns the entire raw object 
+            # with the filter applied to the selected channels by self.picks
+            filtered_data.append(data.preprocessed_raw.filter(l_freq=band[1][0],
+                                                                h_freq=band[1][1],
+                                                                picks = self.picks))
+            # Compute the energy of the filtered data. 26 channels x time points.
+            band_energy.append(np.mean(filtered_data[i].get_data(picks = self.picks) ** 2, axis = 1))
+        
+        band_matrix  = np.array(band_energy).T
+        # test for nan values
+        if np.isnan(band_matrix).any():
+            raise ValueError(f"NaN values found in band_matrix for {file_name}")
+        # test for inf values
+        if np.isinf(band_matrix).any():
+            raise ValueError(f"Inf values found in band_matrix for {file_name}")
+        return band_matrix
+        
+    def get_permutations(self, data) -> list[str]:
+        """
+        Get all the permutations of the data.
+        """
+        return np.random.permutation(data)
+        
     def run_energy_parallel(self):
         pass
-
+ 
 if __name__ == "__main__":
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / 'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
                           get_labels=True,
                           plots=True,
-                          verbose=False)
+                          verbose=False,
+                          picks = ['eeg'],
+                          freq_bands = ['delta', 'theta', 'alpha', 'beta', 'gamma'])
     print(len(dataset))
     dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1])

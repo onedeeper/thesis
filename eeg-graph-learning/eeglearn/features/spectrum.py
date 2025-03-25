@@ -307,7 +307,7 @@ if __name__ == "__main__":
                             fmax=130,
                             tmin=None,
                             tmax=None,
-                            picks=['eeg'],
+                            picks=['all'],
                             proj=False,
                             verbose=False)
     print(len(dataset))
