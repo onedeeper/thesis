@@ -10,6 +10,7 @@ from eeglearn.utils.utils import get_participant_id_condition_from_string
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 from eeglearn.utils.utils import get_labels_dict
+from eeglearn.config import Config
 
 class PowerSpectrum(Dataset):
     """
@@ -293,6 +294,9 @@ class PowerSpectrum(Dataset):
                      desc="Computing spectrums"))
 
 if __name__ == "__main__":
+    # Set seed for reproducibility
+    Config.set_global_seed()
+    
     # Find the path to the cleaned data from root directory
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
     # find the path to the labels file data

@@ -2,6 +2,7 @@ import numpy as np
 import mne
 import pandas as pd
 from typing import Optional, Tuple, List
+from eeglearn.config import Config
 
 def create_base_raw(n_times: int = 1000, sfreq: float = 100.0, init_zeros: bool = False) -> mne.io.RawArray:
     """
@@ -15,6 +16,7 @@ def create_base_raw(n_times: int = 1000, sfreq: float = 100.0, init_zeros: bool 
     Returns:
         mne.io.RawArray: Base MNE Raw object
     """
+    Config.set_global_seed()
     # Define channel types and names
     ch_types = ['eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',
                 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',
@@ -82,6 +84,7 @@ def inject_nans(raw: mne.io.RawArray, nan_ratio: float = 0.1) -> mne.io.RawArray
     Returns:
         mne.io.RawArray: MNE Raw object with NaN values
     """
+    Config.set_global_seed()
     data = raw.get_data()
     n_nans = int(data.size * nan_ratio)
     nan_indices = np.random.choice(data.size, n_nans, replace=False)
@@ -101,6 +104,7 @@ def add_gaussian_noise(raw: mne.io.RawArray, noise_level: float = 0.1) -> mne.io
     Returns:
         mne.io.RawArray: MNE Raw object with added noise
     """
+    Config.set_global_seed()
     data = raw.get_data()
     noise = np.random.normal(0, noise_level, data.shape)
     data = data + noise
@@ -119,6 +123,7 @@ def add_baseline_drift(raw: mne.io.RawArray, drift_amplitude: float = 0.5) -> mn
     Returns:
         mne.io.RawArray: MNE Raw object with baseline drift
     """
+    Config.set_global_seed()
     data = raw.get_data()
     n_times = data.shape[1]
     drift = np.linspace(0, drift_amplitude, n_times)
@@ -144,6 +149,7 @@ def add_artifacts(raw: mne.io.RawArray,
     Returns:
         mne.io.RawArray: MNE Raw object with artifacts
     """
+    Config.set_global_seed()
     data = raw.get_data()
     n_times = data.shape[1]
 
@@ -182,6 +188,7 @@ def create_test_dataset(n_samples: int = 5,
     Returns:
         List[mne.io.RawArray]: List of MNE Raw objects
     """
+    Config.set_global_seed()
     dataset = []
     
     for i in range(n_samples):

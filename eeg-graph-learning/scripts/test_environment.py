@@ -44,6 +44,14 @@ def main():
         if not check_package(package):
             all_installed = False
     
+    # Test eeglearn configuration
+    try:
+        from eeglearn.config import Config
+        print(f"✅ eeglearn.config: Random seed = {Config.RANDOM_SEED}, Deterministic = {Config.DETERMINISTIC}")
+    except ImportError:
+        print("❌ eeglearn.config: Not properly set up")
+        all_installed = False
+    
     # Test GPU availability for PyTorch
     if check_package("torch"):
         import torch

@@ -11,19 +11,17 @@ from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 from eeglearn.utils.utils import get_labels_dict
 from eeglearn.preprocess.plotting import get_plots
+from itertools import permutations
+from eeglearn.config import Config
 
 class Energy(Dataset):
     """
     Dataset class for computing and loading energy features from EEG data.
 
     δ (1-3 Hz)
-
     θ (4-7 Hz)
-
     α (8-13 Hz)
-
     β (14-30 Hz)
-
     γ (31-50 Hz)
     """
     def __init__(self, 
@@ -128,12 +126,22 @@ class Energy(Dataset):
         """
         Get all the permutations of the data.
         """
-        return np.random.permutation(data)
-        
+        permutations_of_bands = list(permutations(range(len(self.freq_bands))))
+     
+
+        # permute the data
+        permuted_data = []
+        for permutation in permutations_of_bands:
+            permuted_data.append(data[:, permutation])
+        return permuted_data
+    
     def run_energy_parallel(self):
         pass
  
 if __name__ == "__main__":
+    # Set seed for reproducibility
+    Config.set_global_seed()
+    
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / 'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
@@ -143,4 +151,5 @@ if __name__ == "__main__":
                           picks = ['eeg'],
                           freq_bands = ['delta', 'theta', 'alpha', 'beta', 'gamma'])
     print(len(dataset))
-    dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1])
+    print(dataset.get_permutations(dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1]))[0].shape)
+    #dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1])

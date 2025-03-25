@@ -26,6 +26,7 @@ from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.preprocess import plotting
+from eeglearn.config import Config
 
 
 def get_filepaths(eeg_dir : str, 
@@ -86,6 +87,9 @@ def preprocess_and_save_data(filepaths : list[str],
        list(tqdm(pool.imap(process_file_with_save_dir, filepaths), total=len(filepaths), desc='Saving to torch...'))
 
 if __name__ == '__main__':
+    # Set seed for reproducibility 
+    Config.set_global_seed()
+    
     # Get the project root directory (2 levels up from this file)
     project_root = Path(__file__).resolve().parent.parent.parent
 
