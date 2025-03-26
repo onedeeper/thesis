@@ -129,8 +129,8 @@ class Energy(Dataset):
         permutations_of_bands = list(permutations(range(len(self.freq_bands))))
         # permute the data
         permuted_data = []
-        for permutation in permutations_of_bands:
-            permuted_data.append(data[:, permutation])
+        for pseudo_label, permutation in enumerate(permutations_of_bands):
+            permuted_data.append((data[:, permutation], pseudo_label))
         return permuted_data
     
     def run_energy_parallel(self):
@@ -149,5 +149,6 @@ if __name__ == "__main__":
                           picks = ['eeg'],
                           freq_bands = ['delta', 'theta', 'alpha', 'beta', 'gamma'])
     print(len(dataset))
-    print(dataset.get_permutations(dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1]))[0].shape)
+    print(dataset.get_permutations(dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1]))[12][0].shape)
+    print(dataset.get_permutations(dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1]))[12][1])
     #dataset.get_energy(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1])
