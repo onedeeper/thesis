@@ -49,3 +49,6 @@ setup_my_env_vars.sh
 
 #  misc
 create_directory_structure.py
+
+# Ruff cache
+.ruff_cache/

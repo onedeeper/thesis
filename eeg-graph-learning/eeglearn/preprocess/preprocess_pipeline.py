@@ -34,17 +34,18 @@ if __name__ == '__main__':
     # Use Path to join paths correctly
     derivates_dir = str(project_root / 'data' / 'TDBRAIN-dataset' / 'derivatives')
     print(f'Reading data from: {derivates_dir}')
-
+    assert os.path.exists(derivates_dir), f"Derivatives directory does not exist: {derivates_dir}"
+    
     # if cleaned folder does not exist, create it
     if not os.path.exists(str(project_root / 'data' / 'cleaned')):
         os.makedirs(str(project_root / 'data' / 'cleaned'), exist_ok=True) 
-
+    assert os.path.exists(str(project_root / 'data' / 'cleaned')), f"Preprocessed directory does not exist: {str(project_root / 'data' / 'cleaned')}"
     preprocessed_dir = str(project_root / 'data' / 'cleaned')
     print(f'Writing preprocessed data to: {preprocessed_dir}')
 
     # Create the output directory if it doesn't exist
     os.makedirs(preprocessed_dir, exist_ok=True)
-
+    assert os.path.exists(preprocessed_dir), f"Preprocessed directory does not exist: {preprocessed_dir}"
     # the following parameters can be changed by the user
     conditions = ['EO', 'EC'] # conditions to be preprocessed
     sessions = ['ses-1'] # sessions to be preprocessed
