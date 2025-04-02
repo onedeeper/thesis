@@ -78,7 +78,10 @@ class PowerSpectrum(Dataset):
             fmax (float): Maximum frequency (Hz) for spectral analysis.
             tmin (float): Start time for analysis (in seconds).
             tmax (float): End time for analysis (in seconds).
-            picks (list[str]): Channels to include in the analysis.
+            picks (list[str]): Channels to include in the analysis. By default, 
+                only includes the data channels:
+            (https://mne.tools/stable/documentation/glossary.html#term-data-channels)
+
             exclude (list[str]): Channels to exclude from the analysis.
             proj (bool): Whether to apply projection.
             verbose (bool): Whether to print detailed information.
@@ -105,7 +108,7 @@ class PowerSpectrum(Dataset):
         self.plots = plots
         # load the labels file
         self.labels_dict = get_labels_dict()
-        self.picks = ['all'] if picks is None else picks
+        self.picks = ['data'] if picks is None else picks
         # create the folder to save the plots and the spectra
         # Get the project root directory (2 levels up from this file)
         project_root = Path(__file__).resolve().parent.parent.parent
@@ -239,9 +242,11 @@ class PowerSpectrum(Dataset):
         freqs : np.ndarray
         # from the epoched data, compute the psd
         # check shape of the epoched and full time series data
+        if self.include_bad_channels:
+            exclude = []
+        else:
+            exclude = 'bads'
         if self.full_time_series:
-            if self.include_bad_channels:
-                data.preprocessed_raw.info['bads'] = []
             psd : mne.time_frequency.Spectrum = data.preprocessed_raw.compute_psd(
                                                 method=self.method,
                                                 fmin=self.fmin,
@@ -250,8 +255,10 @@ class PowerSpectrum(Dataset):
                                                 tmax=self.tmax,
                                                 picks=self.picks,
                                                 proj=self.proj,
+                                                exclude=exclude,
                                                 verbose=self.verbose)
-            spectra, freqs = psd.get_data(return_freqs=True)
+            spectra, freqs = psd.get_data(return_freqs=True, picks=self.picks,
+                                          exclude=exclude)
             if self.save_to_disk:
                 path_to_psd : Path = self.spectrum_save_dir / \
                     f'psd_{participant_id}_{condition}.pt'
@@ -269,8 +276,6 @@ class PowerSpectrum(Dataset):
                             ,dpi=300)
                 plt.close()
         else:
-            if self.include_bad_channels:
-                data.preprocessed_epochs.info['bads'] = []
             psd : mne.time_frequency.Spectrum.EpochsSpectrum = \
                 data.preprocessed_epochs.compute_psd(method=self.method,
                                                 fmin=self.fmin,
@@ -279,8 +284,10 @@ class PowerSpectrum(Dataset):
                                                 tmax=self.tmax,
                                                 picks=self.picks,
                                                 proj=self.proj,
+                                                exclude=exclude,
                                                 verbose=self.verbose)
-            spectra, freqs = psd.get_data(return_freqs=True)
+            spectra, freqs = psd.get_data(return_freqs=True, picks=self.picks,
+                                          exclude=exclude)
             if self.save_to_disk:
                 path_to_psd : Path = self.spectrum_save_dir_epoched / \
                     f'psd_{participant_id}_{condition}.pt'
