@@ -1,17 +1,35 @@
+"""Created on Thu Apr 02 2025.
+
+author: Udesh Habaraduwa
+description: test the PowerSpectrum class
+
+name: test_spectrum.py
+
+version: 1.0
+"""
 import os
-import pytest
-import numpy as np
-import torch
-from pathlib import Path
+import pickle
 import shutil
 import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+
 from eeglearn.features.spectrum import PowerSpectrum
-import pickle
+
 # Extract participant_id and condition
 from eeglearn.utils.utils import get_participant_id_condition_from_string
+
+
 @pytest.fixture
 def setup_and_cleanup_test_dirs():
-    """Fixture to set up and clean up test directories before and after tests"""
+    """Fixture to set up and clean up test directories before and after tests.
+    
+    This fixture creates the necessary directories for storing PSD plots and spectra,
+    and ensures they are cleaned up after the tests are run.
+    """
     # Setup - create directories
     project_root = Path(__file__).resolve().parent.parent
     test_dirs = [
@@ -35,7 +53,11 @@ def setup_and_cleanup_test_dirs():
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_power_spectrum_initialization():
-    """Test PowerSpectrum class initialization with test data"""
+    """Test PowerSpectrum class initialization with test data.
+    
+    This test checks that the PowerSpectrum class initializes correctly with the
+    test data directory and that the attributes are set as expected.
+    """
     # Get path from environment variable
     test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
@@ -59,11 +81,18 @@ def test_power_spectrum_initialization():
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_power_spectrum_computation(setup_and_cleanup_test_dirs):
-    """Test computation of power spectrum with test data"""
+    """Test computation of power spectrum with test data.
+    
+    This test checks that the power spectrum is computed correctly for a single file
+    in the test data directory. It verifies that the computed spectrum and frequencies
+    are of the correct shape and type, and that the minimum and maximum frequencies
+    match the specified range.
+    """
     # Get path from environment variable
     test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
-    # Initialize PowerSpectrum with the test directory and limit to a small frequency range
+    # Initialize PowerSpectrum with the test directory and limit to a small frequency
+    #  range
     ps = PowerSpectrum(cleaned_path=test_dir, 
                       include_bad_channels=True,
                       full_time_series=True,
@@ -76,7 +105,7 @@ def test_power_spectrum_computation(setup_and_cleanup_test_dirs):
         pytest.skip("No .npy files found in the test directory")
     
     folder_path, file_name = ps.folders_and_files[0]
-    
+    print(folder_path, file_name)
     # Compute spectrum for a single file
     ps.get_spectrum(folder_path, file_name)
     
@@ -88,7 +117,7 @@ def test_power_spectrum_computation(setup_and_cleanup_test_dirs):
     spectrum_file = ps.spectrum_save_dir / f'psd_{participant_id}_{condition}.pt'
     freqs_file = ps.spectrum_save_dir / f'freqs_{participant_id}_{condition}.pt'
     
-    assert spectrum_file.exists(), f"Spectrum file {spectrum_file} not created"
+    assert spectrum_file.exists(), f"Spectrum file {spectrum_file} not   created"
     assert freqs_file.exists(), f"Frequencies file {freqs_file} not created"
     
     # Load and verify the computed data
@@ -96,8 +125,8 @@ def test_power_spectrum_computation(setup_and_cleanup_test_dirs):
     freqs = torch.load(freqs_file)
     
     # Basic validation of the output shapes and values
-    assert isinstance(spectra, np.ndarray), "Spectrum should be a numpy array"
-    assert isinstance(freqs, np.ndarray), "Frequencies should be a numpy array"
+    assert isinstance(spectra, torch.Tensor), "Spectrum should be a torch.Tensor"
+    assert isinstance(freqs, torch.Tensor), "Frequencies should be a torch.Tensor"
     assert len(freqs) > 0, "Frequencies array should not be empty"
     assert freqs.min() >= 8, "Minimum frequency should match fmin"
     assert freqs.max() <= 13, "Maximum frequency should match fmax"
@@ -106,7 +135,13 @@ def test_power_spectrum_computation(setup_and_cleanup_test_dirs):
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_power_spectrum_getitem(setup_and_cleanup_test_dirs):
-    """Test __getitem__ method of PowerSpectrum after computing spectra"""
+    """Test __getitem__ method of PowerSpectrum after computing spectra.
+    
+    This test checks that the __getitem__ method of the PowerSpectrum class returns
+    the correct data when accessing an item from the dataset. It verifies that the
+    spectrum and frequency data are of the correct shape and type, and that the
+    computation has been run.
+    """
     # Get path from environment variable
     test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
@@ -130,16 +165,21 @@ def test_power_spectrum_getitem(setup_and_cleanup_test_dirs):
     
     # Only validate if the file was found (not None)
     if spectra is not None and freqs is not None:
-        assert isinstance(spectra, np.ndarray), "Spectrum should be a numpy array"
-        assert isinstance(freqs, np.ndarray), "Frequencies should be a numpy array"
-        assert spectra.shape[0] > 0, "Spectrum should have data for at least one channel"
+        assert isinstance(spectra, torch.Tensor), "Spectrum should be a torch.Tensor"
+        assert isinstance(freqs, torch.Tensor), "Frequencies should be a torch.Tensor"
+        assert spectra.shape[0] > 0,"Spectrum should have data for at least one channel"
         assert len(freqs) > 0, "Frequencies array should not be empty"
 
 
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_power_spectrum_epoched(setup_and_cleanup_test_dirs):
-    """Test computing epoched power spectrum"""
+    """Test computing epoched power spectrum.
+    
+    This test checks that the power spectrum is computed correctly for epoched data.
+    It verifies that the computed spectrum and frequencies are of the correct shape
+    and type, and that the computation has been run.
+    """
     # Get path from environment variable
     test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
@@ -165,14 +205,20 @@ def test_power_spectrum_epoched(setup_and_cleanup_test_dirs):
     if spectra is not None and freqs is not None:
         # For epoched data, we expect shape (n_epochs, n_channels, n_frequencies)
         assert len(spectra.shape) == 3, "Epoched spectra should have 3 dimensions"
-        assert isinstance(freqs, np.ndarray), "Frequencies should be a numpy array"
+        assert isinstance(freqs, torch.Tensor), "Frequencies should be a torch.Tensor"
         assert len(freqs) > 0, "Frequencies array should not be empty"
 
 
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_include_bad_channels_full_time_series(setup_and_cleanup_test_dirs):
-    """Test that include_bad_channels=True properly includes bad channels for full time series data."""
+    """Test that include_bad_channels=True properly.
+    
+    This test checks that the PowerSpectrum class correctly handles bad channels
+    when computing the power spectrum for full time series data. It verifies that
+    the computed spectrum and frequencies are of the correct shape and type, and
+    that the computation has been run.
+    """
     # Get path from environment variable
     test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
@@ -218,7 +264,8 @@ def test_include_bad_channels_full_time_series(setup_and_cleanup_test_dirs):
     temp_save_dir.mkdir(parents=True, exist_ok=True)
     # save the data to the temporary folder path
     pickle.dump(data, open(temp_folder_path / file_name, 'wb', pickle.HIGHEST_PROTOCOL))
-    # change the directory path of the PowerSpectrum object to the temporary  save directory path
+    # change the directory path of the PowerSpectrum 
+    # object to the temporary  save directory path
     ps_include_bad.spectrum_save_dir = temp_save_dir
     ps_exclude_bad.spectrum_save_dir = temp_save_dir
 
@@ -227,22 +274,32 @@ def test_include_bad_channels_full_time_series(setup_and_cleanup_test_dirs):
     # Process with both PowerSpectrum instances
     ps_include_bad.get_spectrum(temp_folder_path, file_name)
     # Load the saved spectra
-    spectra_include = torch.load(ps_include_bad.spectrum_save_dir / f'psd_{participant_id}_{condition}.pt')
+    spectra_include = torch.load(ps_include_bad.spectrum_save_dir \
+                                 / f'psd_{participant_id}_{condition}.pt')
     # Expected number of EEG channels is 26
     print( " spectra_include.shape", spectra_include.shape)
-    assert spectra_include.shape[0] == 26, "When including bad channels, PSD should have 26 channels"
+    assert spectra_include.shape[0] == 26, \
+        "When including bad channels, PSD should have 26 channels"
 
     # Process with both PowerSpectrum instances
     ps_exclude_bad.get_spectrum(temp_folder_path, file_name)
-    spectra_exclude = torch.load(ps_exclude_bad.spectrum_save_dir / f'psd_{participant_id}_{condition}.pt')
+    spectra_exclude = torch.load(ps_exclude_bad.spectrum_save_dir \
+                                 / f'psd_{participant_id}_{condition}.pt')
     # When respecting bad channels, the number of channels should be less than 26
-    assert spectra_exclude.shape[0] < 26, "When excluding bad channels, PSD should have fewer than 26 channels"
+    assert spectra_exclude.shape[0] < 26, \
+          "When excluding bad channels,  PSD should have fewer than 26 channels"
 
 
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_include_bad_channels_epoched(setup_and_cleanup_test_dirs):
-    """Test that include_bad_channels=True properly includes bad channels for epoched data."""
+    """Test that include_bad_channels=True.
+    
+    This test checks that the PowerSpectrum class correctly handles bad channels
+    when computing the power spectrum for epoched data. It verifies that the
+    computed spectrum and frequencies are of the correct shape and type, and
+    that the computation has been run.
+    """
     # Get path from environment variable
     test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
@@ -289,7 +346,8 @@ def test_include_bad_channels_epoched(setup_and_cleanup_test_dirs):
     # save the data to the temporary folder path
     pickle.dump(data, open(temp_folder_path / file_name, 'wb', pickle.HIGHEST_PROTOCOL))
     
-    # change the directory path of the PowerSpectrum object to the temporary save directory path
+    # change the directory path of the PowerSpectrum object to the
+    #  temporary save directory path
     ps_include_bad.spectrum_save_dir_epoched = temp_save_dir_epoched
     ps_exclude_bad.spectrum_save_dir_epoched = temp_save_dir_epoched
 
@@ -298,15 +356,19 @@ def test_include_bad_channels_epoched(setup_and_cleanup_test_dirs):
     # Process with include_bad_channels=True PowerSpectrum instance
     ps_include_bad.get_spectrum(temp_folder_path, file_name)
     # Load the saved spectra
-    spectra_include = torch.load(ps_include_bad.spectrum_save_dir_epoched / f'psd_{participant_id}_{condition}.pt')
+    spectra_include = torch.load(ps_include_bad.spectrum_save_dir_epoched \
+                                  / f'psd_{participant_id}_{condition}.pt')
     # For epoched data, the shape is (n_epochs, n_channels, n_frequencies)
     # Expected number of EEG channels is 26
     print(" spectra_include.shape", spectra_include.shape)
-    assert spectra_include.shape[1] == 26, "When including bad channels, PSD should have 26 channels"
+    assert spectra_include.shape[1] == 26,\
+          "When including bad channels, PSD should have 26 channels"
 
     # Process with include_bad_channels=False PowerSpectrum instance
     ps_exclude_bad.get_spectrum(temp_folder_path, file_name)
     # Load the saved spectra
-    spectra_exclude = torch.load(ps_exclude_bad.spectrum_save_dir_epoched / f'psd_{participant_id}_{condition}.pt')
+    spectra_exclude = torch.load(ps_exclude_bad.spectrum_save_dir_epoched \
+                                 / f'psd_{participant_id}_{condition}.pt')
     # When excluding bad channels, the number of channels should be less than 26
-    assert spectra_exclude.shape[1] < 26, "When excluding bad channels, PSD should have fewer than 26 channels"
+    assert spectra_exclude.shape[1] < 26, \
+          "When excluding bad channels, PSD should have fewer than 26 channels"

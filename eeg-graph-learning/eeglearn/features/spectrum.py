@@ -9,9 +9,9 @@ import mne
 from eeglearn.utils.utils import get_participant_id_condition_from_string
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
-from eeglearn.utils.utils import get_labels_dict
+from eeglearn.utils.utils import get_labels_dict, load_cleaned_from_disk
 from eeglearn.config import Config
-
+from eeglearn.preprocess.preprocessing import Preproccesing
 class PowerSpectrum(Dataset):
     """
     Dataset class for computing and loading power spectrum features from EEG data.
@@ -45,8 +45,9 @@ class PowerSpectrum(Dataset):
     """
     
     def __init__(self, 
-                 include_bad_channels : bool,
                  cleaned_path : str,
+                 include_bad_channels : bool,
+                 save_to_disk : bool = True,
                  get_labels : bool = True, 
                  plots : bool = False,
                  full_time_series : bool = False,
@@ -56,7 +57,7 @@ class PowerSpectrum(Dataset):
                  tmin : float = None,
                  tmax : float = None,
                  picks : list[str] = None,
-                 exclude : list[str] = [],
+                 exclude : list[str] = None,
                  proj : bool = False,
                  verbose : bool = False,
                  ) -> None:
@@ -84,6 +85,7 @@ class PowerSpectrum(Dataset):
         Note:
             This method does not accept n_jobs as an argument as this will cause nested multiprocessing.
         """
+        self.save_to_disk = save_to_disk
         self.cleaned_path = cleaned_path
         self.participant_list = os.listdir(self.cleaned_path)
         self.fmin = fmin
@@ -102,6 +104,10 @@ class PowerSpectrum(Dataset):
         if get_labels:
             self.labels_dict = get_labels_dict()
         self.include_bad_channels = include_bad_channels
+        if exclude is None:
+            self.exclude = []
+        if picks is None:
+            self.picks = ['all']
 
         # create the folder to save the plots and the spectra
         # Get the project root directory (2 levels up from this file)
@@ -110,24 +116,25 @@ class PowerSpectrum(Dataset):
         # Define data directories using Path objects
         self.plot_save_dir = project_root / 'data' / 'psd' / 'plots'
         self.spectrum_save_dir = project_root / 'data' / 'psd' / 'spectra'
-        self.spectrum_save_dir_epoched = project_root / 'data' / 'psd' / 'spectra_epoched'
+        self.spectrum_save_dir_epoched = project_root / 'data' / 'psd' / \
+            'spectra_epoched'
         # Ensure the directories exist
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
         if self.full_time_series:
-            self.spectrum_save_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.spectrum_save_dir.mkdir(parents=True, exist_ok=True)
+            except FileExistsError:
+                raise RuntimeError("failed to create spectrum_save_dir")
         else:
-            self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
+            try:
+                self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
+            except FileExistsError:
+                raise RuntimeError("failed to create spectrum_save_dir_epoched")
         # Get the actual numer of numpy files to process
-        self.folders_and_files = []
-        self.participant_npy_files = []
-        for participant in self.participant_list:
-            participant_folder = Path(self.cleaned_path) / participant / 'ses-1' / 'eeg'
-            for file in os.listdir(participant_folder):
-                if file.endswith('.npy'):
-                    self.participant_npy_files.append(file)
-                    self.folders_and_files.append((participant_folder, file))
-
-        
+        self.folders_and_files : list[tuple[Path, str]] = []
+        self.participant_npy_files : list[str] = []
+        self.folders_and_files, self.participant_npy_files = \
+            load_cleaned_from_disk(self.participant_list, self.cleaned_path)
 
     def __len__(self) -> int:
         """
@@ -200,7 +207,9 @@ class PowerSpectrum(Dataset):
 
         return fig
     
-    def get_spectrum(self, folder_path : str, file_name : str) -> tuple[torch.Tensor, torch.Tensor, str]:
+    def get_spectrum(self, folder_path : str, 
+                     file_name : str, save_to_disk : bool = True) \
+                          -> tuple[torch.Tensor, torch.Tensor, str]:
         """
         Compute power spectrum density for a single EEG data file.
         
@@ -217,20 +226,20 @@ class PowerSpectrum(Dataset):
                 - torch.Tensor: The spectral data (PSD values).
                 - torch.Tensor: The frequency values corresponding to the PSD data.
                 - str: The participant ID and condition.
-                
-        Note:
-            This method prints information about data shapes and bad channels for debugging.
         """
-        participant_id, condition = get_participant_id_condition_from_string(file_name)     
-        data = np.load(folder_path / file_name, allow_pickle=True) 
+        participant_id : str
+        condition : str
+        participant_id, condition = get_participant_id_condition_from_string(file_name)
+        data : Preproccesing = np.load(folder_path / file_name, allow_pickle=True)
+        spectra : np.ndarray 
+        freqs : np.ndarray
         # from the epoched data, compute the psd
         # check shape of the epoched and full time series data
-        
-
         if self.full_time_series:
+            
             if self.include_bad_channels:
                 data.preprocessed_raw.info['bads'] = []
-            psd = data.preprocessed_raw.compute_psd(method=self.method,
+            psd : mne.time_frequency.Spectrum = data.preprocessed_raw.compute_psd(method=self.method,
                                                 fmin=self.fmin,
                                                 fmax=self.fmax, 
                                                 tmin=self.tmin,
@@ -240,8 +249,9 @@ class PowerSpectrum(Dataset):
                                                 proj=self.proj,
                                                 verbose=self.verbose)
             spectra, freqs = psd.get_data(return_freqs=True)
-            torch.save(spectra, f'{self.spectrum_save_dir}/psd_{participant_id}_{condition}.pt')
-            torch.save(freqs, f'{self.spectrum_save_dir}/freqs_{participant_id}_{condition}.pt')
+            if self.save_to_disk:
+                torch.save(torch.from_numpy(spectra), f'{self.spectrum_save_dir}/psd_{participant_id}_{condition}.pt')
+                torch.save(torch.from_numpy(freqs), f'{self.spectrum_save_dir}/freqs_{participant_id}_{condition}.pt')
             if self.plots:
                 fig = self.plot_psd(psd)
                 plt.figure(figsize=(10, 6))
@@ -253,7 +263,8 @@ class PowerSpectrum(Dataset):
         else:
             if self.include_bad_channels:
                 data.preprocessed_epochs.info['bads'] = []
-            psd = data.preprocessed_epochs.compute_psd(method=self.method,
+            psd : mne.time_frequency.Spectrum.EpochsSpectrum = \
+                data.preprocessed_epochs.compute_psd(method=self.method,
                                                 fmin=self.fmin,
                                                 fmax=self.fmax, 
                                                 tmin=self.tmin,
@@ -263,8 +274,9 @@ class PowerSpectrum(Dataset):
                                                 proj=self.proj,
                                                 verbose=self.verbose)
             spectra, freqs = psd.get_data(return_freqs=True)
-            torch.save(spectra, f'{self.spectrum_save_dir_epoched}/psd_{participant_id}_{condition}.pt')
-            torch.save(freqs, f'{self.spectrum_save_dir_epoched}/freqs_{participant_id}_{condition}.pt')
+            if self.save_to_disk:
+                torch.save(torch.from_numpy(spectra), f'{self.spectrum_save_dir_epoched}/psd_{participant_id}_{condition}.pt')
+                torch.save(torch.from_numpy(freqs), f'{self.spectrum_save_dir_epoched}/freqs_{participant_id}_{condition}.pt')
             if self.plots:
                 fig = self.plot_psd(psd)
                 plt.figure(figsize=(10, 6))
@@ -273,6 +285,7 @@ class PowerSpectrum(Dataset):
                 plt.tight_layout()
                 plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
                 plt.close()
+        return spectra, freqs, participant_id + '_' + condition
                 
     def run_spectrum_parallel(self) -> None:
         """ 
@@ -289,7 +302,7 @@ class PowerSpectrum(Dataset):
         processes = cpu_count() - 1
         print(f'Using {processes} processes for spectrum computation')
         with Pool(processes) as p:
-            list(tqdm(p.starmap(self.get_spectrum, self.folders_and_files), 
+            results : list[tuple[torch.Tensor, torch.Tensor, str]] = list(tqdm(p.starmap(self.get_spectrum, self.folders_and_files), 
                      total=len(self.folders_and_files), 
                      desc="Computing spectrums"))
 
@@ -315,5 +328,6 @@ if __name__ == "__main__":
                             proj=False,
                             verbose=False)
     print(len(dataset))
+    #dataset.get_spectrum(dataset.folders_and_files[0][0], dataset.folders_and_files[0][1], save_to_disk=False)
     for i in range(len(dataset)):
         print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
