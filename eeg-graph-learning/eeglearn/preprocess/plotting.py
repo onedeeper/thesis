@@ -51,7 +51,7 @@ def get_plots(raw : mne.io.Raw, step : str,
     - fig: figure object containing the raw data, power spectral density and time frequency decomposition
     """
 
-    def plot_raw(raw : mne.io.Raw, scalings : dict[str, float] = {'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ecg': 'auto'}):
+    def plot_raw(raw : mne.io.Raw, scalings : dict[str, float] = {'eeg': 1.5, 'eog': 'auto', 'emg': 'auto', 'ecg': 'auto'}) -> np.ndarray:
         ## plotting raw data
         with mne.viz.use_browser_backend('matplotlib'):
             fig = raw.plot(n_channels=33, scalings=scalings, title='title', show_scrollbars=False, show=False)
@@ -60,7 +60,7 @@ def get_plots(raw : mne.io.Raw, step : str,
             fig = np.asarray(fig.buffer_rgba())
         return fig
 
-    def plot_psd(raw : mne.io.Raw, xscale : str = 'linear'):
+    def plot_psd(raw : mne.io.Raw, xscale : str = 'linear') -> np.ndarray:
         ## plotting power spectral density
         with mne.viz.use_browser_backend('matplotlib'):
             fig = raw.compute_psd(fmin=0.5, fmax=130).plot(picks='eeg', xscale=xscale, dB=True, show=False)
@@ -70,7 +70,7 @@ def get_plots(raw : mne.io.Raw, step : str,
 
         return fig
 
-    def plot_tfr(raw : mne.io.Raw, axes : plt.Axes, channel : list[int] = [6], baseline_correction : bool = False):
+    def plot_tfr(raw : mne.io.Raw, axes : plt.Axes, channel : list[int] = [6], baseline_correction : bool = False) -> None:
         ## plotting time frequency decomposition
         # define frequencies of interest
         freqs = np.array([  # 5 steps per frequency band
@@ -102,7 +102,7 @@ def get_plots(raw : mne.io.Raw, step : str,
 
         return
 
-    def plot_ica(raw : mne.io.Raw, ica : mne.preprocessing.ICA):
+    def plot_ica(raw : mne.io.Raw, ica : mne.preprocessing.ICA) -> np.ndarray:
         ## plotting ICA components
         with mne.viz.use_browser_backend('matplotlib'):
             fig = ica.plot_overlay(raw, picks='eeg', show=False)

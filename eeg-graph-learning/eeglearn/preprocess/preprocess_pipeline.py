@@ -25,9 +25,13 @@ from multiprocessing import Pool, cpu_count
 from eeglearn.preprocess.preprocessing import Preproccesing  
 from eeglearn.preprocess.save_to_torch import get_filepaths, preprocess_and_save_data
 from eeglearn.preprocess.clean import clean_pipeline
+from eeglearn.config import Config
 
 
 if __name__ == '__main__':
+    # Set seed for reproducibility - only verbose in the main process
+    Config.set_global_seed(verbose=True)
+    
     # Get the project root directory (2 levels up from this file)
     project_root = Path(__file__).parent.parent.parent
 

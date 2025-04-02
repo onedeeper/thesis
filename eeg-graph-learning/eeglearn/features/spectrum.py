@@ -10,6 +10,7 @@ from eeglearn.utils.utils import get_participant_id_condition_from_string
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 from eeglearn.utils.utils import get_labels_dict
+from eeglearn.config import Config
 
 class PowerSpectrum(Dataset):
     """
@@ -21,8 +22,8 @@ class PowerSpectrum(Dataset):
     and saving results for future use.
     
     Attributes:
-        data_path (str): Path to directory containing preprocessed EEG data.
-        participant_list (list): List of participants available in the data_path.
+        cleaned_path (str): Path to directory containing preprocessed EEG data.
+        participant_list (list): List of participants available in the cleaned_path.
         fmin (float): Minimum frequency (Hz) for spectral analysis.
         fmax (float): Maximum frequency (Hz) for spectral analysis.
         full_time_series (bool): Whether to use the full time series or epochs.
@@ -83,8 +84,8 @@ class PowerSpectrum(Dataset):
         Note:
             This method does not accept n_jobs as an argument as this will cause nested multiprocessing.
         """
-        self.data_path = cleaned_path
-        self.participant_list = os.listdir(self.data_path)
+        self.cleaned_path = cleaned_path
+        self.participant_list = os.listdir(self.cleaned_path)
         self.fmin = fmin
         self.fmax = fmax
         self.full_time_series = full_time_series
@@ -97,6 +98,9 @@ class PowerSpectrum(Dataset):
         self.verbose = verbose
         self.ran_spectrum = False
         self.plots = plots
+        # load the labels file
+        if get_labels:
+            self.labels_dict = get_labels_dict()
         self.include_bad_channels = include_bad_channels
 
         # create the folder to save the plots and the spectra
@@ -117,15 +121,13 @@ class PowerSpectrum(Dataset):
         self.folders_and_files = []
         self.participant_npy_files = []
         for participant in self.participant_list:
-            participant_folder = Path(self.data_path) / participant / 'ses-1' / 'eeg'
+            participant_folder = Path(self.cleaned_path) / participant / 'ses-1' / 'eeg'
             for file in os.listdir(participant_folder):
                 if file.endswith('.npy'):
                     self.participant_npy_files.append(file)
                     self.folders_and_files.append((participant_folder, file))
 
-        # load the labels file
-        if get_labels:
-            self.labels_dict = get_labels_dict()
+        
 
     def __len__(self) -> int:
         """
@@ -292,6 +294,9 @@ class PowerSpectrum(Dataset):
                      desc="Computing spectrums"))
 
 if __name__ == "__main__":
+    # Set seed for reproducibility - only verbose in the main process
+    Config.set_global_seed(verbose=True)
+    
     # Find the path to the cleaned data from root directory
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
     # find the path to the labels file data
@@ -299,14 +304,14 @@ if __name__ == "__main__":
     dataset = PowerSpectrum(cleaned_path=cleaned_path,
                             get_labels=True,
                             include_bad_channels=True,
-                            full_time_series=True,
+                            full_time_series=False,
                             method='multitaper',
                             plots=True,
                             fmin=0.5,
                             fmax=130,
                             tmin=None,
                             tmax=None,
-                            picks=['eeg'],
+                            picks=['all'],
                             proj=False,
                             verbose=False)
     print(len(dataset))

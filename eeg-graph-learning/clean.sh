@@ -48,9 +48,11 @@ fi
 echo "Activating conda environment..."
 conda activate eeg-graph-learning > /dev/null 2>&1
 
+# Install the IPython kernel for Jupyter
+echo "Installing Jupyter kernel for this environment..."
+python -m ipykernel install --user --name=eeg-graph-learning --display-name="Python (eeg-graph-learning)"
+
 # Run the preprocessing pipeline
-echo "Activating conda environment..."
-conda activate eeg-graph-learning > /dev/null 2>&1
 echo "Running preprocessing pipeline..."
 if python -m eeglearn.preprocess.preprocess_pipeline; then
     echo "Preprocessing completed successfully!"

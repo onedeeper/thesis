@@ -3,9 +3,15 @@ import re
 import pandas as pd
 from pathlib import Path
 
-def get_participant_id_condition_from_string(file_path):
+def get_participant_id_condition_from_string(file_path: str) -> tuple[str, str]:
     """
     Extract the participant ID and condition from the file path.
+    
+    Args:
+        file_path: Path to the file containing participant ID and condition
+        
+    Returns:
+        tuple: A tuple containing (participant_id, condition)
     """
     # Extract the participant ID and condition from the file path
 

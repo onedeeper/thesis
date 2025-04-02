@@ -48,7 +48,7 @@ def test_power_spectrum_initialization():
                       fmax=40)
     
     # Check that initialization correctly set attributes
-    assert ps.data_path == test_dir
+    assert ps.cleaned_path == test_dir
     assert ps.fmin == 1
     assert ps.fmax == 40
     assert ps.full_time_series is True

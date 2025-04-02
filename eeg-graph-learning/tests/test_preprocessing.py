@@ -5,6 +5,13 @@ from pathlib import Path
 from eeglearn.preprocess.preprocessing import Preproccesing
 import os
 import uuid
+from eeglearn.config import Config
+
+# Set global seed for all tests
+@pytest.fixture(scope="session", autouse=True)
+def setup_seed():
+    Config.set_global_seed()
+    return Config.RANDOM_SEED
 
 # Fixtures are reusable test resources
 @pytest.fixture
