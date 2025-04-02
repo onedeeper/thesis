@@ -264,4 +264,4 @@ class TestClean:
         
         # Verify no files for the subject that raised the exception
         subjects = set(details.participant for details in file_details)
-        assert 'sub-002' not in subjects, f"Subject with exceptions was incorrectly included: {subjects}" 
+        assert 'sub-002' not in subjects, f"Subject with exceptions was incorrectly included: {subjects}"
