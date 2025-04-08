@@ -23,7 +23,7 @@ To that end, I have tried very hard to:
 1. Incorporate software engineering best principles (as far as I can learn them from disparate sources online or from asking an LLM). 
 2. Make the code reproducible to the best of my ability ( [more info on how I tried  to do that](udesh.io/reproduce.html ) )
 
-**I also focused on improving on the work I was doing week  after week**. This means I incorporated good ideas as I encountered them. This also means some earlier files are not perhaps as clean and bug free as they could be. I hope to return to these once the core deliverables for my thesis have been completed.
+**I also focused on improving on the work I was doing week  after week**. This means I incorporated good ideas as I encountered them. This also means some earlier files are not perhaps as clean and bug free as they could be. For example, later files will likely have better test coverage. I hope to return to these once the core deliverables for my thesis have been completed.
 
 ## A short timeline (updated regularly)
 This project was built over several months. 
