@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.preprocess import plotting
+from eeglearn.preprocess import preprocessing_plotting
 from eeglearn.config import Config
 
 

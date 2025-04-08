@@ -12,7 +12,7 @@ import torch
 
 
 from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.preprocess import plotting
+from eeglearn.preprocess import preprocessing_plotting
 from eeglearn.preprocess.preprocess_pipeline import clean_pipeline  
 from eeglearn.preprocess.save_to_torch import get_filepaths, process_file, preprocess_and_save_data
 
