@@ -16,4 +16,6 @@ I implemented testing for the functions I wrote with Pytest. When I started the 
 
 ### Additional Notes
 - I find that asserts that I use in the code make some of these tests redundant
-- I will include these tests for now, and I will add a readme reflecting on this
+- I will include these tests for now, and I will add a readme reflecting on this.
+- It's so easy to write useless tests!: The first principle is that you must not fool yourelf, and you are the easiest to fool - Richard Feynman
+    - If you are not willing to test the code you write, is it worth writing ? 
