@@ -55,9 +55,12 @@ def get_labels_dict() -> dict[str, str]:
     participant_labels = labels_df['indication']
     return dict(zip(participant_ids, participant_labels))
 
-def load_cleaned_from_disk(participant_list : list[str], cleaned_path : str) ->\
+def get_cleaned_data_paths(participant_list : list[str], cleaned_path : str) ->\
       tuple[list[tuple[Path, str]], list[str]]:
     """Load the cleaned data from the disk.
+    This function exists mostly for enabling the parallel processing of data , 
+    for example when computing the spectrum or energy of the data
+    with run_spectrum_parallel() and run_energy_parallel()
 
     Args:
         participant_list: List of participant IDs to load
