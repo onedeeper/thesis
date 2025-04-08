@@ -25,7 +25,9 @@ var/
 !/data/.gitkeep
 setup_
 # Test data
+.coverage*
 tests/test_data/*
+tests/experiments/*
 tests/test_data/data/cleaned/sub-19740274/ses-1/eeg/*
 tests/test_data/TDBRAIN-dataset/derivatives/sub-88046393/ses-1/eeg/*
 !/tests/test_data/.gitkeep

@@ -6,12 +6,13 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas 
 import mne
-from eeglearn.utils.utils import get_participant_id_condition_from_string
+from eeglearn.utils.utils import get_participant_id_condition_from_string,\
+    get_cleaned_data_paths, get_labels_dict
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
-from eeglearn.utils.utils import get_labels_dict
 from eeglearn.config import Config
-
+from eeglearn.preprocess.preprocessing import Preproccesing
+from eeglearn.utils.plotting import plot_psd
 class PowerSpectrum(Dataset):
     """
     Dataset class for computing and loading power spectrum features from EEG data.
@@ -27,7 +28,8 @@ class PowerSpectrum(Dataset):
         fmin (float): Minimum frequency (Hz) for spectral analysis.
         fmax (float): Maximum frequency (Hz) for spectral analysis.
         full_time_series (bool): Whether to use the full time series or epochs.
-        tmin (float): Start time for analysis (in seconds) or None to use beginning of data.
+        tmin (float): Start time for analysis (in seconds) or None to use beginning of 
+                    data.
         tmax (float): End time for analysis (in seconds) or None to use end of data.
         picks (list): Channels to include in the analysis.
         exclude (list): Channels to exclude from the analysis.
@@ -37,17 +39,20 @@ class PowerSpectrum(Dataset):
         plots (bool): Whether to generate and save PSD plots.
         plot_save_dir (Path): Directory to save PSD plots.
         spectrum_save_dir (Path): Directory to save spectrum data for full time series.
-        spectrum_save_dir_epoched (Path): Directory to save spectrum data for epoched data.
-        folders_and_files (list): List of tuples with folder paths and file names to process.
+        spectrum_save_dir_epoched (Path): Directory to save spectrum data for epoched 
+                data.
+        folders_and_files (list): List of tuples with folder paths and file names to 
+                process.
         participant_npy_files (list): List of .npy files to process.
         ran_spectrum (bool): Flag indicating whether spectrum calculation has been run.
-        ignore_bad_channels (bool): Whether to ignore bad channels during spectrum computation.
+        ignore_bad_channels (bool): Whether to ignore bad channels during spectrum 
+                computation.
     """
     
     def __init__(self, 
-                 include_bad_channels : bool,
                  cleaned_path : str,
-                 get_labels : bool = True, 
+                 include_bad_channels : bool = False,
+                 save_to_disk : bool = True,    
                  plots : bool = False,
                  full_time_series : bool = False,
                  method : str = 'welch',
@@ -56,7 +61,6 @@ class PowerSpectrum(Dataset):
                  tmin : float = None,
                  tmax : float = None,
                  picks : list[str] = None,
-                 exclude : list[str] = [],
                  proj : bool = False,
                  verbose : bool = False,
                  ) -> None:
@@ -64,26 +68,31 @@ class PowerSpectrum(Dataset):
         Initialize the PowerSpectrum dataset.
         
         Args:
-            ignore_bad_channels (bool): Whether to ignore bad channels during spectrum computation.
+            ignore_bad_channels (bool): Whether to ignore bad channels
             cleaned_path (str): Path to directory containing preprocessed EEG data.
-            get_labels (bool, optional): Whether to load participant labels. Defaults to True.
-            plots (bool, optional): Whether to generate and save PSD plots. Defaults to False.
-            full_time_series (bool, optional): Whether to use the full time series instead of epochs. 
-                                              Defaults to False.
-            method (str, optional): Method to use for PSD computation. Options include 'welch',
-                                  'multitaper', etc. Defaults to 'welch'.
-            fmin (float, optional): Minimum frequency (Hz) for spectral analysis. Defaults to 0.5 Hz.
-            fmax (float, optional): Maximum frequency (Hz) for spectral analysis. Defaults to 130 Hz.
-            tmin (float, optional): Start time for analysis (in seconds). Defaults to None.
-            tmax (float, optional): End time for analysis (in seconds). Defaults to None.
-            picks (list[str], optional): Channels to include in the analysis. Defaults to None.
-            exclude (list[str], optional): Channels to exclude from the analysis. Defaults to [].
-            proj (bool, optional): Whether to apply projection. Defaults to False.
-            verbose (bool, optional): Whether to print detailed information. Defaults to False.
+            plots (bool): Whether to generate and save PSD plots.
+            full_time_series (bool): Whether to use the full time series instead of 
+                                    epochs. 
+            method (str): Method to use for PSD computation {'welch', 'multitaper'}
+            fmin (float): Minimum frequency (Hz) for spectral analysis.
+            fmax (float): Maximum frequency (Hz) for spectral analysis.
+            tmin (float): Start time for analysis (in seconds).
+            tmax (float): End time for analysis (in seconds).
+            picks (list[str]): Channels to include in the analysis. By default, 
+                only includes the data channels:
+            (https://mne.tools/stable/documentation/glossary.html#term-data-channels)
+
+            exclude (list[str]): Channels to exclude from the analysis.
+            proj (bool): Whether to apply projection.
+            verbose (bool): Whether to print detailed information.
             
         Note:
-            This method does not accept n_jobs as an argument as this will cause nested multiprocessing.
+            This method does not accept n_jobs as an argument as this will cause
+            nested multiprocessing.
+            It only returns the PSD for the EEG channels.
+            Does not use exclude. 
         """
+        self.save_to_disk = save_to_disk
         self.cleaned_path = cleaned_path
         self.participant_list = os.listdir(self.cleaned_path)
         self.fmin = fmin
@@ -91,18 +100,15 @@ class PowerSpectrum(Dataset):
         self.full_time_series = full_time_series
         self.tmin = tmin
         self.tmax = tmax
-        self.picks = picks
-        self.exclude = exclude
+        self.include_bad_channels = include_bad_channels
         self.proj = proj
         self.method = method
         self.verbose = verbose
         self.ran_spectrum = False
         self.plots = plots
         # load the labels file
-        if get_labels:
-            self.labels_dict = get_labels_dict()
-        self.include_bad_channels = include_bad_channels
-
+        self.labels_dict = get_labels_dict()
+        self.picks = ['data'] if picks is None else picks
         # create the folder to save the plots and the spectra
         # Get the project root directory (2 levels up from this file)
         project_root = Path(__file__).resolve().parent.parent.parent
@@ -110,24 +116,25 @@ class PowerSpectrum(Dataset):
         # Define data directories using Path objects
         self.plot_save_dir = project_root / 'data' / 'psd' / 'plots'
         self.spectrum_save_dir = project_root / 'data' / 'psd' / 'spectra'
-        self.spectrum_save_dir_epoched = project_root / 'data' / 'psd' / 'spectra_epoched'
+        self.spectrum_save_dir_epoched = project_root / 'data' / 'psd' / \
+            'spectra_epoched'
         # Ensure the directories exist
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
         if self.full_time_series:
-            self.spectrum_save_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.spectrum_save_dir.mkdir(parents=True, exist_ok=True)
+            except FileExistsError:
+                raise RuntimeError("failed to create spectrum_save_dir")
         else:
-            self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
+            try:
+                self.spectrum_save_dir_epoched.mkdir(parents=True, exist_ok=True)
+            except FileExistsError:
+                raise RuntimeError("failed to create spectrum_save_dir_epoched")
         # Get the actual numer of numpy files to process
-        self.folders_and_files = []
-        self.participant_npy_files = []
-        for participant in self.participant_list:
-            participant_folder = Path(self.cleaned_path) / participant / 'ses-1' / 'eeg'
-            for file in os.listdir(participant_folder):
-                if file.endswith('.npy'):
-                    self.participant_npy_files.append(file)
-                    self.folders_and_files.append((participant_folder, file))
-
-        
+        self.folders_and_files : list[tuple[Path, str]] = []
+        self.participant_npy_files : list[str] = []
+        self.folders_and_files, self.participant_npy_files = \
+            get_cleaned_data_paths(self.participant_list, self.cleaned_path)
 
     def __len__(self) -> int:
         """
@@ -161,14 +168,19 @@ class PowerSpectrum(Dataset):
         if not self.ran_spectrum:
             self.run_spectrum_parallel()
         try:
-            participant_id, condition =  get_participant_id_condition_from_string(self.participant_npy_files[idx])
+            participant_id, condition =  get_participant_id_condition_from_string\
+                (self.participant_npy_files[idx])
             label = self.labels_dict[participant_id]
             if self.full_time_series:
-                spectra = torch.load(self.spectrum_save_dir / f'psd_{participant_id}_{condition}.pt')
-                freqs = torch.load(self.spectrum_save_dir / f'freqs_{participant_id}_{condition}.pt')
+                spectra = torch.load(self.spectrum_save_dir /\
+                                      f'psd_{participant_id}_{condition}.pt')
+                freqs = torch.load(self.spectrum_save_dir /\
+                                      f'freqs_{participant_id}_{condition}.pt')
             else:
-                spectra = torch.load(self.spectrum_save_dir_epoched / f'psd_{participant_id}_{condition}.pt')
-                freqs = torch.load(self.spectrum_save_dir_epoched / f'freqs_{participant_id}_{condition}.pt')
+                spectra = torch.load(self.spectrum_save_dir_epoched /\
+                                      f'psd_{participant_id}_{condition}.pt')
+                freqs = torch.load(self.spectrum_save_dir_epoched /\
+                                      f'freqs_{participant_id}_{condition}.pt')
             return spectra, freqs, label
         except IndexError:
             print(f'Spectrum for {self.participant_npy_files[idx]} not found')
@@ -176,31 +188,10 @@ class PowerSpectrum(Dataset):
         except FileNotFoundError:
             print(f'Spectrum for {self.participant_npy_files[idx]} not found')
             return None, None, None
-
-    def plot_psd(self, psd_object : mne.time_frequency.Spectrum, xscale : str = 'linear') -> plt.Figure:
-        """
-        Plot the power spectral density (PSD) of an EEG dataset.
-        
-        This method uses MNE's plotting functions to visualize the PSD of the EEG data.
-        It allows for customization of the x-axis scale and displays PSD in decibel (dB) units.
-        
-        Args:
-            psd_object (mne.time_frequency.Spectrum): The PSD object from MNE.
-            xscale (str, optional): Scale for the x-axis ('linear' or 'log'). Defaults to 'linear'.
-            
-        Returns:
-            numpy.ndarray: The figure as a numpy array for saving to a file.
-        """
-        with mne.viz.use_browser_backend('matplotlib'):
-            #print(type(raw))
-            fig = psd_object.plot(picks='eeg', xscale=xscale, dB=True, show=False)
-            fig = FigureCanvas(fig)
-            fig.draw()
-            fig = np.asarray(fig.buffer_rgba())
-
-        return fig
     
-    def get_spectrum(self, folder_path : str, file_name : str) -> tuple[torch.Tensor, torch.Tensor, str]:
+    def get_spectrum(self, folder_path : str, 
+                     file_name : str, save_to_disk : bool = True) \
+                          -> tuple[torch.Tensor, torch.Tensor, str]:
         """
         Compute power spectrum density for a single EEG data file.
         
@@ -217,103 +208,128 @@ class PowerSpectrum(Dataset):
                 - torch.Tensor: The spectral data (PSD values).
                 - torch.Tensor: The frequency values corresponding to the PSD data.
                 - str: The participant ID and condition.
-                
-        Note:
-            This method prints information about data shapes and bad channels for debugging.
         """
-        participant_id, condition = get_participant_id_condition_from_string(file_name)     
-        data = np.load(folder_path / file_name, allow_pickle=True) 
+        participant_id, condition = get_participant_id_condition_from_string(file_name)
+        try:
+            data : Preproccesing = np.load(folder_path / file_name, allow_pickle=True)
+        except FileNotFoundError:
+            print(f'File {file_name} not found')
+            return None, None, None
+        assert isinstance(data, Preproccesing), "data is not a Preproccesing object"
+
+        condition : str
+        participant_id : str
+        spectra : np.ndarray 
+        freqs : np.ndarray
+        n_bad_channels : int
         # from the epoched data, compute the psd
         # check shape of the epoched and full time series data
-        
-
-        if self.full_time_series:
-            if self.include_bad_channels:
-                data.preprocessed_raw.info['bads'] = []
-            psd = data.preprocessed_raw.compute_psd(method=self.method,
-                                                fmin=self.fmin,
-                                                fmax=self.fmax, 
-                                                tmin=self.tmin,
-                                                tmax=self.tmax,
-                                                picks=self.picks,
-                                                exclude=self.exclude,
-                                                proj=self.proj,
-                                                verbose=self.verbose)
-            spectra, freqs = psd.get_data(return_freqs=True)
-            torch.save(spectra, f'{self.spectrum_save_dir}/psd_{participant_id}_{condition}.pt')
-            torch.save(freqs, f'{self.spectrum_save_dir}/freqs_{participant_id}_{condition}.pt')
-            if self.plots:
-                fig = self.plot_psd(psd)
-                plt.figure(figsize=(10, 6))
-                plt.imshow(fig)
-                plt.axis('off')
-                plt.tight_layout()
-                plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
-                plt.close()
+        if self.include_bad_channels:
+            exclude = []
         else:
-            if self.include_bad_channels:
-                data.preprocessed_epochs.info['bads'] = []
-            psd = data.preprocessed_epochs.compute_psd(method=self.method,
+            exclude = 'bads'
+        if self.full_time_series:
+            n_bad_channels = len(data.preprocessed_raw.info['bads'])
+            psd : mne.time_frequency.Spectrum = data.preprocessed_raw.compute_psd(
+                                                method=self.method,
                                                 fmin=self.fmin,
                                                 fmax=self.fmax, 
                                                 tmin=self.tmin,
                                                 tmax=self.tmax,
                                                 picks=self.picks,
-                                                exclude=self.exclude,
                                                 proj=self.proj,
+                                                exclude=exclude,
                                                 verbose=self.verbose)
-            spectra, freqs = psd.get_data(return_freqs=True)
-            torch.save(spectra, f'{self.spectrum_save_dir_epoched}/psd_{participant_id}_{condition}.pt')
-            torch.save(freqs, f'{self.spectrum_save_dir_epoched}/freqs_{participant_id}_{condition}.pt')
+            assert isinstance(psd, mne.time_frequency.Spectrum), \
+                f"psd is not a mne.time_frequency.Spectrum object for {file_name}"
+            spectra, freqs = psd.get_data(return_freqs=True, picks=self.picks,
+                                          exclude=exclude)
+            if self.save_to_disk:
+                path_to_psd : Path = self.spectrum_save_dir / \
+                    f'psd_{participant_id}_{condition}.pt'
+                torch.save(torch.from_numpy(spectra), path_to_psd)
+                path_to_freqs : Path = self.spectrum_save_dir / \
+                    f'freqs_{participant_id}_{condition}.pt'
+                torch.save(torch.from_numpy(freqs), path_to_freqs)
+            if self.plots:  
+                plot_psd(psd=psd, plot_save_dir=self.plot_save_dir, \
+                          participant_id=participant_id, condition=condition)
+        else:
+            n_bad_channels : int = len(data.preprocessed_epochs.info['bads'])
+            psd : mne.time_frequency.Spectrum.EpochsSpectrum = \
+                data.preprocessed_epochs.compute_psd(method=self.method,
+                                                fmin=self.fmin,
+                                                fmax=self.fmax, 
+                                                tmin=self.tmin,
+                                                tmax=self.tmax,
+                                                picks=self.picks,
+                                                proj=self.proj,
+                                                exclude=exclude,
+                                                verbose=self.verbose)
+            assert isinstance(psd, mne.time_frequency.spectrum.EpochsSpectrum), \
+       f"psd is not a mne.time_frequency.Spectrum.EpochsSpectrum object for {file_name}"
+            spectra, freqs = psd.get_data(return_freqs=True, picks=self.picks,
+                                          exclude=exclude)
+            if self.save_to_disk:
+                path_to_psd : Path = self.spectrum_save_dir_epoched / \
+                    f'psd_{participant_id}_{condition}.pt'
+                torch.save(torch.from_numpy(spectra), path_to_psd)
+                path_to_freqs : Path = self.spectrum_save_dir_epoched / \
+                    f'freqs_{participant_id}_{condition}.pt'
+                torch.save(torch.from_numpy(freqs), path_to_freqs)
             if self.plots:
-                fig = self.plot_psd(psd)
-                plt.figure(figsize=(10, 6))
-                plt.imshow(fig)
-                plt.axis('off')
-                plt.tight_layout()
-                plt.savefig(f'{self.plot_save_dir}/psd_{participant_id}_{condition}.png', dpi=300)
-                plt.close()
+                plot_psd( psd=psd, plot_save_dir=self.plot_save_dir, \
+                          participant_id=participant_id, condition=condition)
+        assert isinstance(spectra, np.ndarray), \
+            f"spectra is not a numpy array for {file_name}"
+        assert isinstance(freqs, np.ndarray), \
+            f"freqs is not a numpy array for {file_name}"
+        return torch.from_numpy(spectra), torch.from_numpy(freqs), participant_id \
+            + '_' + condition, n_bad_channels
                 
     def run_spectrum_parallel(self) -> None:
         """ 
         Compute power spectrum density for all participants and conditions in parallel.
         
         This method uses multiprocessing to parallelize the computation of PSD features
-        across all EEG data files. It leverages the get_spectrum method for individual
+        across all EEG data files. It uses the get_spectrum method for individual
         file processing and uses a process pool to distribute the workload.
         
-        The method sets ran_spectrum to True to indicate that spectrum computation has been
-        performed, preventing redundant calculations when __getitem__ is called.
+        The method sets ran_spectrum to True to indicate that spectrum computation has 
+        been performed, to make sure when called by __getitem__ it does not compute
+        the spectrum again.
         """
         self.ran_spectrum = True
         processes = cpu_count() - 1
         print(f'Using {processes} processes for spectrum computation')
         with Pool(processes) as p:
-            list(tqdm(p.starmap(self.get_spectrum, self.folders_and_files), 
+            results : list[tuple[torch.Tensor, torch.Tensor, str]] = \
+                list(tqdm(p.starmap(self.get_spectrum, self.folders_and_files), 
                      total=len(self.folders_and_files), 
                      desc="Computing spectrums"))
-
 if __name__ == "__main__":
     # Set seed for reproducibility - only verbose in the main process
     Config.set_global_seed(verbose=True)
     
     # Find the path to the cleaned data from root directory
-    cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
+    cleaned_path = Path(__file__).resolve().parent.parent.parent \
+        / 'data' / 'cleaned'
     # find the path to the labels file data
-    labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / 'TDBRAIN_participants_V2.xlsx'
+    labels_file = Path(__file__).resolve().parent.parent.parent\
+          / 'data' / 'TDBRAIN_participants_V2.xlsx'
     dataset = PowerSpectrum(cleaned_path=cleaned_path,
-                            get_labels=True,
-                            include_bad_channels=True,
-                            full_time_series=False,
-                            method='multitaper',
+                            full_time_series=True,
+                            method='welch',
                             plots=True,
                             fmin=0.5,
                             fmax=130,
                             tmin=None,
                             tmax=None,
-                            picks=['all'],
-                            proj=False,
-                            verbose=False)
+                            proj=True,
+                            verbose=False,
+                            include_bad_channels=True)
     print(len(dataset))
+    #dataset.get_spectrum(dataset.folders_and_files[0][0], \
+    #                     dataset.folders_and_files[0][1], save_to_disk=False)
     for i in range(len(dataset)):
         print(dataset[i][0].shape, dataset[i][1].shape, dataset[i][2]) 
