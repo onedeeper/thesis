@@ -19,6 +19,7 @@ from eeglearn.utils.utils import (
     get_labels_dict,
     get_participant_id_condition_from_string,
 )
+from itertools import permutations
 
 
 class Energy(Dataset):
@@ -83,7 +84,7 @@ class Energy(Dataset):
               channels in the PSD computation.
 
         """
-        self.channel_names =  ['Fp1', 'Fp2', 'F7', 
+        self.channel_names: list[str] =  ['Fp1', 'Fp2', 'F7', 
                                'F3', 'Fz', 'F4', 
                                'F8', 'FC3', 'FCz', 
                                'FC4', 'T7', 'C3', 'Cz', 'C4', 'T8', 
@@ -91,7 +92,7 @@ class Energy(Dataset):
                                'P4', 'P8', 'O1', 'Oz', 'O2']
         self.n_eeg_channels = 26
         # Define all available frequency bands, and the index of the band
-        self.all_freq_bands = {
+        self.all_freq_bands :dict[tuple[list,int]] = {
             'delta': ([1, 3], 0),
             'theta': ([4, 7], 1),
             'alpha': ([8, 13], 2),
@@ -101,13 +102,25 @@ class Energy(Dataset):
         self.cleaned_path : str = cleaned_path
         assert os.path.exists(self.cleaned_path), "cleaned_path does not exist"
         if select_freq_bands is None:
-            self.select_freq_bands : list[str] = list(self.all_freq_bands.keys())
+            # this is guaranteed to be in inserstion order
+            select_freq_bands : list[str] = list(self.all_freq_bands.keys())
+            self.select_freq_bands = select_freq_bands
         else:
             assert isinstance(select_freq_bands, list), \
                 "select_freq_bands must be a list"
             assert all(band in self.all_freq_bands for band in select_freq_bands), \
                 "Invalid frequency band."
-            self.select_freq_bands : list[str] = select_freq_bands
+            self.select_freq_bands = select_freq_bands
+        
+        # get the position in the order of each band
+        ordered_bands = [(band,self.all_freq_bands[band][1]) for\
+                          band in self.select_freq_bands]
+        # get the band names in this order
+        self.select_freq_bands : list[str] = [band[0] for band in sorted(ordered_bands,\
+                                                      key = lambda x : x[1])]
+        
+        assert len(self.select_freq_bands) == len(select_freq_bands),\
+            "Requested bands and reorderd bands differ in length"
         
         if include_bad_channels_psd:
             assert isinstance(include_bad_channels_psd, bool), \
@@ -188,6 +201,8 @@ class Energy(Dataset):
 
         """
         # make sure the spectrum is computed first
+        assert self.save_to_disk,\
+    "Designed to index by loading. Instantiate energy object with save_to_disk= True"
         if not self.ran_energy:
             self.run_energy_parallel()
         try:
@@ -252,7 +267,7 @@ class Energy(Dataset):
             folder_path=folder_path,
             file_name=file_name,
             save_to_disk=False)
-        
+        n_epochs = spectra.shape[0]
         assert not torch.isnan(spectra).any(), "spectra contains nans"
         assert not torch.isnan(freqs).any(), "freqs contains nans"
         n_freqs : int = len(freqs)
@@ -306,7 +321,7 @@ class Energy(Dataset):
             assert spectra.shape[2] == n_freqs,\
                 "spectra and freqs have different number of frequencies"
             # There are 5 matrices of shape (n_epochs x n_channels x n_freq_bins)
-            # we collapse the the frequency bins dimension by summing it up
+            # we collapse the frequency bins dimension by summing it up
             # then we combine the 5 matrices into a 2d matrix of shape 
             # (n_channels x (n_epochs * n_selected_bands))
             band_energies : dict = {
@@ -320,7 +335,7 @@ class Energy(Dataset):
             band_energies['theta'].shape == \
                 band_energies['alpha'].shape == \
                 band_energies['beta'].shape == \
-                band_energies['gamma'].shape ==  (12, n_channels_included), \
+                band_energies['gamma'].shape ==  (n_epochs, n_channels_included), \
                     "Band energies have different shapes"
             
             selected_bands : list = [band_energies[band] for \
@@ -328,7 +343,7 @@ class Energy(Dataset):
             combined_energy : torch.Tensor = torch.cat(selected_bands).T
             
             assert combined_energy.shape ==  (n_channels_included,
-                                              len(self.select_freq_bands)*12), \
+                                              len(self.select_freq_bands)*n_epochs), \
                 f"combined_energy has wrong shape : {combined_energy.shape}"
 
             if self.save_to_disk:
@@ -358,6 +373,7 @@ class Energy(Dataset):
         The method sets ran_energy to True to indicate that energy computation has 
         been performed, to make sure when called by __getitem__ it does not compute
         the energy again.
+
         """
         self.ran_energy = True
         processes = cpu_count() - 1
@@ -370,17 +386,25 @@ class Energy(Dataset):
             if not self.save_to_disk:
                 return results
     #TODO: add the permutations
-    # def get_permutations(self, data : np.ndarray) -> list[str]:
-    #     """
-    #     Get all the permutations of the data.
-    #     """
-    #     permutations_of_bands = list(permutations(range(len(self.select_freq_bands))))
-    #     # permute the data
-    #     permuted_data = []
-    #     for pseudo_label, permutation in enumerate(permutations_of_bands):
-    #         permuted_data.append((data[:, permutation], pseudo_label))
-    #     return permuted_data
- 
+    def get_permutations(self, data : torch.Tensor) -> list[torch.Tensor,int]:
+        """
+        Get all the frequency band permutations of the data.
+        Takes a n_channels x bands matrix and shuffles the c
+
+        Args:
+        ----
+            data (torch.Tensor): A n_channels x n_bands tensor
+                                (optionally, dimension two can be multipled by epochs).
+
+        Returns:
+        -------
+            list[torch.Tensor, int]: The permutations of the
+            data and the number of permutations.
+        """
+        permed_data = permutations(list(self.all_freq_bands.keys()))
+        #print(len(list(permed_data)))
+        shuffled_columns : torch.Tensor = torch.randperm(data.shape[1])
+        return (data[:,shuffled_columns],1) 
 if __name__ == "__main__":
     # Set seed for reproducibility
     Config.set_global_seed()
@@ -389,14 +413,16 @@ if __name__ == "__main__":
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / \
         'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
-                     full_time_series=True,
+                     full_time_series=False,
                           energy_plots=True,
                           verbose_psd=False,
                           picks_psd = ['eeg'],
                           include_bad_channels_psd=False,
-                          save_to_disk=False)
+                          save_to_disk=True,
+                          select_freq_bands=['alpha', 'theta', 'gamma'])
     print(len(dataset))
-    files = dataset.run_energy_parallel()
-    print(len(files))
-    print(dataset[0][0].shape, dataset[0][1])
+    #files = dataset.run_energy_parallel()
+    #print(len(files))
+    print(dataset[0][0].shape)
+    print(dataset.get_permutations(dataset[0][0]))
          

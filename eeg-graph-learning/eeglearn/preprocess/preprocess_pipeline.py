@@ -35,7 +35,6 @@ if __name__ == '__main__':
     # Get the project root directory (2 levels up from this file)
     project_root = Path(__file__).parent.parent.parent
 
-    # Use Path to join paths correctly
     derivates_dir = str(project_root / 'data' / 'TDBRAIN-dataset' / 'derivatives')
     print(f'Reading data from: {derivates_dir}')
     assert os.path.exists(derivates_dir), \
@@ -56,7 +55,7 @@ if __name__ == '__main__':
     # the following parameters can be changed by the user
     conditions = ['EO', 'EC'] # conditions to be preprocessed
     sessions = ['ses-1'] # sessions to be preprocessed
-    epochs_length = 9.95 # length of epochs in seconds, comment out for no epoching
+    epochs_length = 12 # length of epochs in seconds, comment out for no epoching
     sfreq = 500 # sampling frequency
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal
     plots = True # set to True to create and store plots during preprocessing
@@ -88,4 +87,4 @@ if __name__ == '__main__':
     filepaths = get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'],
                                session='ses-1')
     preprocess_and_save_data(filepaths,save_dir, n_processes) 
-    assert len(os.listdir(save_dir)) > 0
+    assert len(os.listdir(save_dir)) > 0,  "No files were processed"

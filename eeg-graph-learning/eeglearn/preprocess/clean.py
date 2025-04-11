@@ -312,7 +312,7 @@ if __name__ == '__main__':
     # the following parameters can be changed by the user
     conditions = ['EO', 'EC'] # conditions to be preprocessed
     sessions = ['ses-1',] # sessions to be preprocessed
-    epochs_length = 9.95 # length of epochs in seconds, comment out for no epoching
+    epochs_length = 12 # length of epochs in seconds, comment out for no epoching
     sfreq = 500 # sampling frequency
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal
     plots = True # set to True to create and store plots during preprocessing
