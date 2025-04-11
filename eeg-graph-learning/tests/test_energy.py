@@ -205,7 +205,13 @@ def test_get_permutations_full_time_series():
     participant : str = ""
     condition : str = ""
     participant, condition = get_participant_id_condition_from_string(TEST_FILE)
-
+    band_position : dict = {
+        "delta" : 0,
+        "theta" : 1,
+        "alpha" : 2,
+        "beta" :3,
+        "gamma": 4,
+    }
     preprocessed : Preproccesing = np.load(test_cleaned_file,                         
                            allow_pickle = True)
     bands : list[str] = ['delta', 'theta', 'alpha', 'beta', 'gamma']
@@ -229,32 +235,53 @@ def test_get_permutations_full_time_series():
                             full_time_series=True,
                             save_to_disk=False,
                             include_bad_channels_psd=False)
-        input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
-                              / participant / "ses-1" / "eeg" ,
-                               file_name= TEST_FILE)
-        
-        permutations_label : tuple[torch.Tensor,
-                             int] = energy.get_permutations(input_matrix)
-        permuted_data : torch.Tensor  = permutations_label[0]
-        pseudo_label : int = permutations_label[1]
-        # testing the dimensions 
-        # easiest to pass!
-        assert isinstance(permutations_label,tuple)
-        assert isinstance(permuted_data, torch.Tensor)
-        assert isinstance(pseudo_label, int)
 
         # testing the contents
-        # assert that the returned matrix has the same rows but shuffled columns
-        for col in range(permutations_label[0].shape[1]):
-            assert not (torch.allclose(input_matrix[:,col], permuted_data[:,col] )),\
-            "Not shuffled. Columns are the same."
+        # The function should not return the same pseud-label each time.
+        for _ in range(10):
+            input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
+                              / participant / "ses-1" / "eeg" ,
+                               file_name= TEST_FILE)
 
+            permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+            permuted_data : torch.Tensor  = permutations_label[0]
+            pseudo_label : int = permutations_label[1]     
+            # testing the dimensions 
+            # easiest to pass!
+            assert isinstance(permutations_label,tuple)
+            assert isinstance(permuted_data, torch.Tensor)
+            assert isinstance(pseudo_label, int)
+
+            for col in range(permutations_label[0].shape[1]):
+                if pseudo_label != 0:
+                    assert not (torch.allclose(input_matrix,permuted_data)),\
+                    "Not shuffled. Columns are the same."
+                else:
+                    assert torch.allclose(input_matrix,permuted_data),\
+                    "Shuffled. Columns should be the same for this pseudo label"
+
+        permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+        permuted_data : torch.Tensor  = permutations_label[0]
+        pseudo_label : int = permutations_label[1]
         # Each permutation should have one and only one label.
-        possible_perms_labels : list[tuple[tuple,int]]=  \
-            [(pseudo_label,perm) for pseudo_label, perm \
-             in enumerate(permutations(bands))]
-        print(random.sample(possible_perms_labels, k = 5))
-        #permuted_columns : list = 
+        # We test if the returned permutation and its pseudolabel matches.
+        # This is 1 of 120 possible permutations
+        possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
+            {pseudo_label : perm for pseudo_label, perm \
+             in enumerate(permutations(bands))}
+        
+        # we test if the resulting matrix and pseudo label match the ones generated
+        expected_permutation : list[str] = possible_perms[pseudo_label]
+
+        band_ordering : list[int] = [band_position[band]\
+                                     for band in expected_permutation]
+        permuted_input_matrix : torch.Tesor = input_matrix[:,band_ordering]
+
+        assert torch.allclose(permuted_data,permuted_input_matrix),\
+        "The expected permutation has not been applied"
+
 
 # def test_get_permutations_epoched():
 #     pass

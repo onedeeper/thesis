@@ -20,7 +20,7 @@ from eeglearn.utils.utils import (
     get_participant_id_condition_from_string,
 )
 from itertools import permutations
-
+import random
 
 class Energy(Dataset):
     """A class to compute the band specific energy for each participant.
@@ -401,10 +401,25 @@ class Energy(Dataset):
             list[torch.Tensor, int]: The permutations of the
             data and the number of permutations.
         """
-        permed_data = permutations(list(self.all_freq_bands.keys()))
-        #print(len(list(permed_data)))
-        shuffled_columns : torch.Tensor = torch.randperm(data.shape[1])
-        return (data[:,shuffled_columns],1) 
+        assert isinstance(data, torch.Tensor)
+        # Assert shape for non-epoched and epoched cases
+        assert len(data.shape) >=2 or len(data.shape) <= 3
+        band_position : dict = {
+        "delta" : 0,
+        "theta" : 1,
+        "alpha" : 2,
+        "beta" :3,
+        "gamma": 4,
+        }
+        possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
+            {pseudo_label : perm for pseudo_label, perm \
+             in enumerate(permutations(list(self.all_freq_bands.keys())))}
+        pseudo_label : int = random.randint(0,119)
+        band_ordering : list[int] = [band_position[band]\
+                                      for band in possible_perms[pseudo_label]]
+        shuffled_columns : torch.Tensor = data[:,band_ordering]
+        return (shuffled_columns,pseudo_label) 
+    
 if __name__ == "__main__":
     # Set seed for reproducibility
     Config.set_global_seed()
