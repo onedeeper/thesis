@@ -59,6 +59,8 @@ This project was built over several months.
 			 2. Started adding type hints to both function calls, and returns as well as any variables that I am declaring anywhere. I want to get used to this, and hopefully soon get familiar with C/C++ which has even stricter requirements (for which the original NASA rules were designed).
 		 	3. Started using coverage tests with `PyTest -cov`. Essentially, this checks which parts of your code are being hit by your tests and which are not ( more my experience with this here)..
     		3. Started to write the test cases myself.
+		4. Started writing with the [red-green refactor method.](https://en.wikipedia.org/wiki/Test-driven_development#:~:text=This%20has%20led%20to%20the%20%22test%2Ddriven%20development%20mantra%22%2C%20which%20is%20%22red/green/refactor%22%2C%20where%20red%20means%20fail%20and%20green%20means%20pass.)
+  			5. I find this process to be extremely satisfying. The similarity between this method and the scientific method (i.e., [conjectures and refutations](https://arc.net/l/quote/dgfdlziu) is just beautiful. 
 
 
 ## References
