@@ -35,9 +35,9 @@ Testing self-supervised pre-training on pretext tasks with graph neural networks
 
 	I have opted for the Cursor IDE. I usually ask questions with Claude 3.7 Sonnet. My impressions (updated regularly) are :
    	1. **Some context confuses it**: Given the niche of this project, I have found that the some of the language used in the project (e.g., EEGs, power spectrum density, etc.) causes the models some trouble.
-   	2. **The "tab to complete" feature causes more poblems than it solves** : So I have opted to turn it off. It is way too verbose and tries to do things that are unnecessary. However, if I need to do some quick refactoring (e.g., I wanto delete the use of a variable throughout), this is quite useful.
-   	3. **Updating documentation** : Models are quite useful for creating genera purpose documentation (e.g, how to install the library) but get confused when the code becomes niche.
-   	4. **Writing test cases**  : In the beggining of the project, I wrote test cases with Claude. However, as I got to learn testing more, I realized it was writing some redundant or over constrained tests (i.e., it was too easy to pass).
+   	2. **The "tab to complete" feature causes more poblems than it solves** : So I have opted to turn it off. It is way too verbose and tries to do things that are unnecessary. However, if I need to do some quick refactoring (e.g., I want to delete the use of a variable throughout), this is quite useful.
+   	3. **Updating documentation** : Models are quite useful for creating general purpose documentation (e.g, how to install a library) but get confused when the code becomes niche.
+   	4. **Writing test cases**  : In the begining of the project, I wrote test cases with Claude. However, as I got to learn testing more, I realized it was writing some redundant or over constrained tests (i.e., it was too easy to pass).
 
 **I also focused on improving on the work I was doing week  after week**. This means I incorporated good ideas as I encountered them. This also means some earlier files are not perhaps as clean and bug free as they could be. For example, later files will likely have better test coverage. I hope to return to these once the core deliverables for my thesis have been completed.
 
