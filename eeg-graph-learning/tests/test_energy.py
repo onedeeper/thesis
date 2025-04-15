@@ -448,3 +448,96 @@ def test_get_permutations_epoched():
 
         assert torch.allclose(permuted_data,permuted_input_matrix),\
         "The expected permutation has not been applied"
+
+def test_save_perms_to_disk():
+    """
+    Test if the generated permuations are saved to disk correctly if asked
+    """
+    
+    test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
+    participant : str = ""
+    condition : str = ""
+    participant, condition = get_participant_id_condition_from_string(TEST_FILE)
+    preprocessed : Preproccesing = np.load(test_cleaned_file,                         
+                           allow_pickle = True)
+    test_bands : list[str] = ['gamma', 'delta']
+
+    project_root : Path = Path(__file__).resolve().parent.parent.parent
+    print("root: " ,project_root)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        print(f"Created temporary directory at: {temp_dir}")
+        temp_dir_cleaned : Path = Path(temp_dir) / "cleaned"
+        temp_dir_cleaned.mkdir(parents=True,  exist_ok = True)
+        perm_save_dir =  Path(temp_dir) / "perm_save"
+        perm_save_dir.mkdir(parents=True, exist_ok=True)
+
+        # hard set a bad channel and save it
+        preprocessed.preprocessed_raw.info['bads'] = ["F7"]
+        file_name : str = f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
+        save_path : Path = temp_dir_cleaned / participant / "ses-1" / "eeg"
+        save_path.mkdir(parents=True,exist_ok = True)
+        with open(save_path / file_name , 'wb') as output:   
+            pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
+        assert os.path.exists(save_path/file_name)
+
+        energy : Energy = Energy(cleaned_path=temp_dir_cleaned,
+                            select_freq_bands=test_bands,
+                            full_time_series=False,
+                            save_to_disk=False,
+                            include_bad_channels_psd=False)
+        
+        # testing the contents
+        # The function should not return the same pseud-label each time.
+        input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir_cleaned \
+                              / participant / "ses-1" / "eeg" ,
+                               file_name= TEST_FILE)
+    
+        permutations_label : tuple[torch.Tensor,
+                            int] = energy.get_permutations(input_matrix,
+                                                           details_for_save="test")
+        permuted_data : torch.Tensor  = permutations_label[0]
+        pseudo_label : int = permutations_label[1]     
+
+        assert isinstance(permutations_label,tuple)
+        assert isinstance(permuted_data, torch.Tensor)
+        assert isinstance(pseudo_label, int)
+        root_extension : str = "eeg-graph-learning"
+        assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
+                              'epoched_perms' / "test")
+        file_name = f"energy_perms_test.pt"
+        reloaded_data = torch.load(project_root / root_extension / 'data'/\
+                              'energy' / 'epoched_perms' / 'test'/ file_name)
+        assert reloaded_data[0].shape == permuted_data.shape
+
+        # Test with full time series
+        energy : Energy = Energy(cleaned_path=temp_dir_cleaned,
+                            select_freq_bands=test_bands,
+                            full_time_series=True,
+                            save_to_disk=False,
+                            include_bad_channels_psd=False)
+        
+
+        # testing the contents
+        # The function should not return the same pseud-label each time.
+        input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir_cleaned \
+                              / participant / "ses-1" / "eeg" ,
+                               file_name= TEST_FILE)
+        
+        permutations_label : tuple[torch.Tensor,
+                            int] = energy.get_permutations(input_matrix,
+                                                           details_for_save="test")
+        permuted_data : torch.Tensor  = permutations_label[0]
+        pseudo_label : int = permutations_label[1]     
+
+        assert isinstance(permutations_label,tuple)
+        assert isinstance(permuted_data, torch.Tensor)
+        assert isinstance(pseudo_label, int)
+        root_extension : str = "eeg-graph-learning"
+        assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
+                              'perms' / "test")
+        file_name = f"energy_perms_test.pt"
+        reloaded_data = torch.load(project_root / root_extension / 'data'/\
+                              'energy' / 'perms' / 'test'/ file_name)
+        assert reloaded_data[0].shape == permuted_data.shape
+
