@@ -205,20 +205,14 @@ def test_get_permutations_full_time_series():
     participant : str = ""
     condition : str = ""
     participant, condition = get_participant_id_condition_from_string(TEST_FILE)
-    band_position : dict = {
-        "delta" : 0,
-        "theta" : 1,
-        "alpha" : 2,
-        "beta" :3,
-        "gamma": 4,
-    }
     preprocessed : Preproccesing = np.load(test_cleaned_file,                         
                            allow_pickle = True)
     bands : list[str] = ['delta', 'theta', 'alpha', 'beta', 'gamma']
+    test_bands : list[str] = ['gamma', 'delta']
     with tempfile.TemporaryDirectory() as temp_dir:
         print(f"Created temporary directory at: {temp_dir}")
         temp_dir : Path = Path(temp_dir) / "cleaned"
-        temp_dir.mkdir(parents=True, exist_ok = True)
+        temp_dir.mkdir(parents=True,  exist_ok = True)
         
         # hard set a bad channel and save it
         preprocessed.preprocessed_raw.info['bads'] = ["F7"]
@@ -228,13 +222,66 @@ def test_get_permutations_full_time_series():
         with open(save_path / file_name , 'wb') as output:   
             pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
         assert os.path.exists(save_path/file_name)
-        # Energy object loading the preprocessed file with a bad channel.
+        # Test with bad channels excluded
+        #--------------------------------#
         energy : Energy = Energy(cleaned_path=temp_dir,
-                            select_freq_bands=['delta', 'theta',
-                                                'alpha', 'beta', 'gamma'],
+                            select_freq_bands=test_bands,
                             full_time_series=True,
                             save_to_disk=False,
                             include_bad_channels_psd=False)
+        
+        band_position : dict = {band : i for i, band \
+                                in enumerate(energy.select_freq_bands)}
+        
+        possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
+            {pseudo_label : perm for pseudo_label, perm \
+             in enumerate(permutations(energy.select_freq_bands))}
+        # testing the contents
+        # The function should not return the same pseud-label each time.
+        for _ in range(10):
+            input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
+                              / participant / "ses-1" / "eeg" ,
+                               file_name= TEST_FILE)
+
+            permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+            permuted_data : torch.Tensor  = permutations_label[0]
+            pseudo_label : int = permutations_label[1]     
+            # testing the dimensions 
+            # easiest to pass!
+            assert isinstance(permutations_label,tuple)
+            assert isinstance(permuted_data, torch.Tensor)
+            assert isinstance(pseudo_label, int)
+
+            if pseudo_label != 0:
+                assert not (torch.allclose(input_matrix,permuted_data)),\
+                "Not shuffled. Columns are the same."
+            else:
+                assert torch.allclose(input_matrix,permuted_data),\
+                "Shuffled. Columns should be the same for this pseudo label"
+
+        permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+        permuted_data : torch.Tensor  = permutations_label[0]
+        pseudo_label : int = permutations_label[1]
+        
+        # we test if the resulting matrix and pseudo label match the ones generated
+        expected_permutation : list[str] = possible_perms[pseudo_label]
+
+        band_ordering : list[int] = [band_position[band]\
+                                     for band in expected_permutation]
+        permuted_input_matrix : torch.Tesor = input_matrix[:,band_ordering]
+
+        assert torch.allclose(permuted_data,permuted_input_matrix),\
+        "The expected permutation has not been applied"
+
+        # Test with bad channels included
+        #--------------------------------#
+        energy : Energy = Energy(cleaned_path=temp_dir,
+                            select_freq_bands=test_bands,
+                            full_time_series=True,
+                            save_to_disk=False,
+                            include_bad_channels_psd=True)
 
         # testing the contents
         # The function should not return the same pseud-label each time.
@@ -253,24 +300,18 @@ def test_get_permutations_full_time_series():
             assert isinstance(permuted_data, torch.Tensor)
             assert isinstance(pseudo_label, int)
 
-            for col in range(permutations_label[0].shape[1]):
-                if pseudo_label != 0:
-                    assert not (torch.allclose(input_matrix,permuted_data)),\
-                    "Not shuffled. Columns are the same."
-                else:
-                    assert torch.allclose(input_matrix,permuted_data),\
-                    "Shuffled. Columns should be the same for this pseudo label"
+        
+            if pseudo_label != 0:
+                assert not (torch.allclose(input_matrix,permuted_data)),\
+                "Not shuffled. Columns are the same."
+            else:
+                assert torch.allclose(input_matrix,permuted_data),\
+                "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
                                 int] = energy.get_permutations(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
-        # Each permutation should have one and only one label.
-        # We test if the returned permutation and its pseudolabel matches.
-        # This is 1 of 120 possible permutations
-        possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
-            {pseudo_label : perm for pseudo_label, perm \
-             in enumerate(permutations(bands))}
         
         # we test if the resulting matrix and pseudo label match the ones generated
         expected_permutation : list[str] = possible_perms[pseudo_label]
@@ -282,6 +323,128 @@ def test_get_permutations_full_time_series():
         assert torch.allclose(permuted_data,permuted_input_matrix),\
         "The expected permutation has not been applied"
 
+def test_get_permutations_epoched():
+    """
+    Test the permutation generation with epoched data.
+    """
+    clean_dir_path = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
+    test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
+    participant : str = ""
+    condition : str = ""
+    participant, condition = get_participant_id_condition_from_string(TEST_FILE)
+    preprocessed : Preproccesing = np.load(test_cleaned_file,                         
+                           allow_pickle = True)
+    bands : list[str] = ['delta', 'theta', 'alpha', 'beta', 'gamma']
+    test_bands : list[str] = ['gamma', 'delta']
+    with tempfile.TemporaryDirectory() as temp_dir:
+        print(f"Created temporary directory at: {temp_dir}")
+        temp_dir : Path = Path(temp_dir) / "cleaned"
+        temp_dir.mkdir(parents=True,  exist_ok = True)
+        
+        # hard set a bad channel and save it
+        preprocessed.preprocessed_raw.info['bads'] = ["F7"]
+        file_name : str = f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
+        save_path : Path = temp_dir / participant / "ses-1" / "eeg"
+        save_path.mkdir(parents=True,exist_ok = True)
+        with open(save_path / file_name , 'wb') as output:   
+            pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
+        assert os.path.exists(save_path/file_name)
 
-# def test_get_permutations_epoched():
-#     pass
+        # Test with bad channels excluded
+        #--------------------------------#
+        energy : Energy = Energy(cleaned_path=temp_dir,
+                            select_freq_bands=test_bands,
+                            full_time_series=False,
+                            save_to_disk=False,
+                            include_bad_channels_psd=False)
+        
+        band_position : dict = {band : i for i, band \
+                                in enumerate(energy.select_freq_bands)}
+        
+        possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
+            {pseudo_label : perm for pseudo_label, perm \
+             in enumerate(permutations(energy.select_freq_bands))}
+        # testing the contents
+        # The function should not return the same pseud-label each time.
+        input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
+                              / participant / "ses-1" / "eeg" ,
+                               file_name= TEST_FILE)
+        for _ in range(10):
+            permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+            permuted_data : torch.Tensor  = permutations_label[0]
+            pseudo_label : int = permutations_label[1]     
+            # testing the dimensions 
+            # easiest to pass!
+            assert isinstance(permutations_label,tuple)
+            assert isinstance(permuted_data, torch.Tensor)
+            assert isinstance(pseudo_label, int)
+
+            if pseudo_label != 0:
+                assert not (torch.allclose(input_matrix,permuted_data)),\
+                "Not shuffled. Columns are the same."
+            else:
+                assert torch.allclose(input_matrix,permuted_data),\
+                "Shuffled. Columns should be the same for this pseudo label"
+
+        permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+        permuted_data : torch.Tensor  = permutations_label[0]
+        pseudo_label : int = permutations_label[1]
+        
+        # we test if the resulting matrix and pseudo label match the ones generated
+        expected_permutation : list[str] = possible_perms[pseudo_label]
+
+        band_ordering : list[int] = [band_position[band]\
+                                     for band in expected_permutation]
+        permuted_input_matrix : torch.Tesor = input_matrix[:,:,band_ordering]
+
+        assert torch.allclose(permuted_data,permuted_input_matrix),\
+        "The expected permutation has not been applied"
+
+        # Test with bad channels included
+        #---------------------------------#
+        energy : Energy = Energy(cleaned_path=temp_dir,
+                            select_freq_bands=test_bands,
+                            full_time_series=False,
+                            save_to_disk=False,
+                            include_bad_channels_psd=True)
+
+        # testing the contents
+        # The function should not return the same pseud-label each time.
+        for _ in range(10):
+            input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
+                              / participant / "ses-1" / "eeg" ,
+                               file_name= TEST_FILE)
+
+            permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+            permuted_data : torch.Tensor  = permutations_label[0]
+            pseudo_label : int = permutations_label[1]     
+            # testing the dimensions 
+            # easiest to pass!
+            assert isinstance(permutations_label,tuple)
+            assert isinstance(permuted_data, torch.Tensor)
+            assert isinstance(pseudo_label, int)
+
+            if pseudo_label != 0:
+                assert not (torch.allclose(input_matrix,permuted_data)),\
+                "Not shuffled. Columns are the same."
+            else:
+                assert torch.allclose(input_matrix,permuted_data),\
+                "Shuffled. Columns should be the same for this pseudo label"
+
+        permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_permutations(input_matrix)
+        permuted_data : torch.Tensor  = permutations_label[0]
+        pseudo_label : int = permutations_label[1]
+        
+        # we test if the resulting matrix and pseudo label match the ones generated
+        expected_permutation : list[str] = possible_perms[pseudo_label]
+
+        band_ordering : list[int] = [band_position[band]\
+                                     for band in expected_permutation]
+        permuted_input_matrix : torch.Tesor = input_matrix[:,:,band_ordering]
+
+        assert torch.allclose(permuted_data,permuted_input_matrix),\
+        "The expected permutation has not been applied"

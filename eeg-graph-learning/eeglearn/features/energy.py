@@ -4,7 +4,10 @@ Created on: April 2025
 Author: Udesh Habaraduwa
 """
 
+import math
 import os
+import random
+from itertools import permutations
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
@@ -19,8 +22,7 @@ from eeglearn.utils.utils import (
     get_labels_dict,
     get_participant_id_condition_from_string,
 )
-from itertools import permutations
-import random
+
 
 class Energy(Dataset):
     """A class to compute the band specific energy for each participant.
@@ -375,7 +377,7 @@ class Energy(Dataset):
 
     def run_energy_parallel(self) -> None:
         """ 
-        Compute band energy density for all participants and conditions in parallel.
+        Compute band energy for all participants and conditions in parallel.
         
         It uses the get_energy method for individual
         file processing and uses a process pool to distribute the workload.
@@ -397,8 +399,8 @@ class Energy(Dataset):
                 return results
     #TODO: add the permutations
     def get_permutations(self, data : torch.Tensor) -> list[torch.Tensor,int]:
-        """
-        Get all the frequency band permutations of the data.
+        """Get all the frequency band permutations of the data.
+
         Takes a n_channels x bands matrix and shuffles the c
 
         Args:
@@ -410,30 +412,30 @@ class Energy(Dataset):
         -------
             list[torch.Tensor, int]: The permutations of the
             data and the number of permutations.
+
         """
         assert isinstance(data, torch.Tensor)
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
         
-        band_position : dict = {
-        "delta" : 0,
-        "theta" : 1,
-        "alpha" : 2,
-        "beta" :3,
-        "gamma": 4,
-        }
-        possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
-            {pseudo_label : perm for pseudo_label, perm \
-             in enumerate(permutations(list(self.all_freq_bands.keys())))}
-        pseudo_label : int = random.randint(0,119)
+        band_position : dict = {band : i for i, band \
+                                in enumerate(self.select_freq_bands)}
+        
+        possible_perms : dict[int, tuple[str, ...]] =\
+            dict(enumerate(permutations(self.select_freq_bands)))
+         
+        pseudo_label : int = random.randint(0,
+                                            math.factorial(len(self.select_freq_bands))\
+                                                -1)
         band_ordering : list[int] = [band_position[band]\
                                       for band in possible_perms[pseudo_label]]
         
         if len(data.shape) == 2:
             shuffled_columns : torch.Tensor = data[:,band_ordering]
         else:
-            shuffled_columns : torch.Tenso = data[:,:,band_ordering]
-        print(data.shape)
+            #print(band_ordering)
+            shuffled_columns : torch.Tensor = data[:,:,band_ordering]
+        #print(data.shape)
         assert shuffled_columns.shape == data.shape
         return (shuffled_columns,pseudo_label) 
     
@@ -445,16 +447,22 @@ if __name__ == "__main__":
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / \
         'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
-                     full_time_series=False,
+                     full_time_series=True,
                           energy_plots=True,
                           verbose_psd=False,
                           picks_psd = ['eeg'],
-                          include_bad_channels_psd=False,
+                          include_bad_channels_psd=True,
                           save_to_disk=True,
-                          select_freq_bands=['gamma', 'delta'])
+                          select_freq_bands=['gamma', 'delta', 'theta','alpha','beta'])
     print(len(dataset))
     #files = dataset.run_energy_parallel()
     #print(len(files))
     print(dataset[0][0].shape)
-    #print(dataset.get_permutations(dataset[0][0]))
-         
+    print(dataset.get_permutations(dataset[0][0])[0].shape, 
+          dataset.get_permutations(dataset[0][0])[1] )
+    print(dataset.get_permutations(dataset[0][0])[0].shape, 
+          dataset.get_permutations(dataset[0][0])[1] )
+    print(dataset.get_permutations(dataset[0][0])[0].shape, 
+          dataset.get_permutations(dataset[0][0])[1] )
+    print(dataset.get_permutations(dataset[0][0])[0].shape, 
+          dataset.get_permutations(dataset[0][0])[1] )
