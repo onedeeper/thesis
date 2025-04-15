@@ -125,9 +125,9 @@ def test_get_energy_shape()-> None:
 
     assert isinstance(band_matrix, torch.Tensor), \
         "Energy matrix should be a torch.Tensor"
-    assert band_matrix.shape[1] == len(energy.select_freq_bands) * 12, \
-        f"Should have {len(energy.select_freq_bands) * 12} frequency bands"
-    assert band_matrix.shape[0] > 0, "Should have at least one channel"
+    assert band_matrix.shape[2] == len(energy.select_freq_bands), \
+        f"Should have {len(energy.select_freq_bands)} frequency bands"
+    assert band_matrix.shape[1] > 0, "Should have at least one channel"
 
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")

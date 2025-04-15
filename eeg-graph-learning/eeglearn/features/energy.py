@@ -322,8 +322,7 @@ class Energy(Dataset):
                 "spectra and freqs have different number of frequencies"
             # There are 5 matrices of shape (n_epochs x n_channels x n_freq_bins)
             # we collapse the frequency bins dimension by summing it up
-            # then we combine the 5 matrices into a 2d matrix of shape 
-            # (n_channels x (n_epochs * n_selected_bands))
+            # to get a matrix of (n_epochs x n_channels) for each band      
             band_energies : dict = {
                 "delta" : torch.sum(spectra[:,:,masks['delta']], dim = 2),
                 "theta" : torch.sum(spectra[:,:,masks['theta']], dim = 2),
@@ -331,6 +330,7 @@ class Energy(Dataset):
                 "beta"  : torch.sum(spectra[:,:,masks['beta']], dim = 2),
                 "gamma" : torch.sum(spectra[:,:,masks['gamma']], dim = 2)
             }
+            #print("band energy : ", band_energies["delta"].shape)
             assert band_energies['delta'].shape == \
             band_energies['theta'].shape == \
                 band_energies['alpha'].shape == \
@@ -338,13 +338,23 @@ class Energy(Dataset):
                 band_energies['gamma'].shape ==  (n_epochs, n_channels_included), \
                     "Band energies have different shapes"
             
+            # a list of len(n_select_freq_bands) n_epochs x n_channels tensors
             selected_bands : list = [band_energies[band] for \
                                       band in self.select_freq_bands]
-            combined_energy : torch.Tensor = torch.cat(selected_bands).T
-            
-            assert combined_energy.shape ==  (n_channels_included,
-                                              len(self.select_freq_bands)*n_epochs), \
-                f"combined_energy has wrong shape : {combined_energy.shape}"
+            # (n_epochs x n_channel x n_bands)
+            combined_energy : torch.Tensor = torch.stack(selected_bands,
+                                                          dim = 1).permute(0,2,1)
+       
+            first_band = self.select_freq_bands[0]
+            # check that the energy for a given band in a given epoch is where it 
+            # should be
+            assert torch.allclose(combined_energy[0,:,0],
+                                  band_energies[first_band][0,:])
+            expected_shape : tuple = (n_epochs,
+                                      n_channels_included,len(self.select_freq_bands))
+            assert combined_energy.shape ==\
+                (n_epochs,n_channels_included, len(self.select_freq_bands)),\
+            f"{combined_energy.shape} != ({expected_shape})"
 
             if self.save_to_disk:
                 torch.save(combined_energy, self.energy_save_dir_epoched /\
@@ -404,6 +414,7 @@ class Energy(Dataset):
         assert isinstance(data, torch.Tensor)
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
+        
         band_position : dict = {
         "delta" : 0,
         "theta" : 1,
@@ -417,7 +428,13 @@ class Energy(Dataset):
         pseudo_label : int = random.randint(0,119)
         band_ordering : list[int] = [band_position[band]\
                                       for band in possible_perms[pseudo_label]]
-        shuffled_columns : torch.Tensor = data[:,band_ordering]
+        
+        if len(data.shape) == 2:
+            shuffled_columns : torch.Tensor = data[:,band_ordering]
+        else:
+            shuffled_columns : torch.Tenso = data[:,:,band_ordering]
+        print(data.shape)
+        assert shuffled_columns.shape == data.shape
         return (shuffled_columns,pseudo_label) 
     
 if __name__ == "__main__":
@@ -434,10 +451,10 @@ if __name__ == "__main__":
                           picks_psd = ['eeg'],
                           include_bad_channels_psd=False,
                           save_to_disk=True,
-                          select_freq_bands=['alpha', 'theta', 'gamma'])
+                          select_freq_bands=['gamma', 'delta'])
     print(len(dataset))
     #files = dataset.run_energy_parallel()
     #print(len(files))
     print(dataset[0][0].shape)
-    print(dataset.get_permutations(dataset[0][0]))
+    #print(dataset.get_permutations(dataset[0][0]))
          
