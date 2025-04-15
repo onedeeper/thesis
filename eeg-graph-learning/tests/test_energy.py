@@ -541,3 +541,38 @@ def test_save_perms_to_disk():
                               'energy' / 'perms' / 'test'/ file_name)
         assert reloaded_data[0].shape == permuted_data.shape
 
+def test_run_permutations_parallel():
+    """
+    Tests if the permutation generation in parallel works as expected.
+    """
+    project_root : Path = Path(__file__).resolve().parent.parent.parent
+    print(project_root)
+    test_data_dir : Path = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
+        "parallel_test"
+    test_data_dir.mkdir(parents=True,exist_ok=True)
+
+    cleaned_path = Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
+         'data' / 'cleaned'
+    labels_file = Path(__file__).resolve().parent.parent.parent / "eeg-graph-learning"/\
+        'data' /'TDBRAIN_participants_V2.xlsx'
+    dataset = Energy(cleaned_path=cleaned_path,
+                     full_time_series=False,
+                          energy_plots=True,
+                          verbose_psd=False,
+                          picks_psd = ['eeg'],
+                          include_bad_channels_psd=True,
+                          save_to_disk=True,
+                          select_freq_bands=['gamma', 'delta', 'theta','alpha','beta']) 
+    dataset.energy_save_dir_epoched = test_data_dir / 'energy'
+    dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
+    dataset.run_energy_parallel()
+    energy_files = os.listdir(test_data_dir)
+    #print(dataset.get_permutations(dataset[0][0])[0].shape)
+    results = dataset.run_permutations_parallel()
+    print(results[0])
+
+
+
+    
+    
+

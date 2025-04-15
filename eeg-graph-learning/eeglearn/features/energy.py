@@ -152,7 +152,8 @@ class Energy(Dataset):
         self.plot_save_dir : Path = self.project_root / 'data' / 'energy' / 'plots'
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
         assert os.path.exists(self.plot_save_dir), "Plotting directory path invalid"
-        self.energy_save_dir : Path = self.project_root / 'data' / 'energy' / 'energy'
+        self.energy_save_dir : Path = self.project_root / 'data' / 'energy' /\
+              "energy_full"
         self.energy_save_dir.mkdir(parents=True, exist_ok=True)
         assert os.path.exists(self.energy_save_dir),\
             " Energy save directory path invalid"
@@ -247,7 +248,7 @@ class Energy(Dataset):
         participant_id, condition = get_participant_id_condition_from_string(file_name)
         path_to_file : Path = folder_path / file_name
         assert os.path.exists(path_to_file),f"file does not exist: {path_to_file}"
-        
+
         # # get the spectrum
         spectra : torch.Tensor
         freqs : torch.Tensor
@@ -347,7 +348,7 @@ class Energy(Dataset):
             combined_energy : torch.Tensor = torch.stack(selected_bands,
                                                           dim = 1).permute(0,2,1)
        
-            first_band = self.select_freq_bands[0]
+            first_band : str = self.select_freq_bands[0]
             # check that the energy for a given band in a given epoch is where it 
             # should be
             assert torch.allclose(combined_energy[0,:,0],
@@ -395,8 +396,9 @@ class Energy(Dataset):
             if not self.save_to_disk:
                 return results
             
-    def get_permutations(self, data : torch.Tensor,
-                         details_for_save : str = None) -> list[torch.Tensor,int]:
+    def get_permutations(self, data : torch.Tensor = None,
+                         is_epoched : bool = False,
+                         details_for_save : str = None) -> tuple[torch.Tensor,int]:
         """Get all the frequency band permutations of the data.
         
         Takes a (n_epochs x n_channels x n_bands) or (n_channels x n_bands ) energy
@@ -406,13 +408,20 @@ class Energy(Dataset):
         ----
             data (torch.Tensor): A (optionally n_epochs) x n_channels x n_bands tensor.
             details_for_save : file information for saving permutation to disk.
-
+                               This is also needed for loading a energy object directly
+                               from disk.
         Returns:
         -------
-            list[torch.Tensor, int]: The permutations of the
-            data and a pseudolabel representing which permutation was applied.
+            tuple: Contains:
+                - torch.Tensor: The permuted data.
+                - int: The pseudolabel representing which permutation was applied.
 
         """
+        if data == None:
+            if is_epoched:
+                data = torch.load(self.energy_save_dir_epoched / details_for_save)
+            else:
+                data = torch.load(self.energy_save_dir / details_for_save)
         assert isinstance(data, torch.Tensor)
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
@@ -458,9 +467,9 @@ class Energy(Dataset):
         return (shuffled_columns,pseudo_label) 
     
     def run_permutations_parallel(self)-> None | list:
-        """ 
+        """
         Compute band energy permutations for all files in parallel.
-        
+
         It uses the get_permutaion method for individual
         file processing and uses a process pool to distribute the workload.
 
@@ -473,18 +482,34 @@ class Energy(Dataset):
             None : if saved to disk
             list : List of permutations for each energy matrix
 
+        NOTE: Problem with sending multiple arguments to starmap solved with AI
         """
-        # Get all the paths to the energy files and load to memory 
+        starmap_args = []
+
+        # Files from energy_save_dir are NOT epoched
+        full_length_energy_files = os.listdir(self.energy_save_dir)
+        for filename in full_length_energy_files:
+            starmap_args.append((None, False, filename))
+
+        # Files from energy_save_dir_epoched ARE epoched
+        epoched_energy_files = os.listdir(self.energy_save_dir_epoched)
+        for filename in epoched_energy_files:
+            starmap_args.append((None, True, filename))
 
         processes = cpu_count() - 1
-        print(f'Using {processes} processes for energy computation')
+        print(f'Using {processes} processes for energy permutation computation')
+        print(f"Processing {len(starmap_args)} files...")
+
         with Pool(processes) as p:
-            results : list[torch.Tensor] = \
-                list(tqdm(p.starmap(self.get_permutations, self.folders_and_files), 
-                     total=len(self.folders_and_files), 
-                     desc="Computing energy band permutations"))
-            if not self.save_to_disk:
-                return results
+            # Pass the list of argument tuples to starmap
+            results = list(tqdm(p.starmap(self.get_permutations, starmap_args),
+                                total=len(starmap_args),
+                                desc="Computing energy band permutations"))
+
+        print(f"Finished processing {len(results)} permutations.")
+
+        return results
+
 if __name__ == "__main__":
     # Set seed for reproducibility
     Config.set_global_seed()
@@ -493,7 +518,7 @@ if __name__ == "__main__":
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / \
         'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
-                     full_time_series=True,
+                     full_time_series=False,
                           energy_plots=True,
                           verbose_psd=False,
                           picks_psd = ['eeg'],
@@ -505,6 +530,7 @@ if __name__ == "__main__":
     #print(len(files))
     print(dataset[0][0].shape)
     print(dataset.get_permutations(dataset[0][0])[0].shape)
+    dataset.run_permutations_parallel()
     # print(dataset.get_permutations(dataset[0][0])[0].shape, 
     #       dataset.get_permutations(dataset[0][0])[1] )
     # print(dataset.get_permutations(dataset[0][0])[0].shape, 
