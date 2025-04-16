@@ -421,7 +421,7 @@ class Energy(Dataset):
             if not self.save_to_disk:
                 return results
             
-    def get_permutations(self, data : torch.Tensor = None,
+    def get_freq_permutations(self, data : torch.Tensor = None,
                          is_epoched : bool = False,
                          file_name : str = None) -> tuple[torch.Tensor,int]:
         """Get all the frequency band permutations of the data.
@@ -547,13 +547,13 @@ class Energy(Dataset):
         # each new process with a diffeent seed. It is used for testing.
         if self.testing:
             with Pool(processes) as p:
-                results = list(tqdm(p.starmap(self.get_permutations, starmap_args),
+                results = list(tqdm(p.starmap(self.get_freq_permutations, starmap_args),
                                     total=len(starmap_args),
                                     desc="Computing energy band permutations"))
         else:
             with Pool(processes, initializer=worker_init_fn, initargs=(os.getpid(),)) \
                 as p:
-                results = list(tqdm(p.starmap(self.get_permutations, starmap_args),
+                results = list(tqdm(p.starmap(self.get_freq_permutations, starmap_args),
                                     total=len(starmap_args),
                                     desc="Computing energy band permutations"))
 

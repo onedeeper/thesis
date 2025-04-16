@@ -244,7 +244,7 @@ def test_get_permutations_full_time_series():
                                file_name= TEST_FILE)
 
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the dimensions 
@@ -261,7 +261,7 @@ def test_get_permutations_full_time_series():
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -291,7 +291,7 @@ def test_get_permutations_full_time_series():
                                file_name= TEST_FILE)
 
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the dimensions 
@@ -309,7 +309,7 @@ def test_get_permutations_full_time_series():
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -371,7 +371,7 @@ def test_get_permutations_epoched():
                                file_name= TEST_FILE)
         for _ in range(10):
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the dimensions 
@@ -388,7 +388,7 @@ def test_get_permutations_epoched():
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -418,7 +418,7 @@ def test_get_permutations_epoched():
                                file_name= TEST_FILE)
 
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the dimensions 
@@ -435,7 +435,7 @@ def test_get_permutations_epoched():
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_permutations(input_matrix)
+                                int] = energy.get_freq_permutations(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -494,7 +494,7 @@ def test_save_perms_to_disk():
                                file_name= TEST_FILE)
     
         permutations_label : tuple[torch.Tensor,
-                            int] = energy.get_permutations(input_matrix,
+                            int] = energy.get_freq_permutations(input_matrix,
                                                            file_name="test.pt")
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]     
@@ -525,7 +525,7 @@ def test_save_perms_to_disk():
                                file_name= TEST_FILE)
         
         permutations_label : tuple[torch.Tensor,
-                            int] = energy.get_permutations(input_matrix,
+                            int] = energy.get_freq_permutations(input_matrix,
                                                            file_name="test.pt")
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]     
@@ -588,7 +588,7 @@ def test_run_permutations_parallel():
             ctr += 1
         energy_file = torch.load(test_data_dir / "energy" / file_name)
         data_iter, label_iter, file_name_iter = \
-            dataset.get_permutations(data = energy_file) 
+            dataset.get_freq_permutations(data = energy_file) 
         assert torch.allclose(data, data_iter)
         
         
