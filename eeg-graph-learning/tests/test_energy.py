@@ -495,7 +495,7 @@ def test_save_perms_to_disk():
     
         permutations_label : tuple[torch.Tensor,
                             int] = energy.get_permutations(input_matrix,
-                                                           details_for_save="test")
+                                                           file_name="test.pt")
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]     
 
@@ -504,10 +504,10 @@ def test_save_perms_to_disk():
         assert isinstance(pseudo_label, int)
         root_extension : str = "eeg-graph-learning"
         assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
-                              'epoched_perms' / "test")
+                              'epoched_perms' / "energy_perms_test.pt")
         file_name = f"energy_perms_test.pt"
         reloaded_data = torch.load(project_root / root_extension / 'data'/\
-                              'energy' / 'epoched_perms' / 'test'/ file_name)
+                              'energy' / 'epoched_perms' / file_name)
         assert reloaded_data[0].shape == permuted_data.shape
 
         # Test with full time series
@@ -526,7 +526,7 @@ def test_save_perms_to_disk():
         
         permutations_label : tuple[torch.Tensor,
                             int] = energy.get_permutations(input_matrix,
-                                                           details_for_save="test")
+                                                           file_name="test.pt")
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]     
 
@@ -535,27 +535,29 @@ def test_save_perms_to_disk():
         assert isinstance(pseudo_label, int)
         root_extension : str = "eeg-graph-learning"
         assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
-                              'perms' / "test")
+                              'perms')
         file_name = f"energy_perms_test.pt"
         reloaded_data = torch.load(project_root / root_extension / 'data'/\
-                              'energy' / 'perms' / 'test'/ file_name)
+                              'energy' / 'perms' / file_name)
         assert reloaded_data[0].shape == permuted_data.shape
 
 def test_run_permutations_parallel():
     """
-    Tests if the permutation generation in parallel works as expected.
+    Tests if the permutation generation in parallel is identical to what is
+    generated in parallel.
+
     """
     project_root : Path = Path(__file__).resolve().parent.parent.parent
-    print(project_root)
+   
     test_data_dir : Path = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
         "parallel_test"
     test_data_dir.mkdir(parents=True,exist_ok=True)
 
     cleaned_path = Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
          'data' / 'cleaned'
-    labels_file = Path(__file__).resolve().parent.parent.parent / "eeg-graph-learning"/\
-        'data' /'TDBRAIN_participants_V2.xlsx'
+    
     dataset = Energy(cleaned_path=cleaned_path,
+                     testing= True,
                      full_time_series=False,
                           energy_plots=True,
                           verbose_psd=False,
@@ -565,12 +567,31 @@ def test_run_permutations_parallel():
                           select_freq_bands=['gamma', 'delta', 'theta','alpha','beta']) 
     dataset.energy_save_dir_epoched = test_data_dir / 'energy'
     dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
+    # setting full length directory to be empty for testing purposes
+    # This is because run_get_permutations_parallel() handles both epoched
+    # and full timeseries data together.
+    empty_dir = test_data_dir / "empty"
+    empty_dir.mkdir(parents=True, exist_ok= True)
+    dataset.energy_save_dir = empty_dir
     dataset.run_energy_parallel()
-    energy_files = os.listdir(test_data_dir)
-    #print(dataset.get_permutations(dataset[0][0])[0].shape)
     results = dataset.run_permutations_parallel()
-    print(results[0])
 
+    seed = 42
+    ctr = 0
+    for data, label, file_name in results:
+        # The last file in the test runs on the same process so it 
+        # becomes the next number of the sequence.
+        if ctr < len(results)-1:
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            ctr += 1
+        energy_file = torch.load(test_data_dir / "energy" / file_name)
+        data_iter, label_iter, file_name_iter = \
+            dataset.get_permutations(data = energy_file) 
+        assert torch.allclose(data, data_iter)
+        
+        
 
 
     
