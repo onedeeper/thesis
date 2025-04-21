@@ -1,23 +1,25 @@
-import pytest
-import numpy as np
+"""Contains functions for testing the Energy module."""
+
 import os
-from pathlib import Path
-from eeglearn.features.energy import Energy
-from eeglearn.utils.augmentations import create_base_raw, inject_nans
 import pickle
-import torch
-import tempfile
-import os
-from eeglearn.utils.utils import get_participant_id_condition_from_string
-from eeglearn.preprocess.preprocessing import Preproccesing
 import random
+import tempfile
 from itertools import permutations
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+
+from eeglearn.features.energy import Energy
+from eeglearn.preprocess.preprocessing import Preproccesing
+from eeglearn.utils.utils import get_participant_id_condition_from_string
 
 TEST_FILE : str = os.environ.get('TEST_FILE')
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_get_energy_initialization() -> None:
-    """Test Energy class initialization with test data"""
+    """Test Energy class initialization with test data."""
     # Get path from environment variable
     test_dir : str = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
@@ -50,8 +52,8 @@ def test_get_energy_initialization() -> None:
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_get_energy_len()-> None:
-    """
-    Test if the len method returns the number of the files to be proccessed. 
+    """Test if the len method returns the number of the files to be proccessed.
+
     This wil eventually be the number of energy objects generated. 
     """
     test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
@@ -68,7 +70,7 @@ def test_get_energy_len()-> None:
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_get_energy_item()-> None:
-    "Tests if the __getitem__method returns a processed energy object."
+    """Tests if the __getitem__method returns a processed energy object."""
     test_dir : str = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
     # Initialize Energy with the test directory
@@ -84,8 +86,7 @@ def test_get_energy_item()-> None:
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_get_energy_shape()-> None:
-    """Test that get_energy returns the correct shape of energy matrix"""
-    
+    """Test that get_energy returns the correct shape of energy matrix."""
     # Get path from environment variable
     test_dir : str = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     
@@ -132,8 +133,7 @@ def test_get_energy_shape()-> None:
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_get_energy_values()-> None:
-    """Test that get_energy returns valid energy values.
-    """
+    """Test that get_energy returns valid energy values."""
     dir_path : str = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     bands : list[str] = ['delta', 'theta', 'alpha', 'beta', 'gamma'] 
 
@@ -190,16 +190,7 @@ def test_parallel_returns() -> None:
 @pytest.mark.skipif(not os.environ.get('EEG_CLEANED_TEST_FILE'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_get_freq_permutations_full_time_series()-> None:
-    """
-    Test case for generating the energy permutations for a given subject
-
-    What should get_permutations do ? 
-
-    Input :  It should take a n_channels x n_bands matrix 
-             1) Can have bad channels excluded so n_channels < 26
-    output : It should return a permuted version of the matrix (with the rows shuffled)
-             and a pseudo label for that permutation
-    """
+    """Test case for generating the energy permutations for a given subject."""
     test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
     participant : str = ""
     condition : str = ""
@@ -232,8 +223,7 @@ def test_get_freq_permutations_full_time_series()-> None:
                                 in enumerate(energy.select_freq_bands)}
         
         possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
-            {pseudo_label : perm for pseudo_label, perm \
-             in enumerate(permutations(energy.select_freq_bands))}
+            dict(enumerate(permutations(energy.select_freq_bands)))
         # testing the contents
         # The function should not return the same pseud-label each time.
         for _ in range(10):
@@ -245,7 +235,7 @@ def test_get_freq_permutations_full_time_series()-> None:
                                 int] = energy.get_freq_permutations(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
-            # testing the dimensions 
+            # testing the objects 
             # easiest to pass!
             assert isinstance(permutations_label,tuple)
             assert isinstance(permuted_data, torch.Tensor)
@@ -322,17 +312,14 @@ def test_get_freq_permutations_full_time_series()-> None:
         "The expected permutation has not been applied"
 
 def test_get_freq_permutations_epoched()-> None:
-    """
-    Test the permutation generation with epoched data.
-    """
-    clean_dir_path = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
+    """Test the permutation generation with epoched data."""
     test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
     participant : str = ""
     condition : str = ""
     participant, condition = get_participant_id_condition_from_string(TEST_FILE)
     preprocessed : Preproccesing = np.load(test_cleaned_file,                         
                            allow_pickle = True)
-    bands : list[str] = ['delta', 'theta', 'alpha', 'beta', 'gamma']
+    
     test_bands : list[str] = ['gamma', 'delta']
     with tempfile.TemporaryDirectory() as temp_dir:
         print(f"Created temporary directory at: {temp_dir}")
@@ -360,8 +347,7 @@ def test_get_freq_permutations_epoched()-> None:
                                 in enumerate(energy.select_freq_bands)}
         
         possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
-            {pseudo_label : perm for pseudo_label, perm \
-             in enumerate(permutations(energy.select_freq_bands))}
+            dict(enumerate(permutations(energy.select_freq_bands)))
         # testing the contents
         # The function should not return the same pseud-label each time.
         input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
@@ -448,10 +434,7 @@ def test_get_freq_permutations_epoched()-> None:
         "The expected permutation has not been applied"
 
 def test_save_freq_perms_to_disk()-> None:
-    """
-    Test if the generated permuations are saved to disk correctly if asked
-    """
-    
+    """Test if the generated permuations are saved to disk correctly if asked."""
     test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
     participant : str = ""
     condition : str = ""
@@ -503,7 +486,7 @@ def test_save_freq_perms_to_disk()-> None:
         root_extension : str = "eeg-graph-learning"
         assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
                               'epoched_perms' / "energy_perms_test.pt")
-        file_name = f"energy_perms_test.pt"
+        file_name = "energy_perms_test.pt"
         reloaded_data = torch.load(project_root / root_extension / 'data'/\
                               'energy' / 'epoched_perms' / file_name)
         assert reloaded_data[0].shape == permuted_data.shape
@@ -534,17 +517,13 @@ def test_save_freq_perms_to_disk()-> None:
         root_extension : str = "eeg-graph-learning"
         assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
                               'perms')
-        file_name = f"energy_perms_test.pt"
+        file_name = "energy_perms_test.pt"
         reloaded_data = torch.load(project_root / root_extension / 'data'/\
                               'energy' / 'perms' / file_name)
         assert reloaded_data[0].shape == permuted_data.shape
 
 def test_run_freq_permutations_parallel()-> None:
-    """
-    Tests if the permutation generation in parallel is identical to what is
-    generated in parallel.
-
-    """
+    """Compare serial and parallel computations."""
     project_root : Path = Path(__file__).resolve().parent.parent.parent
    
     test_data_dir : Path = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
@@ -576,7 +555,7 @@ def test_run_freq_permutations_parallel()-> None:
 
     seed = 42
     ctr = 0
-    for data, label, file_name in results:
+    for data, _, file_name in results:
         # The last file in the test runs on the same process so it 
         # becomes the next number of the sequence.
         if ctr < len(results)-1:
@@ -585,12 +564,10 @@ def test_run_freq_permutations_parallel()-> None:
             torch.manual_seed(seed)
             ctr += 1
         energy_file = torch.load(test_data_dir / "energy" / file_name)
-        data_iter, label_iter, file_name_iter = \
+        data_iter, _, _ = \
             dataset.get_freq_permutations(data = energy_file) 
         assert torch.allclose(data, data_iter)
         
 
 def test_get_position_perms()-> None:
-    """
-    Test if the position permutations are generated correctly for a given participant
-    """
+    """Test positoin permutation generation."""
