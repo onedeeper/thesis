@@ -2,6 +2,64 @@
 
 Created on: April 2025
 Author: Udesh Habaraduwa
+
+Attributes
+----------
+channel_names (list[str]): Standard list of 26 EEG channel names.
+n_eeg_channels (int): Number of EEG channels (fixed at 26).
+all_freq_bands (dict): Dictionary mapping frequency band names (e.g., 'delta') 
+                       to tuples containing frequency range ([min_hz, max_hz]) 
+                       and a canonical band index.
+cleaned_path (str): Path to the directory containing preprocessed EEG data files.
+select_freq_bands (list[str]): List of frequency band names to compute energy for,
+                               ordered canonically (delta, theta, alpha, beta, gamma).
+include_bad_channels_psd (bool): Whether to include channels marked as bad during 
+                                   PSD computation. Defaults to True.
+ran_energy (bool): Flag indicating if `run_energy_parallel` has been executed. 
+                   Initialized to False.
+save_to_disk (bool): Whether to save computed energy matrices to disk. 
+                     Defaults to True.
+energy_plots (bool): Whether to generate and save plots of the energy matrices. 
+                     Defaults to False.
+full_time_series (bool): Whether to compute energy on the full time series 
+                           instead of epochs. Defaults to False.
+method_psd (str): Method used for PSD computation by the underlying 
+                  `PowerSpectrum` class. Defaults to 'welch'.
+fmin_psd (float): Minimum frequency for PSD computation. Defaults to 0.5.
+fmax_psd (float): Maximum frequency for PSD computation. Defaults to 130.
+tmax_psd (float | None): Maximum time for PSD computation. Defaults to None.
+picks_psd (list[str] | None): Channels selected for PSD computation. 
+                                Defaults to None (uses MNE default).
+proj_psd (bool): Whether projection was applied during PSD computation. 
+                     Defaults to False.
+verbose_psd (bool): Verbosity setting for the underlying PSD computation. 
+                        Defaults to False.
+participant_list (list[str]): List of participant identifiers found in 
+                                  `cleaned_path`.
+labels_dict (dict): Dictionary mapping participant IDs to their labels.
+project_root (Path): The root directory of the project.
+plot_save_dir (Path): Directory path for saving energy plots.
+energy_save_dir (Path): Directory path for saving full time series energy matrices.
+energy_save_dir_epoched (Path): Directory path for saving epoched energy matrices.
+folders_and_files (list[tuple[Path, str]]): List of (folder_path, file_name) 
+                                            tuples for processing.
+participant_npy_files (list[str]): List of .npy file names to be processed.
+testing (bool): Flag indicating if the class is used in a testing context. 
+                Defaults to False.
+
+Methods
+-------
+__init__:
+    Initialize the Energy class.
+__len__:
+    Return the number of participants in the dataset.
+__getitem__:
+    Return the energy for a given participant.
+get_energy:
+    Compute the energy for a given participant.
+run_energy_parallel:
+    Compute the energy for all participants in parallel.    
+
 """
 
 import math
@@ -273,7 +331,7 @@ class Energy(Dataset):
         path_to_file : Path = folder_path / file_name
         assert os.path.exists(path_to_file),f"file does not exist: {path_to_file}"
 
-        # # get the spectrum
+        #get the spectrum
         spectra : torch.Tensor
         freqs : torch.Tensor
         n_bad_channels : int 
@@ -290,7 +348,7 @@ class Energy(Dataset):
                                                 include_bad_channels= \
                                                     self.include_bad_channels_psd,
                                                 save_to_disk=False)
-        spectra, freqs, _, n_bad_channels = spectrum.get_spectrum(
+        spectra, freqs, _, n_bad_channels, ch_names = spectrum.get_spectrum(
             folder_path=folder_path,
             file_name=file_name,
             save_to_disk=False)
@@ -505,7 +563,7 @@ class Energy(Dataset):
                     f"Data file does not exist: {save_path}"
         return (shuffled_columns,pseudo_label, file_name) 
     
-    def run_permutations_parallel(self)-> None | list:
+    def run_freq_permutations_parallel(self)-> None | list:
         """Compute band energy permutations for all files in parallel.
 
         Uses unique random seeds for each worker.
@@ -560,6 +618,7 @@ class Energy(Dataset):
         print(f"Finished processing {len(results)} permutations.")
 
         return results
+    
 
 if __name__ == "__main__":
     # Set seed for reproducibility
@@ -576,15 +635,9 @@ if __name__ == "__main__":
                           include_bad_channels_psd=True,
                           save_to_disk=True,
                           select_freq_bands=['gamma', 'delta','beta'])
-    print(len(dataset))
-    #files = dataset.run_energy_parallel()
-    #print(len(files))
-    print(dataset[0][0].shape)
-    # for data in dataset:
-    #     #print(data[1])
-    #     dataset.get_permutations(data[0])
-    # #print(dataset.get_permutations(dataset[0][0])[0].shape)
-    results = dataset.run_permutations_parallel()
+    
+    files = dataset.run_energy_parallel()
+    results = dataset.run_freq_permutations_parallel()
     # for data, label, file_name in results:
     #     print(file_name, label)
     

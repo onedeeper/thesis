@@ -18,6 +18,7 @@ import pytest
 import torch
 
 from eeglearn.features.spectrum import PowerSpectrum
+from eeglearn.preprocess.preprocessing import Preproccesing
 
 # Extract participant_id and condition
 from eeglearn.utils.utils import get_participant_id_condition_from_string
@@ -131,7 +132,7 @@ def test_power_spectrum_computation(setup_and_cleanup_test_dirs):
     freqs = torch.load(freqs_file)
     
     # Basic validation of the output shapes and values
-    assert isinstance(spectra, torch.Tensor), "Spectrum should be a torch.Tensor"
+    assert isinstance(spectra[0], torch.Tensor), "Spectrum should be a torch.Tensor"
     assert isinstance(freqs, torch.Tensor), "Frequencies should be a torch.Tensor"
     assert len(freqs) > 0, "Frequencies array should not be empty"
     assert freqs.min() >= 8, "Minimum frequency should match fmin"
@@ -174,9 +175,9 @@ def test_power_spectrum_getitem(setup_and_cleanup_test_dirs):
     
     # Only validate if the file was found (not None)
     if spectra is not None and freqs is not None:
-        assert isinstance(spectra, torch.Tensor), "Spectrum should be a torch.Tensor"
+        assert isinstance(spectra[0], torch.Tensor), "Spectrum should be a torch.Tensor"
         assert isinstance(freqs, torch.Tensor), "Frequencies should be a torch.Tensor"
-        assert spectra.shape[0] > 0,"Spectrum should have data for at least one channel"
+        assert spectra[0].shape[0] > 0,"Spectrum should have data for at least one channel"
         assert len(freqs) > 0, "Frequencies array should not be empty"
 
 
@@ -216,7 +217,7 @@ def test_power_spectrum_epoched(setup_and_cleanup_test_dirs):
     # If data was found, verify its structure
     if spectra is not None and freqs is not None:
         # For epoched data, we expect shape (n_epochs, n_channels, n_frequencies)
-        assert len(spectra.shape) == 3, "Epoched spectra should have 3 dimensions"
+        assert len(spectra[0].shape) == 3, "Epoched spectra should have 3 dimensions"
         assert isinstance(freqs, torch.Tensor), "Frequencies should be a torch.Tensor"
         assert len(freqs) > 0, "Frequencies array should not be empty"
 
@@ -292,8 +293,8 @@ def test_include_bad_channels_full_time_series(setup_and_cleanup_test_dirs):
     spectra_include = torch.load(ps_include_bad.spectrum_save_dir \
                                  / f'psd_{participant_id}_{condition}.pt')
     # Expected number of EEG channels is 26
-    print( " spectra_include.shape", spectra_include.shape)
-    assert spectra_include.shape[0] == 26, \
+    print( " spectra_include.shape", spectra_include[0].shape)
+    assert spectra_include[0].shape[0] == 26, \
         "When including bad channels, PSD should have 26 channels"
 
     # Process with both PowerSpectrum instances
@@ -301,7 +302,7 @@ def test_include_bad_channels_full_time_series(setup_and_cleanup_test_dirs):
     spectra_exclude = torch.load(ps_exclude_bad.spectrum_save_dir \
                                  / f'psd_{participant_id}_{condition}.pt')
     # When respecting bad channels, the number of channels should be less than 26
-    assert spectra_exclude.shape[0] < 26, \
+    assert spectra_exclude[0].shape[0] < 26, \
           "When excluding bad channels,  PSD should have fewer than 26 channels"
 
 
@@ -375,8 +376,8 @@ def test_include_bad_channels_epoched(setup_and_cleanup_test_dirs):
                                   / f'psd_{participant_id}_{condition}.pt')
     # For epoched data, the shape is (n_epochs, n_channels, n_frequencies)
     # Expected number of EEG channels is 26
-    print(" spectra_include.shape", spectra_include.shape)
-    assert spectra_include.shape[1] == 26,\
+    print(" spectra_include.shape", spectra_include[0].shape)
+    assert spectra_include[0].shape[1] == 26,\
           "When including bad channels, PSD should have 26 channels"
 
     # Process with include_bad_channels=False PowerSpectrum instance
@@ -385,5 +386,64 @@ def test_include_bad_channels_epoched(setup_and_cleanup_test_dirs):
     spectra_exclude = torch.load(ps_exclude_bad.spectrum_save_dir_epoched \
                                  / f'psd_{participant_id}_{condition}.pt')
     # When excluding bad channels, the number of channels should be less than 26
-    assert spectra_exclude.shape[1] < 26, \
+    assert spectra_exclude[0].shape[1] < 26, \
           "When excluding bad channels, PSD should have fewer than 26 channels"
+    
+@pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
+                    reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
+@pytest.mark.skipif(not os.environ.get('TEST_FILE'), 
+                    reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
+def test_spectrum_get_ch_names():
+    # Get path from environment variable
+    test_dir = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
+    # Initialize PowerSpectrum with the test directory for epoched data
+    test_picks = ["Fp1", "Fp2", "P3"]
+    ps = PowerSpectrum(cleaned_path=test_dir, 
+                      include_bad_channels=True,
+                      full_time_series=False,  # Use epoched data
+                      method='welch',
+                      picks= test_picks,
+                      fmin=1, 
+                      fmax=40)
+    
+    # Force computation by accessing an item
+    spectra : tuple[torch.Tensor, list[str]]
+    freqs : torch.Tensor
+    label : int
+    spectra, freqs , label = ps[0]
+    assert spectra[1] == test_picks
+
+    # test if band channels are dealth with
+    # Need to force a bad channel 
+    test_file: str = os.environ.get('TEST_FILE')
+    test_cleaned_file: str = os.environ.get('EEG_CLEANED_TEST_FILE')
+    participant : str = ""
+    condition : str = ""
+    participant, condition = get_participant_id_condition_from_string(test_file)
+    preprocessed : Preproccesing = np.load(test_cleaned_file,                         
+                           allow_pickle = True)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        print(f"Created temporary directory at: {temp_dir}")
+        temp_dir : Path = Path(temp_dir) / "cleaned"
+        temp_dir.mkdir(parents=True,  exist_ok = True)
+        
+        # hard set a bad channel and save it
+        bads: list[str] = ["Fp1", "P3"]
+        preprocessed.preprocessed_raw.info['bads'] = bads
+        preprocessed.preprocessed_epochs.info['bads'] = bads
+        file_name : str = f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
+        save_path : Path = temp_dir / participant / "ses-1" / "eeg"
+        save_path.mkdir(parents=True,exist_ok = True)
+        with open(save_path / file_name , 'wb') as output:   
+            pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
+        assert os.path.exists(save_path/file_name)
+        ps = PowerSpectrum(cleaned_path=temp_dir, 
+                      include_bad_channels=False,
+                      full_time_series=False,  # Use epoched data
+                      method='welch',
+                      fmin=1, 
+                      fmax=40)
+        spectra, freqs , label = ps[0]
+
+        # bad channels should have been excluded from the total 26
+        assert len(spectra[1]) == 26 - len(bads)

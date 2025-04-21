@@ -12,8 +12,8 @@ from eeglearn.utils.utils import get_participant_id_condition_from_string
 from eeglearn.preprocess.preprocessing import Preproccesing
 import random
 from itertools import permutations
-TEST_FILE : str = "sub-19740274_ses-1_task-restEC_preprocessed.npy"
 
+TEST_FILE : str = os.environ.get('TEST_FILE')
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 def test_get_energy_initialization() -> None:
@@ -189,7 +189,7 @@ def test_parallel_returns() -> None:
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
 @pytest.mark.skipif(not os.environ.get('EEG_CLEANED_TEST_FILE'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
-def test_get_permutations_full_time_series():
+def test_get_freq_permutations_full_time_series()-> None:
     """
     Test case for generating the energy permutations for a given subject
 
@@ -200,14 +200,12 @@ def test_get_permutations_full_time_series():
     output : It should return a permuted version of the matrix (with the rows shuffled)
              and a pseudo label for that permutation
     """
-    clean_dir_path = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
     test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
     participant : str = ""
     condition : str = ""
     participant, condition = get_participant_id_condition_from_string(TEST_FILE)
     preprocessed : Preproccesing = np.load(test_cleaned_file,                         
                            allow_pickle = True)
-    bands : list[str] = ['delta', 'theta', 'alpha', 'beta', 'gamma']
     test_bands : list[str] = ['gamma', 'delta']
     with tempfile.TemporaryDirectory() as temp_dir:
         print(f"Created temporary directory at: {temp_dir}")
@@ -323,7 +321,7 @@ def test_get_permutations_full_time_series():
         assert torch.allclose(permuted_data,permuted_input_matrix),\
         "The expected permutation has not been applied"
 
-def test_get_permutations_epoched():
+def test_get_freq_permutations_epoched()-> None:
     """
     Test the permutation generation with epoched data.
     """
@@ -449,7 +447,7 @@ def test_get_permutations_epoched():
         assert torch.allclose(permuted_data,permuted_input_matrix),\
         "The expected permutation has not been applied"
 
-def test_save_perms_to_disk():
+def test_save_freq_perms_to_disk()-> None:
     """
     Test if the generated permuations are saved to disk correctly if asked
     """
@@ -541,7 +539,7 @@ def test_save_perms_to_disk():
                               'energy' / 'perms' / file_name)
         assert reloaded_data[0].shape == permuted_data.shape
 
-def test_run_permutations_parallel():
+def test_run_freq_permutations_parallel()-> None:
     """
     Tests if the permutation generation in parallel is identical to what is
     generated in parallel.
@@ -574,7 +572,7 @@ def test_run_permutations_parallel():
     empty_dir.mkdir(parents=True, exist_ok= True)
     dataset.energy_save_dir = empty_dir
     dataset.run_energy_parallel()
-    results = dataset.run_permutations_parallel()
+    results = dataset.run_freq_permutations_parallel()
 
     seed = 42
     ctr = 0
@@ -591,9 +589,8 @@ def test_run_permutations_parallel():
             dataset.get_freq_permutations(data = energy_file) 
         assert torch.allclose(data, data_iter)
         
-        
 
-
-    
-    
-
+def test_get_position_perms()-> None:
+    """
+    Test if the position permutations are generated correctly for a given participant
+    """
