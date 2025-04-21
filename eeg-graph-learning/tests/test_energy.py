@@ -1,5 +1,6 @@
 """Contains functions for testing the Energy module."""
 
+
 import os
 import pickle
 import random
@@ -13,7 +14,9 @@ import torch
 
 from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.utils.utils import get_participant_id_condition_from_string
+from eeglearn.utils.utils import get_participant_id_condition_from_string, \
+    hamming_set
+from collections import namedtuple
 
 TEST_FILE : str = os.environ.get('TEST_FILE')
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
@@ -570,4 +573,62 @@ def test_run_freq_permutations_parallel()-> None:
         
 
 def test_get_position_perms()-> None:
-    """Test positoin permutation generation."""
+    """Test position permutation generation.
+    """
+     
+     # Test if shuffling of rows is done according to the specified groups
+     # that means, rows in groups should always stay together
+     # first, let's define the groups. 
+     # need to divide 26 electrodes into 10 groups. 
+
+    electrode_names : list['str'] = ['Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'FC3', 'FCz',
+                                'FC4', 'T7', 'C3', 'Cz', 'C4', 'T8', 'CP3','CPz', 'CP4',
+                                'P7', 'P3', 'Pz', 'P4', 'P8', 'O1', 'Oz', 'O2']
+    
+    electrode_array_positions = {electrode : i for i, electrode in \
+                                 enumerate(electrode_names)}
+    regions : dict[str,list[str]] = {
+        "pre_frontal" : ["Fp1", "Fp2"],
+        "frontal" :["Fz", "FCz"],
+        "left_frontal" : ["F7", "F3", "FCz"],
+        "right_frontal" : ["F4", "F8", "FC4"],
+        "left_temporal" : ["T7", "C3", "CP3"],
+        "right_temporal" : ["C4" , "T8", "CP4"],
+        "central" : ["Cz", "CPz", "Pz"],
+        "left_parietal" : ["P7", "P3"],
+        "right_parietal" : ["P4", "P8"],
+        "occipital" : ["O1, Oz, O2"]
+        }
+
+
+    project_root : Path = Path(__file__).resolve().parent.parent.parent
+   
+    test_data_dir : Path = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
+        "parallel_test"
+    test_data_dir.mkdir(parents=True,exist_ok=True)
+
+    cleaned_path = Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
+         'data' / 'cleaned'
+    
+    dataset = Energy(cleaned_path=cleaned_path,
+                     testing= True,
+                     full_time_series=False,
+                          energy_plots=True,
+                          verbose_psd=False,
+                          picks_psd = ['eeg'],
+                          include_bad_channels_psd=True,
+                          save_to_disk=True,
+                          select_freq_bands=['gamma', 'delta', 'theta','alpha','beta'])
+    
+    random.seed(33)
+
+    # random matrices with varying number of epochs and channels.
+    random_epoched = np.random.random((random.randint(1,10),
+                                       random.randint(1,26),5))
+    random_full = np.random.random((random.randint(1,26),
+                                   5))
+    
+    # test with epoched data
+    shuffled = dataset.get_position_permutations(data = random_epoched)
+    print(hamming_set(10,10,"max", "test"))
+    

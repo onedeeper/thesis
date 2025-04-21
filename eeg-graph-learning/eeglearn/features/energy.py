@@ -619,6 +619,10 @@ class Energy(Dataset):
 
         return results
     
+    def get_position_permutations(self, data : torch.Tensor) -> torch.Tensor:
+        """Shuffle the regions of an energy matrix."""
+        return data
+    
 
 if __name__ == "__main__":
     # Set seed for reproducibility

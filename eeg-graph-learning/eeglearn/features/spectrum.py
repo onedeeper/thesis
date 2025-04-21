@@ -95,9 +95,10 @@ class PowerSpectrum(Dataset):
             tmax (float): End time for analysis (in seconds).
             picks (list[str]): Channels to include in the analysis. By default, 
                 only includes the data channels:
-            (https://mne.tools/stable/documentation/glossary.html#term-data-channels)
+            (https://mne.tools/stable/documentation/glossary.html#term-data-channels).
+            Note that this will over-ride "ignore_bad_channels". Requested channels
+            are always returned, bad or not.
 
-            exclude (list[str]): Channels to exclude from the analysis.
             proj (bool): Whether to apply projection.
             verbose (bool): Whether to print detailed information.
             
