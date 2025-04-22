@@ -83,11 +83,11 @@ def test_get_energy_item()-> None:
                    energy_plots=False,
                    verbose_psd=False,
                    include_bad_channels_psd=False)
-    assert energy[0][0].shape[0] == 26
-    assert energy[0][0].shape[1] == 5
+    assert energy[0][0][0].shape[0] == 26
+    assert energy[0][0][0].shape[1] == 5
 
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
-                    reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
+                    reason="EEG_TEST_CLEANED_FOLDER_PATH environment var iable not set")
 def test_get_energy_shape()-> None:
     """Test that get_energy returns the correct shape of energy matrix."""
     # Get path from environment variable
@@ -109,8 +109,9 @@ def test_get_energy_shape()-> None:
     folder_path : Path
     file_name : str 
     folder_path, file_name = energy.folders_and_files[0]
-    band_matrix : torch.Tensor = energy.get_energy(folder_path, file_name)
-    
+    band_details : tuple[torch.Tensor, list[str]] = energy.get_energy(folder_path, 
+                                                                      file_name)
+    band_matrix : torch.Tensor = band_details[0]
     # Check shape: should be (n_channels, n_select_freq_bands)
     assert isinstance(band_matrix, torch.Tensor),\
         "Energy matrix should be a torch.Tensor"
@@ -125,8 +126,8 @@ def test_get_energy_shape()-> None:
                    energy_plots=False,
                    verbose_psd=False,
                    include_bad_channels_psd=True)
-    band_matrix = energy.get_energy(folder_path, file_name)
-
+    band_details = energy.get_energy(folder_path, file_name)
+    band_matrix =  band_details[0]
     assert isinstance(band_matrix, torch.Tensor), \
         "Energy matrix should be a torch.Tensor"
     assert band_matrix.shape[2] == len(energy.select_freq_bands), \
@@ -151,9 +152,12 @@ def test_get_energy_values()-> None:
                     verbose_psd=False,
                     include_bad_channels_psd=True)
         
-        energy_data_ordered  = energy.get_energy(folder_path=Path(dir_path) \
+        band_details : tuple[torch.Tensor, list[str]] =  energy.get_energy\
+                                                (folder_path=Path(dir_path) \
                                 / "sub-19740274" / "ses-1" / "eeg" ,
                                 file_name= TEST_FILE)
+        
+        energy_data_ordered  = band_details[0]
         
         assert isinstance(energy_data_ordered,torch.Tensor), "Should be a torch tensor"
         assert energy_data_ordered.shape[0] ==  26
@@ -168,14 +172,13 @@ def test_get_energy_values()-> None:
                     energy_plots=False,
                     verbose_psd=False,
                     include_bad_channels_psd=True)
-        data_diff_order : torch.Tensor = energy_data_diff_order.\
+        band_details = energy_data_diff_order.\
                                     get_energy(folder_path=Path(dir_path) \
                                 / "sub-19740274" / "ses-1" / "eeg" ,
                                 file_name= TEST_FILE)
-        for col in range(data_diff_order.shape[1]):
-                assert torch.allclose(data_diff_order[:,col], 
-                                      energy_data_ordered[:,col]),\
-                    "Matrix was not built consistently when bands are shuffled"
+        data_diff_order = band_details[0]
+        assert torch.allclose(data_diff_order, energy_data_ordered),\
+        "Matrix was not built consistently when bands are shuffled"
 
 def test_parallel_returns() -> None:
     """Test that the parallel method returns the correct number of files."""
@@ -230,9 +233,11 @@ def test_get_freq_permutations_full_time_series()-> None:
         # testing the contents
         # The function should not return the same pseud-label each time.
         for _ in range(10):
-            input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
-                              / participant / "ses-1" / "eeg" ,
-                               file_name= TEST_FILE)
+            band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
+                                                        (folder_path=temp_dir \
+                                                    / participant / "ses-1" / "eeg" ,
+                                                    file_name= TEST_FILE)
+            input_matrix : torch.Tensor  = band_details[0]
 
             permutations_label : tuple[torch.Tensor,
                                 int] = energy.get_freq_permutations(input_matrix)
@@ -277,9 +282,10 @@ def test_get_freq_permutations_full_time_series()-> None:
         # testing the contents
         # The function should not return the same pseud-label each time.
         for _ in range(10):
-            input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
+            band_details = energy.get_energy(folder_path=temp_dir \
                               / participant / "ses-1" / "eeg" ,
                                file_name= TEST_FILE)
+            input_matrix = band_details[0]
 
             permutations_label : tuple[torch.Tensor,
                                 int] = energy.get_freq_permutations(input_matrix)
@@ -353,9 +359,11 @@ def test_get_freq_permutations_epoched()-> None:
             dict(enumerate(permutations(energy.select_freq_bands)))
         # testing the contents
         # The function should not return the same pseud-label each time.
-        input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
+        band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
+                                (folder_path=temp_dir \
                               / participant / "ses-1" / "eeg" ,
                                file_name= TEST_FILE)
+        input_matrix : torch.Tensor  = band_details[0]
         for _ in range(10):
             permutations_label : tuple[torch.Tensor,
                                 int] = energy.get_freq_permutations(input_matrix)
@@ -400,9 +408,11 @@ def test_get_freq_permutations_epoched()-> None:
         # testing the contents
         # The function should not return the same pseud-label each time.
         for _ in range(10):
-            input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir \
+            band_details = energy.get_energy\
+                                (folder_path=temp_dir \
                               / participant / "ses-1" / "eeg" ,
                                file_name= TEST_FILE)
+            input_matrix = band_details[0]
 
             permutations_label : tuple[torch.Tensor,
                                 int] = energy.get_freq_permutations(input_matrix)
@@ -473,9 +483,11 @@ def test_save_freq_perms_to_disk()-> None:
         
         # testing the contents
         # The function should not return the same pseud-label each time.
-        input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir_cleaned \
+        band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
+                                (folder_path=temp_dir_cleaned \
                               / participant / "ses-1" / "eeg" ,
                                file_name= TEST_FILE)
+        input_matrix : torch.Tensor  = band_details[0]
     
         permutations_label : tuple[torch.Tensor,
                             int] = energy.get_freq_permutations(input_matrix,
@@ -504,9 +516,10 @@ def test_save_freq_perms_to_disk()-> None:
 
         # testing the contents
         # The function should not return the same pseud-label each time.
-        input_matrix : torch.Tensor  = energy.get_energy(folder_path=temp_dir_cleaned \
+        band_details = energy.get_energy(folder_path=temp_dir_cleaned \
                               / participant / "ses-1" / "eeg" ,
                                file_name= TEST_FILE)
+        input_matrix = band_details[0] 
         
         permutations_label : tuple[torch.Tensor,
                             int] = energy.get_freq_permutations(input_matrix,
@@ -566,7 +579,9 @@ def test_run_freq_permutations_parallel()-> None:
             np.random.seed(seed)
             torch.manual_seed(seed)
             ctr += 1
-        energy_file = torch.load(test_data_dir / "energy" / file_name)
+        band_details : tuple[torch.Tensor, list[str]] =  torch.\
+                                            load(test_data_dir / "energy" / file_name)
+        energy_file = band_details[0]
         data_iter, _, _ = \
             dataset.get_freq_permutations(data = energy_file) 
         assert torch.allclose(data, data_iter)
@@ -587,17 +602,18 @@ def test_get_position_perms()-> None:
     
     electrode_array_positions = {electrode : i for i, electrode in \
                                  enumerate(electrode_names)}
-    regions : dict[str,list[str]] = {
-        "pre_frontal" : ["Fp1", "Fp2"],
-        "frontal" :["Fz", "FCz"],
-        "left_frontal" : ["F7", "F3", "FCz"],
-        "right_frontal" : ["F4", "F8", "FC4"],
-        "left_temporal" : ["T7", "C3", "CP3"],
-        "right_temporal" : ["C4" , "T8", "CP4"],
-        "central" : ["Cz", "CPz", "Pz"],
-        "left_parietal" : ["P7", "P3"],
-        "right_parietal" : ["P4", "P8"],
-        "occipital" : ["O1, Oz, O2"]
+    
+    regions : dict[str,tuple[list[str],int]] = {
+        "pre_frontal" : (["Fp1", "Fp2"],0),
+        "frontal" :(["Fz", "FCz"],1 ),
+        "left_frontal" : (["F7", "F3", "FCz"],2),
+        "right_frontal" : (["F4", "F8", "FC4"],3),
+        "left_temporal" : (["T7", "C3", "CP3"],4),
+        "right_temporal" : (["C4" , "T8", "CP4"],5),
+        "central" : (["Cz", "CPz", "Pz"],6),
+        "left_parietal" : (["P7", "P3"],7),
+        "right_parietal" : (["P4", "P8"],8),
+        "occipital" : (["O1, Oz, O2"],9)
         }
 
 
@@ -628,7 +644,14 @@ def test_get_position_perms()-> None:
     random_full = np.random.random((random.randint(1,26),
                                    5))
     
-    # test with epoched data
-    shuffled = dataset.get_position_permutations(data = random_epoched)
-    print(hamming_set(10,10,"max", "test"))
-    
+    # get the permutations for testing 
+
+    output = dataset.get_position_permutations(random_epoched)
+    assert output.shape[0] == random_epoched.shape[0]
+    assert output.shape[1] == random_epoched.shape[1]
+    assert output.shape[2] == random_epoched.shape[2]
+
+    # given a matrix, it should shuffle the matrices in groups according to the 
+    # regions
+    regions['pre_frontal']
+

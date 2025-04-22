@@ -397,9 +397,9 @@ class Energy(Dataset):
                                              len(self.select_freq_bands)), \
                 "combined_energy has wrong shape"
             if self.save_to_disk:
-                torch.save(combined_energy, self.energy_save_dir /\
+                torch.save((combined_energy,ch_names), self.energy_save_dir /\
                             f"energy_{participant_id}_{condition}.pt")
-            return combined_energy
+            return (combined_energy,ch_names)
         else:
             n_channels_included = self.n_eeg_channels - \
                 (1 - self.include_bad_channels_psd)*(n_bad_channels)
@@ -430,7 +430,7 @@ class Energy(Dataset):
             combined_energy : torch.Tensor = torch.stack(selected_bands,
                                                           dim = 1).permute(0,2,1)
        
-            first_band : str = self.select_freq_bands[0]
+            first_band : str = self.select_freq_bands[0] 
             # check that the energy for a given band in a given epoch is where it 
             # should be
             assert torch.allclose(combined_energy[0,:,0],
@@ -442,9 +442,9 @@ class Energy(Dataset):
             f"{combined_energy.shape} != ({expected_shape})"
 
             if self.save_to_disk:
-                torch.save(combined_energy, self.energy_save_dir_epoched /\
+                torch.save((combined_energy, ch_names), self.energy_save_dir_epoched /\
                             f"energy_{participant_id}_{condition}.pt")
-            return combined_energy
+            return (combined_energy,ch_names)
         
 
     def run_energy_parallel(self) -> None | list:
@@ -503,9 +503,9 @@ class Energy(Dataset):
         """
         if data is None:
             if is_epoched:
-                data = torch.load(self.energy_save_dir_epoched / file_name)
+                data = torch.load(self.energy_save_dir_epoched / file_name)[0]
             else:
-                data = torch.load(self.energy_save_dir / file_name)
+                data = torch.load(self.energy_save_dir / file_name)[0]
         assert isinstance(data, torch.Tensor)
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
@@ -641,7 +641,9 @@ if __name__ == "__main__":
                           select_freq_bands=['gamma', 'delta','beta'])
     
     files = dataset.run_energy_parallel()
-    results = dataset.run_freq_permutations_parallel()
+    print(len(dataset[0]),dataset[0][0].shape,dataset[0][1])
+    #results = dataset.run_freq_permutations_parallel()
+    # print(results[0][0].shape, results[0][1], results[0][2])
     # for data, label, file_name in results:
     #     print(file_name, label)
     
