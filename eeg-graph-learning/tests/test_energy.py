@@ -16,7 +16,11 @@ from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.utils import get_participant_id_condition_from_string, \
     hamming_set
+from eeglearn.config import Config
 from collections import namedtuple
+
+Config.RANDOM_SEED = 1223333
+Config.set_global_seed()
 
 TEST_FILE : str = os.environ.get('TEST_FILE')
 @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
@@ -240,7 +244,7 @@ def test_get_freq_permutations_full_time_series()-> None:
             input_matrix : torch.Tensor  = band_details[0]
 
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the objects 
@@ -257,7 +261,7 @@ def test_get_freq_permutations_full_time_series()-> None:
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -288,7 +292,7 @@ def test_get_freq_permutations_full_time_series()-> None:
             input_matrix = band_details[0]
 
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the dimensions 
@@ -306,7 +310,7 @@ def test_get_freq_permutations_full_time_series()-> None:
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -366,7 +370,7 @@ def test_get_freq_permutations_epoched()-> None:
         input_matrix : torch.Tensor  = band_details[0]
         for _ in range(10):
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the dimensions 
@@ -383,7 +387,7 @@ def test_get_freq_permutations_epoched()-> None:
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -415,7 +419,7 @@ def test_get_freq_permutations_epoched()-> None:
             input_matrix = band_details[0]
 
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_label : int = permutations_label[1]     
             # testing the dimensions 
@@ -432,7 +436,7 @@ def test_get_freq_permutations_epoched()-> None:
                 "Shuffled. Columns should be the same for this pseudo label"
 
         permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutations(input_matrix)
+                                int] = energy.get_freq_permutation(input_matrix)
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]
         
@@ -490,7 +494,7 @@ def test_save_freq_perms_to_disk()-> None:
         input_matrix : torch.Tensor  = band_details[0]
     
         permutations_label : tuple[torch.Tensor,
-                            int] = energy.get_freq_permutations(input_matrix,
+                            int] = energy.get_freq_permutation(input_matrix,
                                                            file_name="test.pt")
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]     
@@ -522,7 +526,7 @@ def test_save_freq_perms_to_disk()-> None:
         input_matrix = band_details[0] 
         
         permutations_label : tuple[torch.Tensor,
-                            int] = energy.get_freq_permutations(input_matrix,
+                            int] = energy.get_freq_permutation(input_matrix,
                                                            file_name="test.pt")
         permuted_data : torch.Tensor  = permutations_label[0]
         pseudo_label : int = permutations_label[1]     
@@ -583,40 +587,50 @@ def test_run_freq_permutations_parallel()-> None:
                                             load(test_data_dir / "energy" / file_name)
         energy_file = band_details[0]
         data_iter, _, _ = \
-            dataset.get_freq_permutations(data = energy_file) 
+            dataset.get_freq_permutation(data = energy_file) 
         assert torch.allclose(data, data_iter)
         
 
-def test_get_position_perms()-> None:
-    """Test position permutation generation.
+def test_get_spatial_perms()-> None:
+    """Test spatial permutation generation.
     """
      
      # Test if shuffling of rows is done according to the specified groups
      # that means, rows in groups should always stay together
      # first, let's define the groups. 
      # need to divide 26 electrodes into 10 groups. 
-
-    electrode_names : list['str'] = ['Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'FC3', 'FCz',
-                                'FC4', 'T7', 'C3', 'Cz', 'C4', 'T8', 'CP3','CPz', 'CP4',
-                                'P7', 'P3', 'Pz', 'P4', 'P8', 'O1', 'Oz', 'O2']
+    electrode_names : list['str'] = ['Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'FC3', 
+                                     'FCz','FC4', 'T7', 'C3', 'Cz', 'C4', 'T8', 'CP3',
+                                     'CPz', 'CP4','P7', 'P3', 'Pz', 'P4', 'P8', 'O1', 
+                                     'Oz', 'O2']
     
     electrode_array_positions = {electrode : i for i, electrode in \
                                  enumerate(electrode_names)}
     
-    regions : dict[str,tuple[list[str],int]] = {
-        "pre_frontal" : (["Fp1", "Fp2"],0),
-        "frontal" :(["Fz", "FCz"],1 ),
-        "left_frontal" : (["F7", "F3", "FCz"],2),
-        "right_frontal" : (["F4", "F8", "FC4"],3),
-        "left_temporal" : (["T7", "C3", "CP3"],4),
-        "right_temporal" : (["C4" , "T8", "CP4"],5),
-        "central" : (["Cz", "CPz", "Pz"],6),
-        "left_parietal" : (["P7", "P3"],7),
-        "right_parietal" : (["P4", "P8"],8),
-        "occipital" : (["O1, Oz, O2"],9)
+    regions : dict[str,list[str]] = {
+        "pre_frontal" :["Fp1", "Fp2"],
+        "frontal" :["Fz", "FCz"],
+        "left_frontal" :  ["F7", "F3", "FC3"],
+        "right_frontal" : ["F4", "F8", "FC4"],
+        "left_temporal" : ["T7", "C3", "CP3"],
+        "right_temporal" : ["C4" , "T8", "CP4"],
+        "central" : ["Cz", "CPz", "Pz"],
+        "left_parietal" : ["P7", "P3"],
+        "right_parietal" : ["P4", "P8"],
+        "occipital" : ["O1","Oz", "O2"]
         }
+    
+    assert len([ch for region,channels in 
+                                 regions.items() for ch in channels]) == 26,\
+                                 "Incorrect number of total channels"
+    set_from_regions_dict = set([ch for region,channels in 
+                                 regions.items() for ch in channels])
+    assert len(set([ch for region,channels in regions.items() for ch in channels]))\
+        ==26, "Not expected number of channels"
+    assert len(set(electrode_names).difference(set_from_regions_dict)) == 0,\
+        "Not all defined channels from data are in the regions"
 
-
+    idx_to_region : dict[int,str] = dict(enumerate(list(regions.keys())))
     project_root : Path = Path(__file__).resolve().parent.parent.parent
    
     test_data_dir : Path = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
@@ -626,9 +640,9 @@ def test_get_position_perms()-> None:
     cleaned_path = Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
          'data' / 'cleaned'
     
-    dataset = Energy(cleaned_path=cleaned_path,
+    dataset : Energy = Energy(cleaned_path=cleaned_path,
                      testing= True,
-                     full_time_series=False,
+                     full_time_series=True,
                           energy_plots=True,
                           verbose_psd=False,
                           picks_psd = ['eeg'],
@@ -636,22 +650,77 @@ def test_get_position_perms()-> None:
                           save_to_disk=True,
                           select_freq_bands=['gamma', 'delta', 'theta','alpha','beta'])
     
-    random.seed(33)
+    save_path : Path = Path(__file__).resolve().parent.parent.parent /\
+                "eeg-graph-learning" / "tests" / "test_data"
+    perm_file_name : str = "test_permutations.pt"
+    if not(os.path.exists(save_path / perm_file_name)):
+        permutations = hamming_set(n_regions=10, n_permutations=128, selection='max',
+                                    output_file_name= perm_file_name, 
+                                    save_to_disk=False)
+        torch.save(torch.Tensor(permutations), save_path / perm_file_name)
+    else:
+        permutations = torch.load(save_path / perm_file_name)
+    # runs energy in parallel to process all files in the folder
+    # get the 0th participant, first element is all the band details
+    # second element is the label for the participant in the dataset
+    input_matrix : torch.Tensor = dataset[0][0][0] #freq bands
+    ch_info : list[str] = dataset[0][0][1] # channel order info
+    assert input_matrix.shape[0] == len(ch_info)
+    output_matrix, pseudo_label = dataset.get_spatial_permutation(input_matrix)
+    assert output_matrix.shape == input_matrix.shape
 
-    # random matrices with varying number of epochs and channels.
-    random_epoched = np.random.random((random.randint(1,10),
-                                       random.randint(1,26),5))
-    random_full = np.random.random((random.randint(1,26),
-                                   5))
+    if pseudo_label != 0:
+        # for anything other than the first permutation, which is the original order
+        # test if the rows are shuffled according to the regions.
+        permuted_channels : list[int] = []
+        idxs_chs_in_region : dict[str, list[int]] = {}
+        target_permutation : torch.Tensor = permutations[pseudo_label,:]
+        for region in target_permutation:
+            #print(regions[region_idx[region.item()]])
+            channels_in_region : list[int] = regions[idx_to_region[region.item()]]
+            ch_idxs : list[int] = []
+            for channel in channels_in_region:
+                #print(channel)
+                try:
+                    #print(channel, ch_info.index(channel))
+                    permuted_channels.append(ch_info.index(channel))
+                    ch_idxs.append(ch_info.index(channel))
+                except ValueError :
+                    continue
+            idxs_chs_in_region[region.item()] = ch_idxs
+        assert len(permuted_channels) == input_matrix.shape[0]
+        start = 0
+        # test if the shuffling has been done while preserving the regions
+        for region in target_permutation:
+            # check if this region is in the right place in permuted channels
+            region_size = len(idxs_chs_in_region[region.item()])
+            assert idxs_chs_in_region[region.item()] == permuted_channels[start:start +\
+                                                                          region_size],\
+                                            "Regions are not intact."
+            start += region_size
+        permuted_input_matrix : torch.Tensor = input_matrix[permuted_channels,:]
+        assert torch.allclose(permuted_input_matrix, output_matrix),\
+            "Expected permutation has not been applied."
+        #print(permuted_input_matrix)
+    else:
+        assert torch.allclose(input_matrix, output_matrix)
     
-    # get the permutations for testing 
+    #
+    
+    # # random matrices with varying number of epochs and channels.
+    # random_epoched = np.random.random((random.randint(1,10),
+    #                                    random.randint(1,26),5))
+    # random_full = np.random.random((random.randint(1,26),
+    #                                5))
+    
+    # # get the permutations for testing 
 
-    output = dataset.get_position_permutations(random_epoched)
-    assert output.shape[0] == random_epoched.shape[0]
-    assert output.shape[1] == random_epoched.shape[1]
-    assert output.shape[2] == random_epoched.shape[2]
+    # output = dataset.get_position_permutations(random_epoched)
+    # assert output.shape[0] == random_epoched.shape[0]
+    # assert output.shape[1] == random_epoched.shape[1]
+    # assert output.shape[2] == random_epoched.shape[2]
 
-    # given a matrix, it should shuffle the matrices in groups according to the 
-    # regions
-    regions['pre_frontal']
+    # # given a matrix, it should shuffle the matrices in groups according to the 
+    # # regions
+    # regions['pre_frontal']
 

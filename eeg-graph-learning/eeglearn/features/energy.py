@@ -479,7 +479,7 @@ class Energy(Dataset):
             if not self.save_to_disk:
                 return results
             
-    def get_freq_permutations(self, data : torch.Tensor = None,
+    def get_freq_permutation(self, data : torch.Tensor = None,
                          is_epoched : bool = False,
                          file_name : str = None) -> tuple[torch.Tensor,int]:
         """Get all the frequency band permutations of the data.
@@ -605,13 +605,13 @@ class Energy(Dataset):
         # each new process with a diffeent seed. It is used for testing.
         if self.testing:
             with Pool(processes) as p:
-                results = list(tqdm(p.starmap(self.get_freq_permutations, starmap_args),
+                results = list(tqdm(p.starmap(self.get_freq_permutation, starmap_args),
                                     total=len(starmap_args),
                                     desc="Computing energy band permutations"))
         else:
             with Pool(processes, initializer=worker_init_fn, initargs=(os.getpid(),)) \
                 as p:
-                results = list(tqdm(p.starmap(self.get_freq_permutations, starmap_args),
+                results = list(tqdm(p.starmap(self.get_freq_permutation, starmap_args),
                                     total=len(starmap_args),
                                     desc="Computing energy band permutations"))
 
@@ -619,13 +619,36 @@ class Energy(Dataset):
 
         return results
     
-    def get_position_permutations(self, data : torch.Tensor) -> torch.Tensor:
-        """Shuffle the regions of an energy matrix."""
-        return data
+    def get_spatial_permutation(self, data : torch.Tensor) -> \
+                                    tuple[torch.Tensor, int]:
+        """Shuffle the regions of an energy matrix.
+        
+         Args:
+        ----
+            data : An energy band matrix of shape n_epochs x n_channels x n_bands
+                   or n_channels x n_bands for a full time series.
+
+        Returns:
+        -------
+            tuple[torch.Tensor : A matrix permuted by regions.
+                  int : a pseudo label indicating the permutation applied.
+                ] 
+        
+        """
+        perms_file : str =  "spatial_perms.pt"
+        perms_path : Path = Path(__file__).resolve().parent.parent.parent / "data"
+        try:
+            perms = torch.load(perms_path / perms_file)
+        except Exception as e:
+            print("Permutations not found. Creating. This may take a minute.")
+
+
+        return data, random.randint(1,128)
     
 
 if __name__ == "__main__":
-    # Set seed for reproducibility
+    # Set seed for reproducibility or testing different runs
+    Config.RANDOM_SEED = 33
     Config.set_global_seed()
     
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
@@ -641,9 +664,10 @@ if __name__ == "__main__":
                           select_freq_bands=['gamma', 'delta','beta'])
     
     files = dataset.run_energy_parallel()
-    print(len(dataset[0]),dataset[0][0].shape,dataset[0][1])
+    print(dataset[0][0])
     #results = dataset.run_freq_permutations_parallel()
     # print(results[0][0].shape, results[0][1], results[0][2])
     # for data, label, file_name in results:
     #     print(file_name, label)
+    spatial_perm = dataset.get_spatial_permutation(dataset[0][0][0])
     
