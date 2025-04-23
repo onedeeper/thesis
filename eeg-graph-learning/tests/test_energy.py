@@ -650,6 +650,7 @@ def test_get_spatial_perms_full_time_series()-> None:
     save_path : Path = Path(__file__).resolve().parent.parent.parent /\
                 "eeg-graph-learning" / "tests" / "test_data"
     
+    test_with_random : bool = False
     hamming_selection : str = "max"
     n_regions : str = 10
     n_permutations : str = 128
@@ -667,6 +668,14 @@ def test_get_spatial_perms_full_time_series()-> None:
     # second element is the label for the participant in the dataset
     input_matrix : torch.Tensor = dataset[0][0][0] #freq bands
     ch_names : list[str] = dataset[0][0][1] # channel order info
+
+    if test_with_random:
+         # Random matrices with varying number of epochs and channels.
+        random_n_channels = random.randint(1,26)
+        random_n_bands = random.randint(1,5)
+        input_matrix = torch.Tensor(np.random.random((random_n_channels,
+                                                      random_n_bands)))
+        ch_names = ch_names[:random_n_bands]
     assert input_matrix.shape[0] == len(ch_names)
     output_matrix, pseudo_label = dataset.get_spatial_permutation(input_matrix,
                                                                   ch_names)
@@ -709,20 +718,6 @@ def test_get_spatial_perms_full_time_series()-> None:
     else:
         assert torch.allclose(input_matrix, output_matrix)
     
-    #
-    
-    # # random matrices with varying number of epochs and channels.
-    # random_epoched = np.random.random((random.randint(1,10),
-    #                                    random.randint(1,26),5))
-    # random_full = np.random.random((random.randint(1,26),
-    #                                5))
-    
-    # # get the permutations for testing 
-
-    # output = dataset.get_position_permutations(random_epoched)
-    # assert output.shape[0] == random_epoched.shape[0]
-    # assert output.shape[1] == random_epoched.shape[1]
-    # assert output.shape[2] == random_epoched.shape[2]
 
     # # given a matrix, it should shuffle the matrices in groups according to the 
     # # regions
