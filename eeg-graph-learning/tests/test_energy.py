@@ -650,7 +650,7 @@ def test_get_spatial_perms_full_time_series()-> None:
     save_path : Path = Path(__file__).resolve().parent.parent.parent /\
                 "eeg-graph-learning" / "tests" / "test_data"
     
-    test_with_random : bool = False
+    test_with_random : bool = True
     hamming_selection : str = "max"
     n_regions : str = 10
     n_permutations : str = 128
@@ -718,8 +718,126 @@ def test_get_spatial_perms_full_time_series()-> None:
     else:
         assert torch.allclose(input_matrix, output_matrix)
     
+def test_get_spatial_perms_epoched() -> None:
+    """Test spatial permutation generation for epoched data.
+    """
+    electrode_names : list['str'] = ['Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'FC3', 
+                                     'FCz','FC4', 'T7', 'C3', 'Cz', 'C4', 'T8', 'CP3',
+                                     'CPz', 'CP4','P7', 'P3', 'Pz', 'P4', 'P8', 'O1', 
+                                     'Oz', 'O2']
+    
+    regions : dict[str,list[str]] = {
+        "pre_frontal" :["Fp1", "Fp2"],
+        "frontal" :["Fz", "FCz"],
+        "left_frontal" :  ["F7", "F3", "FC3"],
+        "right_frontal" : ["F4", "F8", "FC4"],
+        "left_temporal" : ["T7", "C3", "CP3"],
+        "right_temporal" : ["C4" , "T8", "CP4"],
+        "central" : ["Cz", "CPz", "Pz"],
+        "left_parietal" : ["P7", "P3"],
+        "right_parietal" : ["P4", "P8"],
+        "occipital" : ["O1","Oz", "O2"]
+        }
+    
+    assert len([ch for region,channels in 
+                                 regions.items() for ch in channels]) == 26,\
+                                 "Incorrect number of total channels"
+    set_from_regions_dict = set([ch for region,channels in 
+                                 regions.items() for ch in channels])
+    assert len(set([ch for region,channels in regions.items() for ch in channels]))\
+        ==26, "Not expected number of channels"
+    assert len(set(electrode_names).difference(set_from_regions_dict)) == 0,\
+        "Not all defined channels from data are in the regions"
 
-    # # given a matrix, it should shuffle the matrices in groups according to the 
-    # # regions
-    # regions['pre_frontal']
+    idx_to_region : dict[int,str] = dict(enumerate(list(regions.keys())))
+    project_root : Path = Path(__file__).resolve().parent.parent.parent
+   
+    test_data_dir : Path = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
+        "parallel_test"
+    test_data_dir.mkdir(parents=True,exist_ok=True)
 
+    cleaned_path = Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
+         'data' / 'cleaned'
+    
+    dataset : Energy = Energy(cleaned_path=cleaned_path,
+                     testing= True,
+                     full_time_series=False,
+                          energy_plots=True,
+                          verbose_psd=False,
+                          picks_psd = ['eeg'],
+                          include_bad_channels_psd=True,
+                          save_to_disk=True,
+                          select_freq_bands=['gamma', 'delta', 'theta','alpha','beta'])
+    
+    save_path : Path = Path(__file__).resolve().parent.parent.parent /\
+                "eeg-graph-learning" / "tests" / "test_data"
+    
+    test_with_random : bool = True
+    hamming_selection : str = "max"
+    n_regions : str = 10
+    n_permutations : str = 128
+    perm_file_name : str =\
+            f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
+    if not(os.path.exists(save_path / perm_file_name)):
+        permutations = hamming_set(n_regions=10, n_permutations=128, selection='max',
+                                    output_file_name= perm_file_name, 
+                                    save_to_disk=False)
+        torch.save(torch.Tensor(permutations), save_path / perm_file_name)
+    else:
+        permutations = torch.load(save_path / perm_file_name)
+    
+    input_matrix : torch.Tensor = dataset[0][0][0] #freq bands
+    ch_names : list[str] = dataset[0][0][1] # channel order info=
+
+    print(input_matrix.shape, ch_names)
+    # if test_with_random:
+    #      # Random matrices with varying number of epochs and channels.
+    #     random_n_channels = random.randint(1,26)
+    #     random_n_bands = random.randint(1,5)
+    #     input_matrix = torch.Tensor(np.random.random((random_n_channels,
+    #                                                   random_n_bands)))
+    #     ch_names = ch_names[:random_n_bands]
+    assert input_matrix.shape[1] == len(ch_names)
+    output_matrix, pseudo_label = dataset.get_spatial_permutation(input_matrix,
+                                                                  ch_names)
+    assert output_matrix.shape == input_matrix.shape
+    assert isinstance(pseudo_label, torch.Tensor),\
+        "For epoched data, tensor of permutations is expected"
+
+    if pseudo_label != 0:
+        # for anything other than the first permutation, which is the original order
+        # test if the rows are shuffled according to the regions.
+        permuted_channels : list[int] = []
+        idxs_chs_in_region : dict[str, list[int]] = {}
+        target_permutation : torch.Tensor = permutations[pseudo_label,:]
+        print(f"testing target perms : {pseudo_label}, {target_permutation}")
+        for region in target_permutation:
+            #print(regions[region_idx[region.item()]])
+            channels_in_region : list[int] = regions[idx_to_region[region.item()]]
+            ch_idxs : list[int] = []
+            for channel in channels_in_region:
+                #print(channel)
+                try:
+                    #print(channel, ch_info.index(channel))
+                    permuted_channels.append(ch_names.index(channel))
+                    ch_idxs.append(ch_names.index(channel))
+                except ValueError :
+                    continue
+            idxs_chs_in_region[region.item()] = ch_idxs
+        assert len(permuted_channels) == input_matrix.shape[1]
+        start = 0
+        # test if the shuffling has been done while preserving the regions
+        for region in target_permutation:
+            # check if this region is in the right place in permuted channels
+            region_size = len(idxs_chs_in_region[region.item()])
+            assert idxs_chs_in_region[region.item()] == permuted_channels[start:start +\
+                                                                          region_size],\
+                                            "Regions are not intact."
+            start += region_size
+        permuted_input_matrix : torch.Tensor = input_matrix[:,permuted_channels,:]
+        assert torch.allclose(permuted_input_matrix, output_matrix),\
+            "Expected permutation has not been applied."
+        #print(permuted_input_matrix)
+    else:
+        assert torch.allclose(input_matrix, output_matrix)
+    

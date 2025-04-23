@@ -313,7 +313,8 @@ class Energy(Dataset):
         """Plot the energy of the EEG data for a given participant."""
         pass
 
-    def get_energy(self, folder_path:  Path, file_name: str) -> torch.Tensor:
+    def get_energy(self, folder_path:  Path, file_name: str) -> tuple[torch.Tensor,
+                                                                      list[str]]:
         """Compute the energy of the EEG data for one file.
 
         Args:
@@ -323,8 +324,21 @@ class Energy(Dataset):
 
         Returns:
         -------
-            np.ndarray: The energy of the EEG data.
+            tuple: Contains:
+                - torch.Tensor: The energy of the EEG data, with shape:
+                  - For full_time_series=True: (n_channels, n_bands)
+                  - For full_time_series=False: (n_epochs, n_channels, n_bands)
+                - list[str]: Channel names corresponding to the rows in the energ
+                             matrix.
 
+        Notes:
+        -----
+            - For full time series, computes energy across all frequency bands and 
+                returns a matrix of shape (n_channels, n_bands).
+            - For epoched data, computes energy for each epoch and returns a tensor of
+              shape (n_epochs, n_channels, n_bands).
+            - If save_to_disk is True, saves the energy data to disk in the appropriate
+              directory (energy_save_dir or energy_save_dir_epoched).
         """
         participant_id : str
         condition : str
@@ -365,11 +379,7 @@ class Energy(Dataset):
             "gamma" : (freqs >= 31) & (freqs <= 50)
         }
         if self.full_time_series:
-            # n_bads either >= 0 , can be 1,2,  --> n _eeg_channels
-            # if you are including them in the analysis, then this should not be
-            # removed from the included bands
             # if include_bads --> do not subtract
-            # if you are Not including, then remove them. 
             # if (not include_bads) --> subtract 
             n_channels_included = self.n_eeg_channels - \
                 (1 - self.include_bad_channels_psd)*(n_bad_channels)
@@ -686,26 +696,23 @@ class Energy(Dataset):
             9 : ["O1","Oz", "O2"]
         }
 
-        # to a given object, I should apply a permutation at random.
-        # return the permuted matrix and the label
         pseudo_label = random.randint(1,128)
         target_permutaion = permutations[pseudo_label,:]
-        print(f"Call perm : {pseudo_label}, {target_permutaion}")
         shuffled_channels = [] 
         for region in target_permutaion:
             for ch in regions[region.item()]:
                 try:
-                    #print(ch)
-                    #print(ch, ch_names.index(ch) )
                     ch_index = ch_names.index(ch)
                     shuffled_channels.append(ch_index)
                 except ValueError as e:
                     # Some channels might be missing due to bad channels and user picks.
                     continue
-        #print(shuffled_channels)
-        #print(data.shape)
-        #print(pseudo_label)
-        return (data[shuffled_channels,:], pseudo_label)
+        if len(data.shape) == 3:
+            shuffled_data = data[:,shuffled_channels,:]
+        else:
+            shuffled_data = data[shuffled_channels,:]
+        assert shuffled_data.shape == data.shape
+        return (shuffled_data, pseudo_label)
     
 
 if __name__ == "__main__":
