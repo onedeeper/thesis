@@ -81,6 +81,7 @@ from eeglearn.utils.utils import (
     get_cleaned_data_paths,
     get_labels_dict,
     get_participant_id_condition_from_string,
+    hamming_set
 )
 
 
@@ -619,14 +620,21 @@ class Energy(Dataset):
 
         return results
     
-    def get_spatial_permutation(self, data : torch.Tensor) -> \
-                                    tuple[torch.Tensor, int]:
+    def get_spatial_permutation(self,
+                                data : torch.Tensor,
+                                ch_names : list[str],
+                                hamming_selection: str = "max")\
+                                    -> tuple[torch.Tensor, int]:
         """Shuffle the regions of an energy matrix.
         
          Args:
         ----
             data : An energy band matrix of shape n_epochs x n_channels x n_bands
                    or n_channels x n_bands for a full time series.
+            ch_names : A list of channel names where the index of each entry 
+                       coressponds to that channels row index in the data matrix
+            hamming_selection :  Choose the maximally different permutation ("max") 
+                                to be included at iteration or the median ("median"). 
 
         Returns:
         -------
@@ -635,15 +643,69 @@ class Energy(Dataset):
                 ] 
         
         """
-        perms_file : str =  "spatial_perms.pt"
+        n_regions : int = 10
+        n_permutations : int = 128
+        assert isinstance(data, torch.Tensor), "Inut should be a torch.Tensor object."
+        assert isinstance(ch_names, list), "Input should be a list of strings."
+        # for epoched objects
+        if len(data.shape) == 3:
+            assert data.shape[1] == len(ch_names),\
+                "Channels in matrix should equal number of channel names"
+            assert data.shape[2] <= 5, "There should be atmost five frequency bands"
+        else:
+         assert data.shape[0] == len(ch_names), \
+            "Channels in matrix should equal channels number of channel names"
+         assert data.shape[1] <= 5, "There should be atmost five frequency bands"
+
+
+        perms_file : str = \
+            f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
         perms_path : Path = Path(__file__).resolve().parent.parent.parent / "data"
-        try:
-            perms = torch.load(perms_path / perms_file)
-        except Exception as e:
-            print("Permutations not found. Creating. This may take a minute.")
+        if not(os.path.exists(perms_path / perms_file)):
+            print("Permutations not found in path. Running. It may take a minute.")
+            permutations : torch.Tensor = hamming_set(n_regions=n_regions,
+                                                    n_permutations=n_permutations, 
+                                                    selection=hamming_selection,
+                                                    output_file_name= perms_file, 
+                                                    save_to_disk=False)
+            torch.save(torch.Tensor(permutations), perms_path / perms_file)
+        else:
+            print("Loading permutations from disk..")
+            permutations = torch.load(perms_path / perms_file) 
 
+        regions : dict[int,list[str]] = {
+            0 :["Fp1", "Fp2"],
+            1 :["Fz", "FCz"],
+            2 : ["F7", "F3", "FC3"],
+            3 : ["F4", "F8", "FC4"],
+            4 : ["T7", "C3", "CP3"],
+            5 : ["C4" , "T8", "CP4"],
+            6 : ["Cz", "CPz", "Pz"],
+            7 : ["P7", "P3"],
+            8 : ["P4", "P8"],
+            9 : ["O1","Oz", "O2"]
+        }
 
-        return data, random.randint(1,128)
+        # to a given object, I should apply a permutation at random.
+        # return the permuted matrix and the label
+        pseudo_label = random.randint(1,128)
+        target_permutaion = permutations[pseudo_label,:]
+        print(f"Call perm : {pseudo_label}, {target_permutaion}")
+        shuffled_channels = [] 
+        for region in target_permutaion:
+            for ch in regions[region.item()]:
+                try:
+                    #print(ch)
+                    #print(ch, ch_names.index(ch) )
+                    ch_index = ch_names.index(ch)
+                    shuffled_channels.append(ch_index)
+                except ValueError as e:
+                    # Some channels might be missing due to bad channels and user picks.
+                    continue
+        #print(shuffled_channels)
+        #print(data.shape)
+        #print(pseudo_label)
+        return (data[shuffled_channels,:], pseudo_label)
     
 
 if __name__ == "__main__":
@@ -659,7 +721,7 @@ if __name__ == "__main__":
                           energy_plots=True,
                           verbose_psd=False,
                           picks_psd = ['eeg'],
-                          include_bad_channels_psd=True,
+                          include_bad_channels_psd=False,
                           save_to_disk=True,
                           select_freq_bands=['gamma', 'delta','beta'])
     
@@ -669,5 +731,8 @@ if __name__ == "__main__":
     # print(results[0][0].shape, results[0][1], results[0][2])
     # for data, label, file_name in results:
     #     print(file_name, label)
-    spatial_perm = dataset.get_spatial_permutation(dataset[0][0][0])
+    for energy_data in dataset:
+        print(len(energy_data[0][1]))
+        spatial_perm = dataset.get_spatial_permutation(energy_data[0][0],
+                                                       energy_data[0][1])
     

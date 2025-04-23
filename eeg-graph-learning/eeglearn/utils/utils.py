@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
-
+import torch
 
 def get_participant_id_condition_from_string(file_path: str) -> tuple[str, str]:
     """Extract the participant ID and condition from the file path.
@@ -169,6 +169,6 @@ def hamming_set(n_regions : int,
     assert collection.shape[0] == n_permutations
     assert collection.shape[1] == n_regions
     if save_to_disk:
-        np.save(f'max_hamming_set_{n_regions}_{n_permutations}.npy', collection)
-
+        torch.save(f'max_hamming_set_{n_regions}_{n_permutations}.pt', torch.Tensor\
+                                                                        (collection))
     return collection

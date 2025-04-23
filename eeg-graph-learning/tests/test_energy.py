@@ -591,7 +591,7 @@ def test_run_freq_permutations_parallel()-> None:
         assert torch.allclose(data, data_iter)
         
 
-def test_get_spatial_perms()-> None:
+def test_get_spatial_perms_full_time_series()-> None:
     """Test spatial permutation generation.
     """
      
@@ -603,9 +603,6 @@ def test_get_spatial_perms()-> None:
                                      'FCz','FC4', 'T7', 'C3', 'Cz', 'C4', 'T8', 'CP3',
                                      'CPz', 'CP4','P7', 'P3', 'Pz', 'P4', 'P8', 'O1', 
                                      'Oz', 'O2']
-    
-    electrode_array_positions = {electrode : i for i, electrode in \
-                                 enumerate(electrode_names)}
     
     regions : dict[str,list[str]] = {
         "pre_frontal" :["Fp1", "Fp2"],
@@ -652,7 +649,12 @@ def test_get_spatial_perms()-> None:
     
     save_path : Path = Path(__file__).resolve().parent.parent.parent /\
                 "eeg-graph-learning" / "tests" / "test_data"
-    perm_file_name : str = "test_permutations.pt"
+    
+    hamming_selection : str = "max"
+    n_regions : str = 10
+    n_permutations : str = 128
+    perm_file_name : str =\
+            f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
     if not(os.path.exists(save_path / perm_file_name)):
         permutations = hamming_set(n_regions=10, n_permutations=128, selection='max',
                                     output_file_name= perm_file_name, 
@@ -664,9 +666,10 @@ def test_get_spatial_perms()-> None:
     # get the 0th participant, first element is all the band details
     # second element is the label for the participant in the dataset
     input_matrix : torch.Tensor = dataset[0][0][0] #freq bands
-    ch_info : list[str] = dataset[0][0][1] # channel order info
-    assert input_matrix.shape[0] == len(ch_info)
-    output_matrix, pseudo_label = dataset.get_spatial_permutation(input_matrix)
+    ch_names : list[str] = dataset[0][0][1] # channel order info
+    assert input_matrix.shape[0] == len(ch_names)
+    output_matrix, pseudo_label = dataset.get_spatial_permutation(input_matrix,
+                                                                  ch_names)
     assert output_matrix.shape == input_matrix.shape
 
     if pseudo_label != 0:
@@ -675,6 +678,7 @@ def test_get_spatial_perms()-> None:
         permuted_channels : list[int] = []
         idxs_chs_in_region : dict[str, list[int]] = {}
         target_permutation : torch.Tensor = permutations[pseudo_label,:]
+        print(f"testing target perms : {pseudo_label}, {target_permutation}")
         for region in target_permutation:
             #print(regions[region_idx[region.item()]])
             channels_in_region : list[int] = regions[idx_to_region[region.item()]]
@@ -683,8 +687,8 @@ def test_get_spatial_perms()-> None:
                 #print(channel)
                 try:
                     #print(channel, ch_info.index(channel))
-                    permuted_channels.append(ch_info.index(channel))
-                    ch_idxs.append(ch_info.index(channel))
+                    permuted_channels.append(ch_names.index(channel))
+                    ch_idxs.append(ch_names.index(channel))
                 except ValueError :
                     continue
             idxs_chs_in_region[region.item()] = ch_idxs
