@@ -62,6 +62,10 @@ This project was built over several months.
  	 2. Realized a simple way to reduce code repetition:
       
    		1. One of the challenges in building the processing pipeline is dealing with different shapes of data for epoched and non-epoched cases. If a recording is epoched, it would be of shape (n_epochs x n_channels x ...). Otherwise, it would start with (n_channels x ...). In late april, I realized that if I simply reshape all non-epoched data to have 1 epoch dimension, I could have reduce a ton of code duplication and decisions in the code. At the moment, I am going to implement this going forward, without doing a full refactor. This change will be implemented from the get_spatial_permutations method onwards.
+		3. Started writing with the [red-green refactor method.](https://en.wikipedia.org/wiki/Test-driven_development#:~:text=This%20has%20led%20to%20the%20%22test%2Ddriven%20development%20mantra%22%2C%20which%20is%20%22red/green/refactor%22%2C%20where%20red%20means%20fail%20and%20green%20means%20pass.) I find this process to be extremely satisfying. The similarity between this method and the scientific method (i.e., [conjectures and refutations](https://arc.net/l/quote/dgfdlziu)) is just beautiful.
+ 	 2. Realized a simple way to reduce code repetition:
+      
+   		1. One of the challenges in building the processing pipeline is dealing with different shapes of data for epoched and non-epoched cases. If a recording is epoched, it would be of shape (n_epochs x n_channels x ...). Otherwise, it would start with (n_channels x ...). In late april, I realized that if I simply reshape all non-epoched data to have 1 epoch dimension, I could have reduce a ton of code duplication and decisions in the code. At the moment, I am going to implement this going forward, without doing a full refactor. This change will be implemented from the get_spatial_permutations method onwards.
 
 
 ## References
