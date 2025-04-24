@@ -20,6 +20,7 @@ var/
 .installed.cfg
 *.egg
 
+eeglearn/preprocess/preprocessing_log.txt
 # Data directories
 /data/*
 !/data/.gitkeep
