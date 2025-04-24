@@ -81,7 +81,7 @@ from eeglearn.utils.utils import (
     get_cleaned_data_paths,
     get_labels_dict,
     get_participant_id_condition_from_string,
-    hamming_set
+    hamming_set,
 )
 
 
@@ -339,6 +339,7 @@ class Energy(Dataset):
               shape (n_epochs, n_channels, n_bands).
             - If save_to_disk is True, saves the energy data to disk in the appropriate
               directory (energy_save_dir or energy_save_dir_epoched).
+
         """
         participant_id : str
         condition : str
@@ -637,7 +638,7 @@ class Energy(Dataset):
                                     -> tuple[torch.Tensor, int]:
         """Shuffle the regions of an energy matrix.
         
-         Args:
+        Args:
         ----
             data : An energy band matrix of shape n_epochs x n_channels x n_bands
                    or n_channels x n_bands for a full time series.
@@ -649,24 +650,25 @@ class Energy(Dataset):
         Returns:
         -------
             tuple[torch.Tensor : A matrix permuted by regions.
-                  int : a pseudo label indicating the permutation applied.
-                ] 
+                  np.array : a n_epochs length vector  of pseudo labels
+                               indicating the permutation applied to each epoch.
+                    ] 
+                
         
         """
         n_regions : int = 10
         n_permutations : int = 128
-        assert isinstance(data, torch.Tensor), "Inut should be a torch.Tensor object."
+        assert isinstance(data, torch.Tensor), "Input should be a torch.Tensor object."
         assert isinstance(ch_names, list), "Input should be a list of strings."
-        # for epoched objects
-        if len(data.shape) == 3:
-            assert data.shape[1] == len(ch_names),\
-                "Channels in matrix should equal number of channel names"
-            assert data.shape[2] <= 5, "There should be atmost five frequency bands"
-        else:
-         assert data.shape[0] == len(ch_names), \
+        # for non-epoched objects
+        if len(data.shape) == 2:
+            assert data.shape[0] == len(ch_names), \
             "Channels in matrix should equal channels number of channel names"
-         assert data.shape[1] <= 5, "There should be atmost five frequency bands"
+            assert data.shape[1] <= 5, "There should be atmost five frequency bands"
+            # reshape to a 3-d matrix with 1 epochs dimension
+            data = data.reshape(-1,*data.shape)
 
+        n_epochs : int = data.shape[0]
 
         perms_file : str = \
             f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
@@ -696,24 +698,29 @@ class Energy(Dataset):
             9 : ["O1","Oz", "O2"]
         }
 
-        pseudo_label = random.randint(1,128)
-        target_permutaion = permutations[pseudo_label,:]
-        shuffled_channels = [] 
-        for region in target_permutaion:
-            for ch in regions[region.item()]:
-                try:
-                    ch_index = ch_names.index(ch)
-                    shuffled_channels.append(ch_index)
-                except ValueError as e:
-                    # Some channels might be missing due to bad channels and user picks.
-                    continue
-        if len(data.shape) == 3:
-            shuffled_data = data[:,shuffled_channels,:]
-        else:
-            shuffled_data = data[shuffled_channels,:]
+        pseudo_labels = np.random.randint(low = 1,
+                                            high = 128,
+                                            size = n_epochs)
+        target_permutaions : torch.Tensor = permutations[pseudo_labels,:]
+        shuffled_channels : list[list[int]] = []
+        shuffled_data = torch.zeros(data.shape).double()
+
+        for epoch_num, epoch_permutation in enumerate(target_permutaions): 
+            shuffled_channels : list[int] = []
+            for region in epoch_permutation: # permuted region for that epoch
+                for ch in regions[region.item()]:
+                    try:
+                        ch_index = ch_names.index(ch)
+                        shuffled_channels.append(ch_index)
+                    except ValueError:
+                        # Some channels might be missing due to bad channels 
+                        # and user picks.
+                        continue
+            shuffled_data[epoch_num,:,:] = data[epoch_num,shuffled_channels,:]
+        
         assert shuffled_data.shape == data.shape
-        return (shuffled_data, pseudo_label)
-    
+        return (shuffled_data, pseudo_labels)
+        
 
 if __name__ == "__main__":
     # Set seed for reproducibility or testing different runs
@@ -724,7 +731,7 @@ if __name__ == "__main__":
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / \
         'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
-                     full_time_series=False,
+                     full_time_series=True,
                           energy_plots=True,
                           verbose_psd=False,
                           picks_psd = ['eeg'],

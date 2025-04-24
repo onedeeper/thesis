@@ -667,6 +667,7 @@ def test_get_spatial_perms_full_time_series()-> None:
     # get the 0th participant, first element is all the band details
     # second element is the label for the participant in the dataset
     input_matrix : torch.Tensor = dataset[0][0][0] #freq bands
+    input_matrix = input_matrix.reshape(-1,*input_matrix.shape)
     ch_names : list[str] = dataset[0][0][1] # channel order info
 
     if test_with_random:
@@ -675,46 +676,45 @@ def test_get_spatial_perms_full_time_series()-> None:
         random_n_bands = random.randint(1,5)
         input_matrix = torch.Tensor(np.random.random((random_n_channels,
                                                       random_n_bands)))
-        ch_names = ch_names[:random_n_bands]
-    assert input_matrix.shape[0] == len(ch_names)
-    output_matrix, pseudo_label = dataset.get_spatial_permutation(input_matrix,
+        input_matrix = input_matrix.reshape(-1, *input_matrix.shape)
+        ch_names = ch_names[:random_n_channels]
+    assert input_matrix.shape[1] == len(ch_names)
+    output_matrix, pseudo_labels = dataset.get_spatial_permutation(input_matrix,
                                                                   ch_names)
     assert output_matrix.shape == input_matrix.shape
-
+   
+    pseudo_label = pseudo_labels[0]
+    
     if pseudo_label != 0:
         # for anything other than the first permutation, which is the original order
         # test if the rows are shuffled according to the regions.
         permuted_channels : list[int] = []
         idxs_chs_in_region : dict[str, list[int]] = {}
         target_permutation : torch.Tensor = permutations[pseudo_label,:]
-        print(f"testing target perms : {pseudo_label}, {target_permutation}")
         for region in target_permutation:
-            #print(regions[region_idx[region.item()]])
             channels_in_region : list[int] = regions[idx_to_region[region.item()]]
             ch_idxs : list[int] = []
             for channel in channels_in_region:
-                #print(channel)
                 try:
-                    #print(channel, ch_info.index(channel))
                     permuted_channels.append(ch_names.index(channel))
                     ch_idxs.append(ch_names.index(channel))
                 except ValueError :
                     continue
             idxs_chs_in_region[region.item()] = ch_idxs
-        assert len(permuted_channels) == input_matrix.shape[0]
+        assert len(permuted_channels) == input_matrix.shape[1]
         start = 0
         # test if the shuffling has been done while preserving the regions
         for region in target_permutation:
             # check if this region is in the right place in permuted channels
             region_size = len(idxs_chs_in_region[region.item()])
             assert idxs_chs_in_region[region.item()] == permuted_channels[start:start +\
-                                                                          region_size],\
+                                                                        region_size],\
                                             "Regions are not intact."
             start += region_size
-        permuted_input_matrix : torch.Tensor = input_matrix[permuted_channels,:]
+        permuted_input_matrix : torch.Tensor = input_matrix[:,permuted_channels,:]\
+                                                                            .double()
         assert torch.allclose(permuted_input_matrix, output_matrix),\
             "Expected permutation has not been applied."
-        #print(permuted_input_matrix)
     else:
         assert torch.allclose(input_matrix, output_matrix)
     
@@ -789,55 +789,54 @@ def test_get_spatial_perms_epoched() -> None:
     input_matrix : torch.Tensor = dataset[0][0][0] #freq bands
     ch_names : list[str] = dataset[0][0][1] # channel order info=
 
-    print(input_matrix.shape, ch_names)
-    # if test_with_random:
-    #      # Random matrices with varying number of epochs and channels.
-    #     random_n_channels = random.randint(1,26)
-    #     random_n_bands = random.randint(1,5)
-    #     input_matrix = torch.Tensor(np.random.random((random_n_channels,
-    #                                                   random_n_bands)))
-    #     ch_names = ch_names[:random_n_bands]
-    assert input_matrix.shape[1] == len(ch_names)
-    output_matrix, pseudo_label = dataset.get_spatial_permutation(input_matrix,
+    if test_with_random:
+         # Random matrices with varying number of epochs and channels.
+        random_n_epochs :int = random.randint(1,15)
+        random_n_channels : int = random.randint(1,26)
+        random_n_bands : int = random.randint(1,5)
+        input_matrix : torch.Tensor = torch.Tensor(np.random.random((random_n_epochs,
+                                                      random_n_channels,
+                                                      random_n_bands))).float()
+        ch_names = ch_names[:random_n_channels]
+
+    output_matrix : torch.Tensor 
+    pseudo_labels : torch.Tensor
+    output_matrix, pseudo_labels = dataset.get_spatial_permutation(input_matrix,
                                                                   ch_names)
     assert output_matrix.shape == input_matrix.shape
-    assert isinstance(pseudo_label, torch.Tensor),\
+    assert isinstance(pseudo_labels, np.ndarray),\
         "For epoched data, tensor of permutations is expected"
-
-    if pseudo_label != 0:
-        # for anything other than the first permutation, which is the original order
-        # test if the rows are shuffled according to the regions.
-        permuted_channels : list[int] = []
-        idxs_chs_in_region : dict[str, list[int]] = {}
-        target_permutation : torch.Tensor = permutations[pseudo_label,:]
-        print(f"testing target perms : {pseudo_label}, {target_permutation}")
-        for region in target_permutation:
-            #print(regions[region_idx[region.item()]])
-            channels_in_region : list[int] = regions[idx_to_region[region.item()]]
-            ch_idxs : list[int] = []
-            for channel in channels_in_region:
-                #print(channel)
-                try:
-                    #print(channel, ch_info.index(channel))
-                    permuted_channels.append(ch_names.index(channel))
-                    ch_idxs.append(ch_names.index(channel))
-                except ValueError :
-                    continue
-            idxs_chs_in_region[region.item()] = ch_idxs
-        assert len(permuted_channels) == input_matrix.shape[1]
-        start = 0
-        # test if the shuffling has been done while preserving the regions
-        for region in target_permutation:
-            # check if this region is in the right place in permuted channels
-            region_size = len(idxs_chs_in_region[region.item()])
-            assert idxs_chs_in_region[region.item()] == permuted_channels[start:start +\
-                                                                          region_size],\
-                                            "Regions are not intact."
-            start += region_size
-        permuted_input_matrix : torch.Tensor = input_matrix[:,permuted_channels,:]
-        assert torch.allclose(permuted_input_matrix, output_matrix),\
-            "Expected permutation has not been applied."
-        #print(permuted_input_matrix)
-    else:
-        assert torch.allclose(input_matrix, output_matrix)
+    assert pseudo_labels.shape[0] == input_matrix.shape[0], \
+        "Expected a pseudolabel for each epoch"
+    
+    shuffled_data = torch.zeros(input_matrix.shape).double()
+    for epoch, pseudo_label in enumerate(pseudo_labels):
+            permuted_channels : list[int] = []
+            idxs_chs_in_region : dict[str, list[int]] = {}
+            target_permutation : torch.Tensor = permutations[pseudo_label,:]
+            for region in target_permutation:
+                channels_in_region : list[int] = regions[idx_to_region[region.item()]]
+                ch_idxs : list[int] = []
+                for channel in channels_in_region:
+                    try:
+                        permuted_channels.append(ch_names.index(channel))
+                        ch_idxs.append(ch_names.index(channel))
+                    except ValueError :
+                        continue
+                # save the channels in each region.
+                idxs_chs_in_region[region.item()] = ch_idxs 
+            assert len(permuted_channels) == input_matrix.shape[1]
+            start = 0
+            # test if the shuffling has been done while preserving the regions
+            for region in target_permutation:
+                # check if this region is in the right place in permuted channels
+                region_size = len(idxs_chs_in_region[region.item()])
+                assert idxs_chs_in_region[region.item()] == \
+                                        permuted_channels[start:start + region_size],\
+                                                "Regions are not intact."
+                start += region_size
+            shuffled_data[epoch,:,:] = input_matrix[epoch,permuted_channels,:]
+            
+    assert torch.allclose(shuffled_data, output_matrix),\
+                "Expected permutation has not been applied."
     
