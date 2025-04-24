@@ -21,10 +21,11 @@ var/
 *.egg
 
 # Preprocessing logs
+# Preprocessing logs
 eeglearn/preprocess/preprocessing_log.txt
 **/preprocessing_log.txt
 **/preprocessing_log/
-preprocessing_log.txt
+preprocessing_log/
 
 # Data directories
 /data/*
