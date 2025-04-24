@@ -6,6 +6,12 @@ edited by: Udesh Habaraduwa
 
 description: automated pipeline for preprocessing of the TDBRAIN dataset
 
+ Preprocessing of data according to the following pipeline:
+            - PREP (see readme for source and details)
+            - ICA for ECG, EOG, and EMG artifact correction
+            - Bandpass filtering (1-100Hz)
+            - Epoching (optional)
+            
 name: preprocess_pipeline.py
 
 version: 1.1
@@ -52,6 +58,7 @@ if __name__ == '__main__':
     os.makedirs(preprocessed_dir, exist_ok=True)
     assert os.path.exists(preprocessed_dir), \
         f"Preprocessed directory does not exist: {preprocessed_dir}"
+   
     # the following parameters can be changed by the user
     conditions = ['EO', 'EC'] # conditions to be preprocessed
     sessions = ['ses-1'] # sessions to be preprocessed
