@@ -24,7 +24,7 @@ var/
 eeglearn/preprocess/preprocessing_log.txt
 **/preprocessing_log.txt
 **/preprocessing_log/
-preprocessing_log/
+preprocessing_log.txt
 
 # Data directories
 /data/*
