@@ -613,7 +613,7 @@ class Energy(Dataset):
         print(f'Using {processes} processes for energy permutation computation')
         print(f"Processing {len(starmap_args)} files...")
 
-        # This is the same as except does not use the correction for starting
+        # This is the same except does not use the correction for starting
         # each new process with a diffeent seed. It is used for testing.
         if self.testing:
             with Pool(processes) as p:
@@ -670,20 +670,21 @@ class Energy(Dataset):
 
         n_epochs : int = data.shape[0]
 
+        self.permutations : torch.Tensor | None = None
         perms_file : str = \
             f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
         perms_path : Path = Path(__file__).resolve().parent.parent.parent / "data"
         if not(os.path.exists(perms_path / perms_file)):
             print("Permutations not found in path. Running. It may take a minute.")
-            permutations : torch.Tensor = hamming_set(n_regions=n_regions,
+            self.permutations : torch.Tensor = hamming_set(n_regions=n_regions,
                                                     n_permutations=n_permutations, 
                                                     selection=hamming_selection,
                                                     output_file_name= perms_file, 
                                                     save_to_disk=False)
-            torch.save(torch.Tensor(permutations), perms_path / perms_file)
+            torch.save(torch.Tensor(self.permutations), perms_path / perms_file)
         else:
             print("Loading permutations from disk..")
-            permutations = torch.load(perms_path / perms_file) 
+            self.permutations = torch.load(perms_path / perms_file) 
 
         regions : dict[int,list[str]] = {
             0 :["Fp1", "Fp2"],
@@ -701,7 +702,7 @@ class Energy(Dataset):
         pseudo_labels = np.random.randint(low = 1,
                                             high = 128,
                                             size = n_epochs)
-        target_permutaions : torch.Tensor = permutations[pseudo_labels,:]
+        target_permutaions : torch.Tensor = self.permutations[pseudo_labels,:]
         shuffled_channels : list[list[int]] = []
         shuffled_data = torch.zeros(data.shape).double()
 
@@ -720,6 +721,9 @@ class Energy(Dataset):
         
         assert shuffled_data.shape == data.shape
         return (shuffled_data, pseudo_labels)
+    
+    def run_spatial_permutations_parallel(self):
+        return None
         
 
 if __name__ == "__main__":

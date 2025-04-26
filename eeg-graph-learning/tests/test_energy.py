@@ -23,6 +23,8 @@ from eeglearn.config import Config
 from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set
+from unittest.mock import patch
+import multiprocessing
 
 Config.RANDOM_SEED = 1223333
 Config.set_global_seed()
@@ -805,3 +807,54 @@ class TestEnergy:
         assert torch.allclose(shuffled_data, output_matrix),\
                     "Expected permutation has not been applied."
     
+    def test_run_spatial_perms_parallel(self, monkeypatch):
+        """
+        Test if the permutations generated in parallel are as expected
+        """
+
+        # set up the necessary resources.
+        project_root : Path = Path(__file__).resolve().parent.parent.parent
+    
+        test_data_dir : Path \
+            = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
+            "parallel_test"
+        test_data_dir.mkdir(parents=True,exist_ok=True)
+
+        cleaned_path = \
+            Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
+            'data' / 'cleaned'
+        
+        # full time series
+        dataset = Energy(cleaned_path=cleaned_path,
+                        testing= True,
+                        full_time_series=False,
+                            energy_plots=True,
+                            verbose_psd=False,
+                            picks_psd = ['eeg'],
+                            include_bad_channels_psd=True,
+                            save_to_disk=True,
+                            select_freq_bands=['gamma', 'delta',
+                                                'theta','alpha','beta']) 
+        dataset.energy_save_dir_epoched = test_data_dir / 'energy'
+        dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
+        # setting full length directory to be empty for testing purposes
+        # This is because run_get_permutations_parallel() handles both epoched
+        # and full timeseries data together.
+        empty_dir = test_data_dir / "empty"
+        empty_dir.mkdir(parents=True, exist_ok= True)
+        dataset.energy_save_dir = empty_dir
+
+        # assert if the function calls multiprocessing.
+        calls = []
+        class DummyPool:
+            def starmap(self, fn, items):
+                calls.append(("starmap", items))
+                return [fn(i) for i in items]
+
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+
+        # whenever multiprocessing.Pool is called, uses the dummyh pool instead.
+        monkeypatch.setattr(multiprocessing, "Pool", lambda *args, **kw: DummyPool())
+        result = dataset.run_spatial_permutations_parallel()
+        assert calls == [("map", [1, 2, 3])]
