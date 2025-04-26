@@ -2,6 +2,7 @@
 
 # clean.sh - Script to run the EEG preprocessing pipeline
 # Author: Udesh Habaraduwa
+# Written with AI. 
 
 # Exit on error
 set -e

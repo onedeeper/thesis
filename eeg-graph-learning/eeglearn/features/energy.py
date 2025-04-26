@@ -2,6 +2,64 @@
 
 Created on: April 2025
 Author: Udesh Habaraduwa
+
+Attributes
+----------
+channel_names (list[str]): Standard list of 26 EEG channel names.
+n_eeg_channels (int): Number of EEG channels (fixed at 26).
+all_freq_bands (dict): Dictionary mapping frequency band names (e.g., 'delta') 
+                       to tuples containing frequency range ([min_hz, max_hz]) 
+                       and a canonical band index.
+cleaned_path (str): Path to the directory containing preprocessed EEG data files.
+select_freq_bands (list[str]): List of frequency band names to compute energy for,
+                               ordered canonically (delta, theta, alpha, beta, gamma).
+include_bad_channels_psd (bool): Whether to include channels marked as bad during 
+                                   PSD computation. Defaults to True.
+ran_energy (bool): Flag indicating if `run_energy_parallel` has been executed. 
+                   Initialized to False.
+save_to_disk (bool): Whether to save computed energy matrices to disk. 
+                     Defaults to True.
+energy_plots (bool): Whether to generate and save plots of the energy matrices. 
+                     Defaults to False.
+full_time_series (bool): Whether to compute energy on the full time series 
+                           instead of epochs. Defaults to False.
+method_psd (str): Method used for PSD computation by the underlying 
+                  `PowerSpectrum` class. Defaults to 'welch'.
+fmin_psd (float): Minimum frequency for PSD computation. Defaults to 0.5.
+fmax_psd (float): Maximum frequency for PSD computation. Defaults to 130.
+tmax_psd (float | None): Maximum time for PSD computation. Defaults to None.
+picks_psd (list[str] | None): Channels selected for PSD computation. 
+                                Defaults to None (uses MNE default).
+proj_psd (bool): Whether projection was applied during PSD computation. 
+                     Defaults to False.
+verbose_psd (bool): Verbosity setting for the underlying PSD computation. 
+                        Defaults to False.
+participant_list (list[str]): List of participant identifiers found in 
+                                  `cleaned_path`.
+labels_dict (dict): Dictionary mapping participant IDs to their labels.
+project_root (Path): The root directory of the project.
+plot_save_dir (Path): Directory path for saving energy plots.
+energy_save_dir (Path): Directory path for saving full time series energy matrices.
+energy_save_dir_epoched (Path): Directory path for saving epoched energy matrices.
+folders_and_files (list[tuple[Path, str]]): List of (folder_path, file_name) 
+                                            tuples for processing.
+participant_npy_files (list[str]): List of .npy file names to be processed.
+testing (bool): Flag indicating if the class is used in a testing context. 
+                Defaults to False.
+
+Methods
+-------
+__init__:
+    Initialize the Energy class.
+__len__:
+    Return the number of participants in the dataset.
+__getitem__:
+    Return the energy for a given participant.
+get_energy:
+    Compute the energy for a given participant.
+run_energy_parallel:
+    Compute the energy for all participants in parallel.    
+
 """
 
 import math
@@ -23,6 +81,7 @@ from eeglearn.utils.utils import (
     get_cleaned_data_paths,
     get_labels_dict,
     get_participant_id_condition_from_string,
+    hamming_set,
 )
 
 
@@ -254,7 +313,8 @@ class Energy(Dataset):
         """Plot the energy of the EEG data for a given participant."""
         pass
 
-    def get_energy(self, folder_path:  Path, file_name: str) -> torch.Tensor:
+    def get_energy(self, folder_path:  Path, file_name: str) -> tuple[torch.Tensor,
+                                                                      list[str]]:
         """Compute the energy of the EEG data for one file.
 
         Args:
@@ -264,7 +324,21 @@ class Energy(Dataset):
 
         Returns:
         -------
-            np.ndarray: The energy of the EEG data.
+            tuple: Contains:
+                - torch.Tensor: The energy of the EEG data, with shape:
+                  - For full_time_series=True: (n_channels, n_bands)
+                  - For full_time_series=False: (n_epochs, n_channels, n_bands)
+                - list[str]: Channel names corresponding to the rows in the energ
+                             matrix.
+
+        Notes:
+        -----
+            - For full time series, computes energy across all frequency bands and 
+                returns a matrix of shape (n_channels, n_bands).
+            - For epoched data, computes energy for each epoch and returns a tensor of
+              shape (n_epochs, n_channels, n_bands).
+            - If save_to_disk is True, saves the energy data to disk in the appropriate
+              directory (energy_save_dir or energy_save_dir_epoched).
 
         """
         participant_id : str
@@ -273,7 +347,7 @@ class Energy(Dataset):
         path_to_file : Path = folder_path / file_name
         assert os.path.exists(path_to_file),f"file does not exist: {path_to_file}"
 
-        # # get the spectrum
+        #get the spectrum
         spectra : torch.Tensor
         freqs : torch.Tensor
         n_bad_channels : int 
@@ -290,7 +364,7 @@ class Energy(Dataset):
                                                 include_bad_channels= \
                                                     self.include_bad_channels_psd,
                                                 save_to_disk=False)
-        spectra, freqs, _, n_bad_channels = spectrum.get_spectrum(
+        spectra, freqs, _, n_bad_channels, ch_names = spectrum.get_spectrum(
             folder_path=folder_path,
             file_name=file_name,
             save_to_disk=False)
@@ -306,11 +380,7 @@ class Energy(Dataset):
             "gamma" : (freqs >= 31) & (freqs <= 50)
         }
         if self.full_time_series:
-            # n_bads either >= 0 , can be 1,2,  --> n _eeg_channels
-            # if you are including them in the analysis, then this should not be
-            # removed from the included bands
             # if include_bads --> do not subtract
-            # if you are Not including, then remove them. 
             # if (not include_bads) --> subtract 
             n_channels_included = self.n_eeg_channels - \
                 (1 - self.include_bad_channels_psd)*(n_bad_channels)
@@ -339,9 +409,9 @@ class Energy(Dataset):
                                              len(self.select_freq_bands)), \
                 "combined_energy has wrong shape"
             if self.save_to_disk:
-                torch.save(combined_energy, self.energy_save_dir /\
+                torch.save((combined_energy,ch_names), self.energy_save_dir /\
                             f"energy_{participant_id}_{condition}.pt")
-            return combined_energy
+            return (combined_energy,ch_names)
         else:
             n_channels_included = self.n_eeg_channels - \
                 (1 - self.include_bad_channels_psd)*(n_bad_channels)
@@ -372,7 +442,7 @@ class Energy(Dataset):
             combined_energy : torch.Tensor = torch.stack(selected_bands,
                                                           dim = 1).permute(0,2,1)
        
-            first_band : str = self.select_freq_bands[0]
+            first_band : str = self.select_freq_bands[0] 
             # check that the energy for a given band in a given epoch is where it 
             # should be
             assert torch.allclose(combined_energy[0,:,0],
@@ -384,9 +454,9 @@ class Energy(Dataset):
             f"{combined_energy.shape} != ({expected_shape})"
 
             if self.save_to_disk:
-                torch.save(combined_energy, self.energy_save_dir_epoched /\
+                torch.save((combined_energy, ch_names), self.energy_save_dir_epoched /\
                             f"energy_{participant_id}_{condition}.pt")
-            return combined_energy
+            return (combined_energy,ch_names)
         
 
     def run_energy_parallel(self) -> None | list:
@@ -421,7 +491,7 @@ class Energy(Dataset):
             if not self.save_to_disk:
                 return results
             
-    def get_permutations(self, data : torch.Tensor = None,
+    def get_freq_permutation(self, data : torch.Tensor = None,
                          is_epoched : bool = False,
                          file_name : str = None) -> tuple[torch.Tensor,int]:
         """Get all the frequency band permutations of the data.
@@ -445,9 +515,9 @@ class Energy(Dataset):
         """
         if data is None:
             if is_epoched:
-                data = torch.load(self.energy_save_dir_epoched / file_name)
+                data = torch.load(self.energy_save_dir_epoched / file_name)[0]
             else:
-                data = torch.load(self.energy_save_dir / file_name)
+                data = torch.load(self.energy_save_dir / file_name)[0]
         assert isinstance(data, torch.Tensor)
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
@@ -505,7 +575,7 @@ class Energy(Dataset):
                     f"Data file does not exist: {save_path}"
         return (shuffled_columns,pseudo_label, file_name) 
     
-    def run_permutations_parallel(self)-> None | list:
+    def run_freq_permutations_parallel(self)-> None | list:
         """Compute band energy permutations for all files in parallel.
 
         Uses unique random seeds for each worker.
@@ -547,44 +617,136 @@ class Energy(Dataset):
         # each new process with a diffeent seed. It is used for testing.
         if self.testing:
             with Pool(processes) as p:
-                results = list(tqdm(p.starmap(self.get_permutations, starmap_args),
+                results = list(tqdm(p.starmap(self.get_freq_permutation, starmap_args),
                                     total=len(starmap_args),
                                     desc="Computing energy band permutations"))
         else:
             with Pool(processes, initializer=worker_init_fn, initargs=(os.getpid(),)) \
                 as p:
-                results = list(tqdm(p.starmap(self.get_permutations, starmap_args),
+                results = list(tqdm(p.starmap(self.get_freq_permutation, starmap_args),
                                     total=len(starmap_args),
                                     desc="Computing energy band permutations"))
 
         print(f"Finished processing {len(results)} permutations.")
 
         return results
+    
+    def get_spatial_permutation(self,
+                                data : torch.Tensor,
+                                ch_names : list[str],
+                                hamming_selection: str = "max")\
+                                    -> tuple[torch.Tensor, int]:
+        """Shuffle the regions of an energy matrix.
+        
+        Args:
+        ----
+            data : An energy band matrix of shape n_epochs x n_channels x n_bands
+                   or n_channels x n_bands for a full time series.
+            ch_names : A list of channel names where the index of each entry 
+                       coressponds to that channels row index in the data matrix
+            hamming_selection :  Choose the maximally different permutation ("max") 
+                                to be included at iteration or the median ("median"). 
+
+        Returns:
+        -------
+            tuple[torch.Tensor : A matrix permuted by regions.
+                  np.array : a n_epochs length vector  of pseudo labels
+                               indicating the permutation applied to each epoch.
+                    ] 
+                
+        
+        """
+        n_regions : int = 10
+        n_permutations : int = 128
+        assert isinstance(data, torch.Tensor), "Input should be a torch.Tensor object."
+        assert isinstance(ch_names, list), "Input should be a list of strings."
+        # for non-epoched objects
+        if len(data.shape) == 2:
+            assert data.shape[0] == len(ch_names), \
+            "Channels in matrix should equal channels number of channel names"
+            assert data.shape[1] <= 5, "There should be atmost five frequency bands"
+            # reshape to a 3-d matrix with 1 epochs dimension
+            data = data.reshape(-1,*data.shape)
+
+        n_epochs : int = data.shape[0]
+
+        perms_file : str = \
+            f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
+        perms_path : Path = Path(__file__).resolve().parent.parent.parent / "data"
+        if not(os.path.exists(perms_path / perms_file)):
+            print("Permutations not found in path. Running. It may take a minute.")
+            permutations : torch.Tensor = hamming_set(n_regions=n_regions,
+                                                    n_permutations=n_permutations, 
+                                                    selection=hamming_selection,
+                                                    output_file_name= perms_file, 
+                                                    save_to_disk=False)
+            torch.save(torch.Tensor(permutations), perms_path / perms_file)
+        else:
+            print("Loading permutations from disk..")
+            permutations = torch.load(perms_path / perms_file) 
+
+        regions : dict[int,list[str]] = {
+            0 :["Fp1", "Fp2"],
+            1 :["Fz", "FCz"],
+            2 : ["F7", "F3", "FC3"],
+            3 : ["F4", "F8", "FC4"],
+            4 : ["T7", "C3", "CP3"],
+            5 : ["C4" , "T8", "CP4"],
+            6 : ["Cz", "CPz", "Pz"],
+            7 : ["P7", "P3"],
+            8 : ["P4", "P8"],
+            9 : ["O1","Oz", "O2"]
+        }
+
+        pseudo_labels = np.random.randint(low = 1,
+                                            high = 128,
+                                            size = n_epochs)
+        target_permutaions : torch.Tensor = permutations[pseudo_labels,:]
+        shuffled_channels : list[list[int]] = []
+        shuffled_data = torch.zeros(data.shape).double()
+
+        for epoch_num, epoch_permutation in enumerate(target_permutaions): 
+            shuffled_channels : list[int] = []
+            for region in epoch_permutation: # permuted region for that epoch
+                for ch in regions[region.item()]:
+                    try:
+                        ch_index = ch_names.index(ch)
+                        shuffled_channels.append(ch_index)
+                    except ValueError:
+                        # Some channels might be missing due to bad channels 
+                        # and user picks.
+                        continue
+            shuffled_data[epoch_num,:,:] = data[epoch_num,shuffled_channels,:]
+        
+        assert shuffled_data.shape == data.shape
+        return (shuffled_data, pseudo_labels)
+        
 
 if __name__ == "__main__":
-    # Set seed for reproducibility
+    # Set seed for reproducibility or testing different runs
+    Config.RANDOM_SEED = 33
     Config.set_global_seed()
     
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
     labels_file = Path(__file__).resolve().parent.parent.parent / 'data' / \
         'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
-                     full_time_series=False,
+                     full_time_series=True,
                           energy_plots=True,
                           verbose_psd=False,
                           picks_psd = ['eeg'],
-                          include_bad_channels_psd=True,
+                          include_bad_channels_psd=False,
                           save_to_disk=True,
                           select_freq_bands=['gamma', 'delta','beta'])
-    print(len(dataset))
-    #files = dataset.run_energy_parallel()
-    #print(len(files))
-    print(dataset[0][0].shape)
-    # for data in dataset:
-    #     #print(data[1])
-    #     dataset.get_permutations(data[0])
-    # #print(dataset.get_permutations(dataset[0][0])[0].shape)
-    results = dataset.run_permutations_parallel()
+    
+    files = dataset.run_energy_parallel()
+    print(dataset[0][0])
+    #results = dataset.run_freq_permutations_parallel()
+    # print(results[0][0].shape, results[0][1], results[0][2])
     # for data, label, file_name in results:
     #     print(file_name, label)
+    for energy_data in dataset:
+        print(len(energy_data[0][1]))
+        spatial_perm = dataset.get_spatial_permutation(energy_data[0][0],
+                                                       energy_data[0][1])
     
