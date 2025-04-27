@@ -25,8 +25,9 @@ from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set
 from unittest.mock import patch
 import multiprocessing
+import shutil
 
-Config.RANDOM_SEED = 1223333
+#Config.RANDOM_SEED = 1223333
 Config.set_global_seed()
 
 TEST_FILE : str = os.environ.get('TEST_FILE')
@@ -648,6 +649,7 @@ class TestEnergy:
         for data, _, file_name in results:
             # The last file in the test runs on the same process so it 
             # becomes the next number of the sequence.
+            # for all others, reset the seed to generate the same sequence.
             if ctr < len(results)-1:
                 random.seed(seed)
                 np.random.seed(seed)
@@ -772,7 +774,7 @@ class TestEnergy:
 
         if test_file_loading:
             energy_files : list[str] = os.listdir(dataset.energy_save_dir)
-            energy_files.append(os.listdir(dataset.energy_save_dir_epoched))
+            energy_files.extend(os.listdir(dataset.energy_save_dir_epoched))
             random_file = energy_files[random.randint(0,len(energy_files)-1)]
             if os.path.exists(dataset.energy_save_dir_epoched / random_file):
                 input_matrix, ch_names = torch.\
@@ -781,11 +783,12 @@ class TestEnergy:
                 input_matrix,ch_names = torch.\
                     load(dataset.energy_save_dir / random_file)
 
-            output_matrix, pseudo_labels = dataset.\
+            output_matrix, pseudo_labels, file_name = dataset.\
                     get_spatial_permutation(file_name=random_file)
         else:
-            output_matrix, pseudo_labels = dataset.get_spatial_permutation(ch_names,
-                                                                        input_matrix,
+            output_matrix, pseudo_labels, file_name = dataset.\
+                                            get_spatial_permutation(data = input_matrix,
+                                                                    ch_names= ch_names
                                                                         )
         assert output_matrix.shape == input_matrix.shape
         assert isinstance(pseudo_labels, np.ndarray),\
@@ -825,84 +828,92 @@ class TestEnergy:
         assert torch.allclose(shuffled_data, output_matrix),\
                     "Expected permutation has not been applied."
     
-def test_run_spatial_perms_parallel(self, monkeypatch):
-        """
-        Test if the permutations generated in parallel are as expected
-        """
+    def test_run_spatial_perms_parallel(self, monkeypatch):
+            """
+            Test if the permutations generated in parallel are as expected
+            """
 
-        # set up the necessary resources.
-        project_root : Path = Path(__file__).resolve().parent.parent.parent
-    
-        test_data_dir : Path \
-            = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
-            "parallel_test"
-        test_data_dir.mkdir(parents=True,exist_ok=True)
-
-        cleaned_path = \
-            Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
-            'data' / 'cleaned'
+            # set up the necessary resources.
+            project_root : Path = Path(__file__).resolve().parent.parent.parent
         
-        # full time series
-        dataset = Energy(cleaned_path=cleaned_path,
-                        testing= True,
-                                                full_time_series=False,
-    energy_plots=True,
+            test_data_dir : Path \
+                = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
+                "parallel_test"
+            test_data_dir.mkdir(parents=True,exist_ok=True)
+
+            cleaned_path = \
+                Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
+                'data' / 'cleaned'
+            
+            dataset_full : Energy = Energy(cleaned_path=cleaned_path,
+                                testing= True,
+                                full_time_series=True,
+                                energy_plots=True,
+                                verbose_psd=False,
+                                picks_psd = ['eeg'],
+                                include_bad_channels_psd=False,
+                                save_to_disk=True,
+                                select_freq_bands=['gamma', 'delta',
+                                                    'theta','alpha','beta']) 
+            
+            dataset_epoched : Energy = Energy(cleaned_path=cleaned_path,
+                            testing= True,
+                            full_time_series=False,
+                            energy_plots=True,
                             verbose_psd=False,
                             picks_psd = ['eeg'],
-                            include_bad_channels_psd=True,
+                            include_bad_channels_psd=False,
                             save_to_disk=True,
                             select_freq_bands=['gamma', 'delta',
                                                 'theta','alpha','beta']) 
-        dataset.energy_save_dir_epoched = test_data_dir / 'energy'
-        dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
-        # setting full length directory to be empty for testing purposes
-        # This is because run_get_permutations_parallel() handles both epoched
-        # and full timeseries data together.
-        empty_dir = test_data_dir / "empty"
-        empty_dir.mkdir(parents=True, exist_ok= True)
-        dataset.energy_save_dir = empty_dir
+            
+            for dataset in [dataset_full, dataset_epoched]:
 
-        # test_matrices : list[torch.Tensor]= [torch.Tensor(np.random.random\
-        #                                                   ((random.randint(1,10),
-        #                          random.randint(1,26),
-        #                          random.randint(1,5))))\
-        #                             for _ in range(10)]
-        # test_ch_names = [self.electrode_names[:matrix.shape[1]] \
-        #                  for matrix in test_matrices]
-        # hamming_selection : list[str] = ["max"]*10
-        # test_args = zip(test_matrices,test_ch_names,hamming_selection)
-        # serial_results = []
-        # for item in test_args:
-        #     serial_results.append(dataset.get_spatial_permutation(*item))
+                dataset.energy_save_dir_epoched = test_data_dir / 'energy'
+                dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
+                dataset.energy_save_dir = test_data_dir / 'energy'
+                dataset.run_energy_parallel()
+                results = dataset.run_spatial_permutations_parallel()
+                parallel_results : dict[str,list] = {file_name : labels for 
+                                                    _,labels,file_name in \
+                                                                            results}
+                seed = 42
+                ctr = 0
+                for data, para_labels, file_name in results:
+                    # The last file in the test runs on the same process so it 
+                    # becomes the next number of the sequence.
+                    if ctr < len(results)-1:
+                        random.seed(seed)
+                        np.random.seed(seed)
+                        torch.manual_seed(seed)
+                        ctr += 1
+                    band_details : tuple[torch.Tensor, list[str]] =  torch.\
+                                                    load(test_data_dir / "energy" / \
+                                                        file_name)
+                    energy_file = band_details[0]
+                    ch_info = band_details[1]
+                    data_iter, labels, iter_file = \
+                        dataset.get_spatial_permutation(data = energy_file,
+                                                        ch_names=ch_info) 
+                    
+                    print(f"iter labels : {labels}")
+                    print(f"parallel labels : {parallel_results[file_name]}")
+                    print("------------------------")
+                    if dataset.testing:
+                        assert torch.allclose(data, data_iter)
+                        # full tim series should only return one label.
+                    else:
+                        # if the seed does not get reset in the function.
+                        # with the testing flag, then expect these to differ.
+                        assert not(torch.allclose(data, data_iter))
+                    if dataset.full_time_series:
+                        print(f"labels : {labels}, para_labels : {para_labels}")
+                        assert len(labels) == len(para_labels) == 1
+                    else:
+                        assert len(labels) == len(para_labels) == energy_file.shape[0]
+                shutil.rmtree('tests/test_data/parallel_test/energy')
+                
 
-        empty_dir = test_data_dir / "empty"
-        empty_dir.mkdir(parents=True, exist_ok= True)
-        dataset.energy_save_dir = empty_dir
-        dataset.run_energy_parallel()
-        with patch.object(multiprocessing, "Pool") as MockPool:
-            instance = MockPool.return_value
-            instance.starmap.return_value = [ "foo", "bar" ]
-            instance.__enter__.return_value = instance
 
-            results = dataset.run_spatial_permutations_parallel()
+                
 
-            MockPool.assert_called_once()
-
-        # seed = 42
-        # ctr = 0
-        # for data, _, file_name in results:
-        #     # The last file in the test runs on the same process so it 
-        #     # becomes the next number of the sequence.
-        #     if ctr < len(results)-1:
-        #         random.seed(seed)
-        #         np.random.seed(seed)
-        #         torch.manual_seed(seed)
-        #         ctr += 1
-        #     band_details : tuple[torch.Tensor, list[str]] =  torch.\
-        #                                     load(test_data_dir / "energy" / file_name)
-        #     energy_file = band_details[0]
-        #     ch_info = band_details[1]
-        #     data_iter, _, = \
-        #         dataset.get_spatial_permutation(data = energy_file,
-        #                                         ch_names=ch_info) 
-        #     assert torch.allclose(data, data_iter)

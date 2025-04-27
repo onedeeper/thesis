@@ -513,6 +513,8 @@ class Energy(Dataset):
                 - int: The pseudolabel representing which permutation was applied.
 
         """
+        if self.testing:
+            Config.set_global_seed()
         if data is None:
             if is_epoched:
                 data = torch.load(self.energy_save_dir_epoched / file_name)[0]
@@ -596,6 +598,7 @@ class Energy(Dataset):
 
         """
         starmap_args = []
+        max_processes = multiprocessing.cpu_count() -1
 
         # Files from energy_save_dir are NOT epoched
         full_length_energy_files = os.listdir(self.energy_save_dir)
@@ -609,33 +612,36 @@ class Energy(Dataset):
             starmap_args.append((None, True, filename))
             
         print("epoched :",len(epoched_energy_files))
-        processes = multiprocessing.cpu_count() - 1
-        print(f'Using {processes} processes for energy permutation computation')
+
+        processes = len(starmap_args) if len(starmap_args) < max_processes \
+                                                                else max_processes
+        
+        print(f'Using {processes} processes for frequency permutation computation')
         print(f"Processing {len(starmap_args)} files...")
 
         # This is the same except does not use the correction for starting
-        # each new process with a diffeent seed. It is used for testing.
+        # each new process with a different seed. It is used for testing.
         if self.testing:
             with multiprocessing.Pool(processes) as p:
                 results = list(tqdm(p.starmap(self.get_freq_permutation, starmap_args),
                                     total=len(starmap_args),
-                                    desc="Computing energy band permutations"))
+                                    desc="Computing frequency band permutations"))
         else:
             with multiprocessing.Pool(processes, initializer=worker_init_fn,
                                       initargs=(os.getpid(),)) \
                 as p:
                 results = list(tqdm(p.starmap(self.get_freq_permutation, starmap_args),
                                     total=len(starmap_args),
-                                    desc="Computing energy band permutations"))
+                                    desc="Computing frequency band permutations"))
 
         print(f"Finished processing {len(results)} permutations.")
 
         return results
     
     def get_spatial_permutation(self,
+                                file_name : str = None,
                                 ch_names : list[str] = None,
                                 data : torch.Tensor = None,
-                                file_name : str = None,
                                 hamming_selection: str = "max")\
                                     -> tuple[torch.Tensor, int]:
         """Shuffle the regions of an energy matrix.
@@ -657,10 +663,16 @@ class Energy(Dataset):
             tuple[torch.Tensor : A matrix permuted by regions.
                   np.array : a n_epochs length vector  of pseudo labels
                                indicating the permutation applied to each epoch.
-                    ] 
+                 file_name : participant identifier ] 
                 
         
         """
+
+        # synchronize seed for testing permutation generation between parallel
+        # serial processing testing.
+        if self.testing:
+            Config.set_global_seed()
+
         n_regions : int = 10
         n_permutations : int = 128
         if data is None:
@@ -670,7 +682,7 @@ class Energy(Dataset):
                 data, ch_names = torch.load(self.energy_save_dir_epoched / file_name)
             else:
                 data,ch_names = torch.load(self.energy_save_dir / file_name)
-                
+            
         assert isinstance(data, torch.Tensor)
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
@@ -692,7 +704,7 @@ class Energy(Dataset):
             f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
         perms_path : Path = Path(__file__).resolve().parent.parent.parent / "data"
         if not(os.path.exists(perms_path / perms_file)):
-            print("Permutations not found in path. Running. It may take a minute.")
+            #print("Permutations not found in path. Running. It may take a minute.")
             self.permutations : torch.Tensor = hamming_set(n_regions=n_regions,
                                                     n_permutations=n_permutations, 
                                                     selection=hamming_selection,
@@ -700,7 +712,7 @@ class Energy(Dataset):
                                                     save_to_disk=False)
             torch.save(torch.Tensor(self.permutations), perms_path / perms_file)
         else:
-            print("Loading permutations from disk..")
+            #print("Loading permutations from disk..")
             self.permutations = torch.load(perms_path / perms_file) 
 
         regions : dict[int,list[str]] = {
@@ -737,7 +749,7 @@ class Energy(Dataset):
             shuffled_data[epoch_num,:,:] = data[epoch_num,shuffled_channels,:]
         
         assert shuffled_data.shape == data.shape
-        return (shuffled_data, pseudo_labels)
+        return (shuffled_data, pseudo_labels, file_name)
     
     def run_spatial_permutations_parallel(self):
         """
@@ -755,39 +767,36 @@ class Energy(Dataset):
                         ]
                 ] 
         """
-        starmap_args = []
-        # Files from energy_save_dir are NOT epoched
-        full_length_energy_files = os.listdir(self.energy_save_dir)
-        print("full len :",len(full_length_energy_files))
-        for filename in full_length_energy_files:
-            starmap_args.append((None, False, filename))
 
-        # Files from energy_save_dir_epoched ARE epoched
-        epoched_energy_files = os.listdir(self.energy_save_dir_epoched)
-        for filename in epoched_energy_files:
-            starmap_args.append((None, True, filename))
-            
-        print("epoched :",len(epoched_energy_files))
-        processes = multiprocessing.cpu_count() - 1
-        print(f'Using {processes} processes for energy permutation computation')
-        print(f"Processing {len(starmap_args)} files...")
+        energy_files : list[str] = os.listdir(self.energy_save_dir)
+        energy_files.extend(os.listdir(self.energy_save_dir_epoched))
+
+        #starmap_args : list[tuple[]]]
+        max_processes = multiprocessing.cpu_count() -1
+        processes = len(energy_files) if len(energy_files) < max_processes \
+                                                                else max_processes
+        
+        print(f'Using {processes} processes for spatial permutation computation')
+        print(f"Processing {len(energy_files)} files...")
 
         if self.testing:
             with multiprocessing.Pool(processes) as p:
-                results = list(tqdm(p.starmap(self.get_freq_permutation,
-                                              starmap_args),
-                                    total=len(starmap_args),
-                                    desc="Computing energy band permutations"))
+                results = list(tqdm(p.map(self.get_spatial_permutation,
+                                              energy_files),
+                                    total=len(energy_files),
+                                    desc="Computing spatial band permutations"))
         else:
             with multiprocessing.Pool(processes, initializer=worker_init_fn,
                                       initargs=(os.getpid(),)) \
                 as p:
-                results = list(tqdm(p.starmap(self.get_freq_permutation, starmap_args),
-                                    total=len(starmap_args),
-                                    desc="Computing energy band permutations"))
+                results = list(tqdm(p.map(self.get_spatial_permutation,
+                                              energy_files),
+                                    total=len(energy_files),
+                                    desc="Computing spatial band permutations"))
 
         print(f"Finished processing {len(results)} permutations.")
-
+        assert len(results) == len(energy_files),\
+            "Expected numer of permutations results not generated."
         return results
         
 
@@ -814,8 +823,10 @@ if __name__ == "__main__":
     # print(results[0][0].shape, results[0][1], results[0][2])
     # for data, label, file_name in results:
     #     print(file_name, label)
-    for energy_data in dataset:
-        print(len(energy_data[0][1]))
-        spatial_perm = dataset.get_spatial_permutation(energy_data[0][0],
-                                                       energy_data[0][1])
-    
+    # for energy_data in dataset:
+    #     print(len(energy_data[0][1]))
+    #     spatial_perm = dataset.get_spatial_permutation(energy_data[0][0],
+    #                                                    energy_data[0][1])
+    results = dataset.run_spatial_permutations_parallel()
+    for result, label, file_name ,in results:
+        print(result[0].shape, len(label))
