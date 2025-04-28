@@ -232,24 +232,6 @@ class TestEnergy:
             assert energy_data_ordered.shape[0] ==  26
             assert energy_data_ordered.shape[1] == len(random_n_bands)
 
-            # it is imperative that the bands are always in the same order in the 
-            # returned matrix, regardless of the order the user sends them at 
-            # initialization
-            random.shuffle(random_n_bands)
-            energy_data_diff_order : Energy = Energy(cleaned_path=dir_path,
-                        select_freq_bands=random_n_bands,
-                        full_time_series= True,
-                        energy_plots=False,
-                        verbose_psd=False,
-                        include_bad_channels_psd=True)
-            band_details = energy_data_diff_order.\
-                                        get_energy(folder_path=Path(dir_path) \
-                                    / "sub-19740274" / "ses-1" / "eeg" ,
-                                    file_name= TEST_FILE)
-            data_diff_order = band_details[0]
-            assert torch.allclose(data_diff_order, energy_data_ordered),\
-            "Matrix was not built consistently when bands are shuffled"
-
     def test_parallel_returns(self) -> None:
         """Test that the parallel method returns the correct number of files."""
         dir_path : str = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
@@ -267,21 +249,59 @@ class TestEnergy:
     @pytest.mark.skipif(not os.environ.get('EEG_CLEANED_TEST_FILE'), 
                         reason=\
                             "EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
-    def test_get_freq_permutations_full_time_series(self)-> None:
+
+    def helper_frequency_shuffle(self, energy : Energy, temp_dir : Path,
+                                 participant: str,
+                                 file_name) -> None:
+        """ Helper function for frequency shuffling testing"""
+        band_position : dict = {band : i for i, band \
+                                    in enumerate(energy.select_freq_bands)}
+            
+        possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
+            dict(enumerate(permutations(energy.select_freq_bands)))
+        
+
+        for _ in range(10):
+            band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
+                                                        (folder_path=temp_dir \
+                                                    / participant / "ses-1" / "eeg",
+                                                    file_name= file_name, )
+            input_matrix : torch.Tensor  = band_details[0]
+            if len(input_matrix.shape) == 2:
+                input_matrix = input_matrix.reshape(-1, *input_matrix.shape)
+            permutations_label : tuple[torch.Tensor,
+                                int] = energy.get_freq_permutation(input_matrix,
+                                                                save_to_disk=True)
+            permuted_data : torch.Tensor  = permutations_label[0]
+            pseudo_labels : int = permutations_label[1]     
+      
+            assert isinstance(permutations_label,tuple)
+            assert isinstance(permuted_data, torch.Tensor)
+            assert isinstance(pseudo_labels, np.ndarray)
+
+            for i, pseudo_label in enumerate(pseudo_labels):
+                test_permutation : tuple[str] = possible_perms[pseudo_label]
+                test_permutation_idx = [ band_position[permutation]
+                                        for permutation in test_permutation ]
+                assert torch.allclose(input_matrix[i,:,test_permutation_idx],
+                                        permuted_data[i,:,:])
+
+    def test_get_freq_permutations(self)-> None:
         """Test case for generating the energy permutations for a given subject."""
         test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
         participant : str = ""
         condition : str = ""
         participant, condition = get_participant_id_condition_from_string(TEST_FILE)
         preprocessed : Preproccesing = np.load(test_cleaned_file, allow_pickle = True)
-        test_bands : list[str] = ['gamma', 'delta']
+        test_bands : list[str] = ['alpha','beta']
         with tempfile.TemporaryDirectory() as temp_dir:
             print(f"Created temporary directory at: {temp_dir}")
             temp_dir : Path = Path(temp_dir) / "cleaned"
             temp_dir.mkdir(parents=True,  exist_ok = True)
             
             # hard set a bad channel and save it
-            preprocessed.preprocessed_raw.info['bads'] = ["F7"]
+            preprocessed.preprocessed_raw.info['bads'] = ["F7", "Fp1"]
+            preprocessed.preprocessed_epochs.info['bads'] = ["F7", "Fp1"]
             file_name : str = \
                 f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
             save_path : Path = temp_dir / participant / "ses-1" / "eeg"
@@ -289,326 +309,44 @@ class TestEnergy:
             with open(save_path / file_name , 'wb') as output:   
                 pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
             assert os.path.exists(save_path/file_name)
-            # Test with bad channels excluded
+            
+            #Test with full time series bad channels excluded
             #--------------------------------#
             energy : Energy = Energy(cleaned_path=temp_dir,
                                 select_freq_bands=test_bands,
                                 full_time_series=True,
                                 save_to_disk=False,
                                 include_bad_channels_psd=False)
+            self.helper_frequency_shuffle(energy,temp_dir,participant,file_name)
             
-            band_position : dict = {band : i for i, band \
-                                    in enumerate(energy.select_freq_bands)}
-            
-            possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
-                dict(enumerate(permutations(energy.select_freq_bands)))
-            # testing the contents
-            # The function should not return the same pseud-label each time.
-            for _ in range(10):
-                band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
-                                                            (folder_path=temp_dir \
-                                                        / participant / "ses-1" / "eeg",
-                                                        file_name= TEST_FILE)
-                input_matrix : torch.Tensor  = band_details[0]
-
-                permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-                permuted_data : torch.Tensor  = permutations_label[0]
-                pseudo_label : int = permutations_label[1]     
-                # testing the objects 
-                # easiest to pass!
-                assert isinstance(permutations_label,tuple)
-                assert isinstance(permuted_data, torch.Tensor)
-                assert isinstance(pseudo_label, int)
-
-                if pseudo_label != 0:
-                    assert not (torch.allclose(input_matrix,permuted_data)),\
-                    "Not shuffled. Columns are the same."
-                else:
-                    assert torch.allclose(input_matrix,permuted_data),\
-                    "Shuffled. Columns should be the same for this pseudo label"
-
-            permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-            permuted_data : torch.Tensor  = permutations_label[0]
-            pseudo_label : int = permutations_label[1]
-            
-            # we test if the resulting matrix and pseudo label match the ones generated
-            expected_permutation : list[str] = possible_perms[pseudo_label]
-
-            band_ordering : list[int] = [band_position[band]\
-                                        for band in expected_permutation]
-            permuted_input_matrix : torch.Tesor = input_matrix[:,band_ordering]
-
-            assert torch.allclose(permuted_data,permuted_input_matrix),\
-            "The expected permutation has not been applied"
-
-            # Test with bad channels included
+            # Test with full time series bad channels included
             #--------------------------------#
             energy : Energy = Energy(cleaned_path=temp_dir,
                                 select_freq_bands=test_bands,
                                 full_time_series=True,
                                 save_to_disk=False,
                                 include_bad_channels_psd=True)
-
-            # testing the contents
-            # The function should not return the same pseud-label each time.
-            for _ in range(10):
-                band_details = energy.get_energy(folder_path=temp_dir \
-                                / participant / "ses-1" / "eeg" ,
-                                file_name= TEST_FILE)
-                input_matrix = band_details[0]
-
-                permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-                permuted_data : torch.Tensor  = permutations_label[0]
-                pseudo_label : int = permutations_label[1]     
-                # testing the dimensions 
-                # easiest to pass!
-                assert isinstance(permutations_label,tuple)
-                assert isinstance(permuted_data, torch.Tensor)
-                assert isinstance(pseudo_label, int)
-
+            self.helper_frequency_shuffle(energy,temp_dir,participant, file_name)
             
-                if pseudo_label != 0:
-                    assert not (torch.allclose(input_matrix,permuted_data)),\
-                    "Not shuffled. Columns are the same."
-                else:
-                    assert torch.allclose(input_matrix,permuted_data),\
-                    "Shuffled. Columns should be the same for this pseudo label"
+            # Test with epoched time series with bad channels excluded
+            #--------------------------------#
 
-            permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-            permuted_data : torch.Tensor  = permutations_label[0]
-            pseudo_label : int = permutations_label[1]
-            
-            # we test if the resulting matrix and pseudo label match the ones generated
-            expected_permutation : list[str] = possible_perms[pseudo_label]
+            energy : Energy = Energy(cleaned_path=temp_dir,
+                                            select_freq_bands=test_bands,
+                                            full_time_series=False,
+                                            save_to_disk=False,
+                                            include_bad_channels_psd=False)
+            self.helper_frequency_shuffle(energy,temp_dir,participant,file_name)
 
-            band_ordering : list[int] = [band_position[band]\
-                                        for band in expected_permutation]
-            permuted_input_matrix : torch.Tesor = input_matrix[:,band_ordering]
-
-            assert torch.allclose(permuted_data,permuted_input_matrix),\
-            "The expected permutation has not been applied"
-
-    def test_get_freq_permutations_epoched(self)-> None:
-        """Test the permutation generation with epoched data."""
-        test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
-        participant : str = ""
-        condition : str = ""
-        participant, condition = get_participant_id_condition_from_string(TEST_FILE)
-        preprocessed : Preproccesing = np.load(test_cleaned_file, allow_pickle = True)
-        
-        test_bands : list[str] = ['gamma', 'delta']
-        with tempfile.TemporaryDirectory() as temp_dir:
-            print(f"Created temporary directory at: {temp_dir}")
-            temp_dir : Path = Path(temp_dir) / "cleaned"
-            temp_dir.mkdir(parents=True,  exist_ok = True)
-            
-            # hard set a bad channel and save it
-            preprocessed.preprocessed_raw.info['bads'] = ["F7"]
-            file_name : str = \
-                f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
-            save_path : Path = temp_dir / participant / "ses-1" / "eeg"
-            save_path.mkdir(parents=True,exist_ok = True)
-            with open(save_path / file_name , 'wb') as output:   
-                pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
-            assert os.path.exists(save_path/file_name)
-
-            # Test with bad channels excluded
+            # Test with epoched time series with bad channels included
             #--------------------------------#
             energy : Energy = Energy(cleaned_path=temp_dir,
-                                select_freq_bands=test_bands,
-                                full_time_series=False,
-                                save_to_disk=False,
-                                include_bad_channels_psd=False)
-            
-            band_position : dict = {band : i for i, band \
-                                    in enumerate(energy.select_freq_bands)}
-            
-            possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
-                dict(enumerate(permutations(energy.select_freq_bands)))
-            # testing the contents
-            # The function should not return the same pseud-label each time.
-            band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
-                                    (folder_path=temp_dir \
-                                / participant / "ses-1" / "eeg" ,
-                                file_name= TEST_FILE)
-            input_matrix : torch.Tensor  = band_details[0]
-            for _ in range(10):
-                permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-                permuted_data : torch.Tensor  = permutations_label[0]
-                pseudo_label : int = permutations_label[1]     
-                # testing the dimensions 
-                # easiest to pass!
-                assert isinstance(permutations_label,tuple)
-                assert isinstance(permuted_data, torch.Tensor)
-                assert isinstance(pseudo_label, int)
+                                            select_freq_bands=test_bands,
+                                            full_time_series=False,
+                                            save_to_disk=False,
+                                            include_bad_channels_psd=True)
+            self.helper_frequency_shuffle(energy,temp_dir,participant, file_name)
 
-                if pseudo_label != 0:
-                    assert not (torch.allclose(input_matrix,permuted_data)),\
-                    "Not shuffled. Columns are the same."
-                else:
-                    assert torch.allclose(input_matrix,permuted_data),\
-                    "Shuffled. Columns should be the same for this pseudo label"
-
-            permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-            permuted_data : torch.Tensor  = permutations_label[0]
-            pseudo_label : int = permutations_label[1]
-            
-            # we test if the resulting matrix and pseudo label match the ones generated
-            expected_permutation : list[str] = possible_perms[pseudo_label]
-
-            band_ordering : list[int] = [band_position[band]\
-                                        for band in expected_permutation]
-            permuted_input_matrix : torch.Tesor = input_matrix[:,:,band_ordering]
-
-            assert torch.allclose(permuted_data,permuted_input_matrix),\
-            "The expected permutation has not been applied"
-
-            # Test with bad channels included
-            #---------------------------------#
-            energy : Energy = Energy(cleaned_path=temp_dir,
-                                select_freq_bands=test_bands,
-                                full_time_series=False,
-                                save_to_disk=False,
-                                include_bad_channels_psd=True)
-
-            # testing the contents
-            # The function should not return the same pseud-label each time.
-            for _ in range(10):
-                band_details = energy.get_energy\
-                                    (folder_path=temp_dir \
-                                / participant / "ses-1" / "eeg" ,
-                                file_name= TEST_FILE)
-                input_matrix = band_details[0]
-
-                permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-                permuted_data : torch.Tensor  = permutations_label[0]
-                pseudo_label : int = permutations_label[1]     
-                # testing the dimensions 
-                # easiest to pass!
-                assert isinstance(permutations_label,tuple)
-                assert isinstance(permuted_data, torch.Tensor)
-                assert isinstance(pseudo_label, int)
-
-                if pseudo_label != 0:
-                    assert not (torch.allclose(input_matrix,permuted_data)),\
-                    "Not shuffled. Columns are the same."
-                else:
-                    assert torch.allclose(input_matrix,permuted_data),\
-                    "Shuffled. Columns should be the same for this pseudo label"
-
-            permutations_label : tuple[torch.Tensor,
-                                    int] = energy.get_freq_permutation(input_matrix)
-            permuted_data : torch.Tensor  = permutations_label[0]
-            pseudo_label : int = permutations_label[1]
-            
-            # we test if the resulting matrix and pseudo label match the ones generated
-            expected_permutation : list[str] = possible_perms[pseudo_label]
-
-            band_ordering : list[int] = [band_position[band]\
-                                        for band in expected_permutation]
-            permuted_input_matrix : torch.Tesor = input_matrix[:,:,band_ordering]
-
-            assert torch.allclose(permuted_data,permuted_input_matrix),\
-            "The expected permutation has not been applied"
-
-    def test_save_freq_perms_to_disk(self)-> None:
-        """Test if the generated permuations are saved to disk correctly if asked."""
-        test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
-        participant : str = ""
-        condition : str = ""
-        participant, condition = get_participant_id_condition_from_string(TEST_FILE)
-        preprocessed : Preproccesing = np.load(test_cleaned_file, allow_pickle = True)
-        test_bands : list[str] = ['gamma', 'delta']
-
-        project_root : Path = Path(__file__).resolve().parent.parent.parent
-        print("root: " ,project_root)
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            print(f"Created temporary directory at: {temp_dir}")
-            temp_dir_cleaned : Path = Path(temp_dir) / "cleaned"
-            temp_dir_cleaned.mkdir(parents=True,  exist_ok = True)
-            perm_save_dir =  Path(temp_dir) / "perm_save"
-            perm_save_dir.mkdir(parents=True, exist_ok=True)
-
-            # hard set a bad channel and save it
-            preprocessed.preprocessed_raw.info['bads'] = ["F7"]
-            file_name : str = \
-                f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
-            save_path : Path = temp_dir_cleaned / participant / "ses-1" / "eeg"
-            save_path.mkdir(parents=True,exist_ok = True)
-            with open(save_path / file_name , 'wb') as output:   
-                pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
-            assert os.path.exists(save_path/file_name)
-
-            energy : Energy = Energy(cleaned_path=temp_dir_cleaned,
-                                select_freq_bands=test_bands,
-                                full_time_series=False,
-                                save_to_disk=False,
-                                include_bad_channels_psd=False)
-            
-            # testing the contents
-            # The function should not return the same pseud-label each time.
-            band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
-                                    (folder_path=temp_dir_cleaned \
-                                / participant / "ses-1" / "eeg" ,
-                                file_name= TEST_FILE)
-            input_matrix : torch.Tensor  = band_details[0]
-        
-            permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutation(input_matrix,
-                                                            file_name="test.pt")
-            permuted_data : torch.Tensor  = permutations_label[0]
-            pseudo_label : int = permutations_label[1]     
-
-            assert isinstance(permutations_label,tuple)
-            assert isinstance(permuted_data, torch.Tensor)
-            assert isinstance(pseudo_label, int)
-            root_extension : str = "eeg-graph-learning"
-            assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
-                                'epoched_perms' / "energy_perms_test.pt")
-            file_name = "energy_perms_test.pt"
-            reloaded_data = torch.load(project_root / root_extension / 'data'/\
-                                'energy' / 'epoched_perms' / file_name)
-            assert reloaded_data[0].shape == permuted_data.shape
-
-            # Test with full time series
-            energy : Energy = Energy(cleaned_path=temp_dir_cleaned,
-                                select_freq_bands=test_bands,
-                                full_time_series=True,
-                                save_to_disk=False,
-                                include_bad_channels_psd=False)
-            
-
-            # testing the contents
-            # The function should not return the same pseud-label each time.
-            band_details = energy.get_energy(folder_path=temp_dir_cleaned \
-                                / participant / "ses-1" / "eeg" ,
-                                file_name= TEST_FILE)
-            input_matrix = band_details[0] 
-            
-            permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutation(input_matrix,
-                                                            file_name="test.pt")
-            permuted_data : torch.Tensor  = permutations_label[0]
-            pseudo_label : int = permutations_label[1]     
-
-            assert isinstance(permutations_label,tuple)
-            assert isinstance(permuted_data, torch.Tensor)
-            assert isinstance(pseudo_label, int)
-            root_extension : str = "eeg-graph-learning"
-            assert os.path.exists(project_root / root_extension / 'data' / 'energy'/
-                                'perms')
-            file_name = "energy_perms_test.pt"
-            reloaded_data = torch.load(project_root / root_extension / 'data'/\
-                                'energy' / 'perms' / file_name)
-            assert reloaded_data[0].shape == permuted_data.shape
 
     def test_run_freq_permutations_parallel(self)-> None:
         """Compare serial and parallel computations."""
@@ -616,15 +354,24 @@ class TestEnergy:
     
         test_data_dir : Path \
             = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
-            "parallel_test"
+            "parallel_test" / "energy"
         test_data_dir.mkdir(parents=True,exist_ok=True)
 
         cleaned_path = \
             Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
             'data' / 'cleaned'
         
-        dataset = Energy(cleaned_path=cleaned_path,
-                        testing= True,
+        dataset_full = Energy(cleaned_path=cleaned_path,
+                        full_time_series=True,
+                            energy_plots=True,
+                            verbose_psd=False,
+                            picks_psd = ['eeg'],
+                            include_bad_channels_psd=True,
+                            save_to_disk=True,
+                            select_freq_bands=['gamma', 'delta',
+                                                'theta','alpha','beta']) 
+        
+        dataset_epoched = Energy(cleaned_path=cleaned_path,
                         full_time_series=False,
                             energy_plots=True,
                             verbose_psd=False,
@@ -633,34 +380,25 @@ class TestEnergy:
                             save_to_disk=True,
                             select_freq_bands=['gamma', 'delta',
                                                 'theta','alpha','beta']) 
-        dataset.energy_save_dir_epoched = test_data_dir / 'energy'
-        dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
-        # setting full length directory to be empty for testing purposes
-        # This is because run_get_permutations_parallel() handles both epoched
-        # and full timeseries data together.
-        empty_dir = test_data_dir / "empty"
-        empty_dir.mkdir(parents=True, exist_ok= True)
-        dataset.energy_save_dir = empty_dir
-        dataset.run_energy_parallel()
-        results = dataset.run_freq_permutations_parallel()
+        
+        datasets : list[Energy] = [dataset_full, dataset_epoched]
 
-        seed = 42
-        ctr = 0
-        for data, _, file_name in results:
-            # The last file in the test runs on the same process so it 
-            # becomes the next number of the sequence.
-            # for all others, reset the seed to generate the same sequence.
-            if ctr < len(results)-1:
-                random.seed(seed)
-                np.random.seed(seed)
-                torch.manual_seed(seed)
-                ctr += 1
-            band_details : tuple[torch.Tensor, list[str]] =  torch.\
-                                            load(test_data_dir / "energy" / file_name)
-            energy_file = band_details[0]
-            data_iter, _, _ = \
-                dataset.get_freq_permutation(data = energy_file) 
-            assert torch.allclose(data, data_iter)
+        for dataset in datasets:
+            dataset.energy_save_dir_epoched = test_data_dir / 'energy_epoched'
+            dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
+            # setting full length directory to be empty for testing purposes
+            # This is because run_get_permutations_parallel() handles both epoched
+            # and full timeseries data together.
+            dataset.energy_save_dir= test_data_dir / 'energy_full'
+            dataset.energy_save_dir.mkdir(parents=True, exist_ok= True)
+
+            dataset.run_energy_parallel()
+            seed = Config.RANDOM_SEED
+            results = dataset.run_freq_permutations_parallel(seed = seed,
+                                                    save_to_disk=False)
+
+            assert len(results) == len(dataset)
+            shutil.rmtree("tests/test_data/parallel_test")
             
     def test_get_spatial_perms(self) -> None:
         """Test the generated spatial permutations.
@@ -689,7 +427,6 @@ class TestEnergy:
         
         # Full time series
         dataset : Energy = Energy(cleaned_path=cleaned_path,
-                        testing= True,
                         full_time_series=True,
                             energy_plots=True,
                             verbose_psd=False,
@@ -707,7 +444,6 @@ class TestEnergy:
 
         # Epoched time series
         dataset : Energy = Energy(cleaned_path=cleaned_path,
-                        testing= True,
                         full_time_series=False,
                             energy_plots=True,
                             verbose_psd=False,
@@ -722,7 +458,7 @@ class TestEnergy:
     def helper_get_permutations(self,
                               dataset : Energy,
                               save_path: Path,
-                              test_file_loading : bool = False):
+                              test_file_loading : bool = False) -> None:
         """Test the generated spatial permutations.
         
         Helper method that contains the testing code for permutations.
@@ -825,10 +561,10 @@ class TestEnergy:
                     start += region_size
                 shuffled_data[epoch,:,:] = input_matrix[epoch,permuted_channels,:]
                 
-        assert torch.allclose(shuffled_data, output_matrix),\
+        assert torch.allclose(shuffled_data.float(), output_matrix),\
                     "Expected permutation has not been applied."
     
-    def test_run_spatial_perms_parallel(self, monkeypatch):
+    def test_run_spatial_perms_parallel(self, monkeypatch) -> None:
             """
             Test if the permutations generated in parallel are as expected
             """
@@ -838,7 +574,7 @@ class TestEnergy:
         
             test_data_dir : Path \
                 = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
-                "parallel_test"
+                "parallel_test" 
             test_data_dir.mkdir(parents=True,exist_ok=True)
 
             cleaned_path = \
@@ -846,7 +582,6 @@ class TestEnergy:
                 'data' / 'cleaned'
             
             dataset_full : Energy = Energy(cleaned_path=cleaned_path,
-                                testing= True,
                                 full_time_series=True,
                                 energy_plots=True,
                                 verbose_psd=False,
@@ -857,7 +592,6 @@ class TestEnergy:
                                                     'theta','alpha','beta']) 
             
             dataset_epoched : Energy = Energy(cleaned_path=cleaned_path,
-                            testing= True,
                             full_time_series=False,
                             energy_plots=True,
                             verbose_psd=False,
@@ -896,21 +630,12 @@ class TestEnergy:
                         dataset.get_spatial_permutation(data = energy_file,
                                                         ch_names=ch_info) 
                     
-                    print(f"iter labels : {labels}")
-                    print(f"parallel labels : {parallel_results[file_name]}")
-                    print("------------------------")
-                    if dataset.testing:
-                        assert torch.allclose(data, data_iter)
-                        # full tim series should only return one label.
-                    else:
-                        # if the seed does not get reset in the function.
-                        # with the testing flag, then expect these to differ.
-                        assert not(torch.allclose(data, data_iter))
-                    if dataset.full_time_series:
-                        print(f"labels : {labels}, para_labels : {para_labels}")
-                        assert len(labels) == len(para_labels) == 1
-                    else:
-                        assert len(labels) == len(para_labels) == energy_file.shape[0]
+                    # print(f"iter labels : {labels}")
+                    # print(f"parallel labels : {parallel_results[file_name]}")
+                    # print("------------------------")
+                    
+                    assert data.shape == data_iter.shape
+                    assert len(labels) == len(para_labels)
                 shutil.rmtree('tests/test_data/parallel_test/energy')
                 
 

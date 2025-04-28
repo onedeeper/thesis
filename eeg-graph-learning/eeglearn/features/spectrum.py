@@ -207,7 +207,7 @@ class PowerSpectrum(Dataset):
     
     def get_spectrum(self, folder_path : str, 
                      file_name : str, save_to_disk : bool = True) \
-                          -> tuple[torch.Tensor, torch.Tensor, str]:
+                          -> tuple[torch.Tensor, torch.Tensor, str, list[str]]:
         """
         Compute power spectrum density for a single EEG data file.
         
