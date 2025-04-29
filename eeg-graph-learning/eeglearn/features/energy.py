@@ -296,14 +296,13 @@ class Energy(Dataset):
         try:
             participant_id, condition =  get_participant_id_condition_from_string\
                 (self.participant_npy_files[idx])
-            label = self.labels_dict[participant_id]
             if self.full_time_series:
                 energy = torch.load(self.energy_save_dir /\
                             f'energy_{participant_id}_{condition}_{self.data_type}.pt')
             else:
                 energy = torch.load(self.energy_save_dir_epoched /\
                         f'energy_{participant_id}_{condition}_{self.data_type}.pt')
-            return energy, label
+            return energy
         except IndexError:
             print(f'Energy for {self.participant_npy_files[idx]} not found')
             return None, None
@@ -348,7 +347,7 @@ class Energy(Dataset):
         participant_id, condition = get_participant_id_condition_from_string(file_name)
         path_to_file : Path = folder_path / file_name
         assert os.path.exists(path_to_file),f"file does not exist: {path_to_file}"
-
+        label = self.labels_dict[participant_id]
         #get the spectrum
         spectra : torch.Tensor
         freqs : torch.Tensor
@@ -411,9 +410,11 @@ class Energy(Dataset):
                                              len(self.select_freq_bands)), \
                 "combined_energy has wrong shape"
             if self.save_to_disk:
-                torch.save((combined_energy.float(),ch_names), self.energy_save_dir /\
+                assert isinstance(ch_names, list), "Should be a list of strings"
+                torch.save((combined_energy.float(),ch_names,
+                            participant_id, condition, label), self.energy_save_dir /\
                             f"energy_{participant_id}_{condition}_{self.data_type}.pt")
-            return (combined_energy.float(),ch_names)
+            return (combined_energy.float(),ch_names, participant_id, condition, label)
         else:
             n_channels_included = self.n_eeg_channels - \
                 (1 - self.include_bad_channels_psd)*(n_bad_channels)
@@ -456,10 +457,11 @@ class Energy(Dataset):
             f"{combined_energy.shape} != ({expected_shape})"
 
             if self.save_to_disk:
-                torch.save((combined_energy.float(), ch_names), self.energy_save_dir_epoched /\
+                torch.save((combined_energy.float(),
+                            ch_names, participant_id,
+                            condition, label), self.energy_save_dir_epoched /\
                             f"energy_{participant_id}_{condition}_{self.data_type}.pt")
-            #print(f"print {combined_energy.shape}")
-            return (combined_energy.float(),ch_names)
+            return (combined_energy.float(),ch_names, participant_id, condition, label)
         
 
     def run_energy_parallel(self) -> None | list:
@@ -674,15 +676,14 @@ class Energy(Dataset):
             assert file_name is not None,\
                 "If data is not provided, requires a file name to load from disk"
             if os.path.exists(self.energy_save_dir_epoched / file_name):
-                data, ch_names = torch.load(self.energy_save_dir_epoched / file_name)
+                data, ch_names, id,cond,label = torch.load(self.energy_save_dir_epoched / file_name)
             else:
-                data,ch_names = torch.load(self.energy_save_dir / file_name)
-            
-        assert isinstance(data, torch.Tensor)
+                data,ch_names,id,cond,label = torch.load(self.energy_save_dir / file_name)
+        
+        assert isinstance(data, torch.Tensor), "Input should be a torch.T ensor object."
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
 
-        assert isinstance(data, torch.Tensor), "Input should be a torch.Tensor object."
         assert isinstance(ch_names, list), "Input should be a list of strings."
         # for non-epoched objects
         if len(data.shape) == 2:
@@ -819,9 +820,12 @@ if __name__ == "__main__":
                           select_freq_bands=['alpha', 'delta','theta'])
     
     dataset.run_energy_parallel()
-    for file in dataset:
-        print(len(file))
+    # print(len(dataset[0]))
+    # print(dataset[0][0].shape, dataset[0][1])
+    # for data in dataset:
+    #     print(dataset[0][1])
 
-    # dataset.run_freq_permutations_parallel(save_to_disk=True)
-    # dataset.run_spatial_permutations_parallel(save_to_disk=True)
+    dataset.run_freq_permutations_parallel(save_to_disk=True)
+    dataset.run_spatial_permutations_parallel(save_to_disk=True)
+    
 

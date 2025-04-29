@@ -152,9 +152,13 @@ class TestEnergy:
                     verbose_psd=False,
                     include_bad_channels_psd=False,
                     save_to_disk=True)
-        assert energy[0][0][0].shape[0] == 26
-        assert energy[0][0][0].shape[1] == 5
-
+        assert energy[0][0].shape[0] == 26 , "Should have all channels"
+        assert energy[0][0].shape[1] == 5, "Should have all bands"
+        assert isinstance(energy[0][1], list), "Should be a list of channels"
+        assert len(energy[0][1]) == energy[0][0].shape[0],"Matrix rows != n_channels"
+        assert isinstance(energy[0][2], str), "Should be a participant Id"
+        assert isinstance(energy[0][3], str), "Should be a psychiatric indication"
+        assert isinstance(energy[0][4], str)
     @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment var iable not set")
     def test_get_energy_shape(self)-> None:
@@ -503,8 +507,8 @@ class TestEnergy:
         else:
             permutations = torch.load(save_path / perm_file_name)
         
-        input_matrix : torch.Tensor = dataset[0][0][0] #freq bands
-        ch_names : list[str] = dataset[0][0][1] # channel order info=
+        input_matrix : torch.Tensor = dataset[0][0] #freq bands
+        ch_names : list[str] = dataset[0][1] # channel order info=
 
         if test_with_random:
             # Random matrices with varying number of epochs and channels.
@@ -525,10 +529,10 @@ class TestEnergy:
             energy_files.extend(os.listdir(dataset.energy_save_dir_epoched))
             random_file = energy_files[random.randint(0,len(energy_files)-1)]
             if os.path.exists(dataset.energy_save_dir_epoched / random_file):
-                input_matrix, ch_names = torch.\
+                input_matrix, ch_names, _, _,_ = torch.\
                     load(dataset.energy_save_dir_epoched / random_file)
             else:
-                input_matrix,ch_names = torch.\
+                input_matrix,ch_names,_,_,_ = torch.\
                     load(dataset.energy_save_dir / random_file)
                 input_matrix = input_matrix.reshape(-1,*input_matrix.shape)
             output_matrix, pseudo_labels, file_name = dataset.\
