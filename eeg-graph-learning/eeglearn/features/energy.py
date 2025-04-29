@@ -237,6 +237,9 @@ class Energy(Dataset):
         assert os.path.exists(self.energy_save_dir_epoched), \
             "Energy epoched directory path invalid"
         
+        self.save_freq_perms_to_disk : bool = False
+        self.save_spatial_perms_to_disk : bool  = False
+        
         
         # Get the actual number of numpy files to process
         self.folders_and_files : list[tuple[Path, str]] = [] 
@@ -492,7 +495,6 @@ class Energy(Dataset):
                 return results
             
     def get_freq_permutation(self, data : torch.Tensor = None,
-                             save_to_disk : bool = False,
                          file_name : str = None) -> tuple[torch.Tensor,int]:
         """Get all the frequency band permutations of the data.
         
@@ -557,21 +559,21 @@ class Energy(Dataset):
                                 "Delete the energy folder in data and retry.") from \
                                 err
         assert shuffled_columns.shape == data.shape
-        if save_to_disk:
+        assert shuffled_columns.shape == data.shape,\
+                "Input and shuffled data should match"
+        assert shuffled_columns.shape[0] == len(pseudo_labels),\
+                "Should be as many pseudolabels as there are epochs"
+        if self.save_freq_perms_to_disk:
             self.perm_save_dir : Path = self.project_root /\
-                'data' / 'energy' / 'epoched_perms'
+                'data' / 'energy' / 'frequency_perms'
             self.perm_save_dir.mkdir(parents=True, exist_ok=True)
             assert os.path.exists(self.perm_save_dir),\
                 "Permutation save directory path invalid"
             
             save_path = self.perm_save_dir / f"energy_perms_{file_name}"
-            torch.save((shuffled_columns, pseudo_labels), save_path)
+            torch.save((shuffled_columns, pseudo_labels, file_name), save_path)
             assert os.path.exists(save_path),\
                 f"Data file does not exist: {save_path}"
-        assert shuffled_columns.shape == data.shape,\
-                "Input and shuffled data should match"
-        assert shuffled_columns.shape[0] == len(pseudo_labels),\
-                "Should be as many pseudolabels as there are epochs"
         return (shuffled_columns.float(),pseudo_labels, file_name) 
     
     def run_freq_permutations_parallel(self, save_to_disk : bool = False,
@@ -598,16 +600,18 @@ class Energy(Dataset):
         starmap_args = []
         max_processes = multiprocessing.cpu_count() -1
 
+        if save_to_disk:
+            self.save_freq_perms_to_disk = True
         # Files from energy_save_dir are NOT epoched
         full_length_energy_files = os.listdir(self.energy_save_dir)
         print("full len :",len(full_length_energy_files))
         for filename in full_length_energy_files:
-            starmap_args.append((None, save_to_disk, filename))
+            starmap_args.append((None,filename))
 
         # Files from energy_save_dir_epoched ARE epoched
         epoched_energy_files = os.listdir(self.energy_save_dir_epoched)
         for filename in epoched_energy_files:
-            starmap_args.append((None, save_to_disk, filename))
+            starmap_args.append((None,filename))
             
         print("epoched :",len(epoched_energy_files))
 
@@ -737,9 +741,22 @@ class Energy(Dataset):
             shuffled_data[epoch_num,:,:] = data[epoch_num,shuffled_channels,:]
         
         assert shuffled_data.shape == data.shape
+
+        if self.save_freq_perms_to_disk:
+            self.perm_save_dir : Path = self.project_root /\
+                'data' / 'energy' / 'spatial_perms'
+            self.perm_save_dir.mkdir(parents=True, exist_ok=True)
+            assert os.path.exists(self.perm_save_dir),\
+                "Permutation save directory path invalid"
+            
+            save_path = self.perm_save_dir / f"energy_perms_{file_name}"
+            torch.save((shuffled_data, pseudo_labels, file_name), save_path)
+            assert os.path.exists(save_path),\
+                f"Data file does not exist: {save_path}"
+            
         return (shuffled_data.float(), pseudo_labels, file_name)
     
-    def run_spatial_permutations_parallel(self):
+    def run_spatial_permutations_parallel(self, save_to_disk : bool = False):
         """Parallel process the energy objects to generate spatial permutations.
 
         Args:
@@ -755,6 +772,8 @@ class Energy(Dataset):
                 ] 
 
         """
+        if save_to_disk:
+            self.save_spatial_perms_to_disk = True
         energy_files : list[str] = os.listdir(self.energy_save_dir)
         energy_files.extend(os.listdir(self.energy_save_dir_epoched))
 
@@ -796,7 +815,11 @@ if __name__ == "__main__":
                           include_bad_channels_psd=True,
                           save_to_disk=True,
                           select_freq_bands=['alpha', 'delta','theta'])
-    for f in dataset.folders_and_files:
-        #print(f"f {f}")
-        out = dataset.get_energy(*f)
-        print(out[0].shape)
+    # for f in dataset.folders_and_files:
+    #     #print(f"f {f}")
+    #     out = dataset.get_energy(*f)
+    #     print(out[0].shape)
+    dataset.run_energy_parallel()
+    dataset.run_freq_permutations_parallel(save_to_disk=True)
+    dataset.run_spatial_permutations_parallel(save_to_disk=True)
+

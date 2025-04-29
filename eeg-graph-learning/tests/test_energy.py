@@ -281,8 +281,7 @@ class TestEnergy:
             if len(input_matrix.shape) == 2:
                 input_matrix = input_matrix.reshape(-1, *input_matrix.shape)
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutation(input_matrix,
-                                                                save_to_disk=True)
+                                int] = energy.get_freq_permutation(input_matrix)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_labels : int = permutations_label[1]     
       
@@ -406,7 +405,7 @@ class TestEnergy:
             dataset.run_energy_parallel()
             seed = Config.RANDOM_SEED
             results = dataset.run_freq_permutations_parallel(seed = seed,
-                                                    save_to_disk=False)
+                                                    save_to_disk=True)
 
             assert len(results) == len(dataset)
             shutil.rmtree("tests/test_data/parallel_test")
@@ -643,7 +642,7 @@ class TestEnergy:
                     
                     assert data.shape == data_iter.shape
                     assert len(labels) == len(para_labels)
-                shutil.rmtree('tests/test_data/parallel_test/energy')
+                
                 
 
 
