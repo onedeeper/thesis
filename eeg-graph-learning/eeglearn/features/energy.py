@@ -411,7 +411,7 @@ class Energy(Dataset):
                                              len(self.select_freq_bands)), \
                 "combined_energy has wrong shape"
             if self.save_to_disk:
-                torch.save((combined_energy,ch_names), self.energy_save_dir /\
+                torch.save((combined_energy.float(),ch_names), self.energy_save_dir /\
                             f"energy_{participant_id}_{condition}_{self.data_type}.pt")
             return (combined_energy.float(),ch_names)
         else:
@@ -456,7 +456,7 @@ class Energy(Dataset):
             f"{combined_energy.shape} != ({expected_shape})"
 
             if self.save_to_disk:
-                torch.save((combined_energy, ch_names), self.energy_save_dir_epoched /\
+                torch.save((combined_energy.float(), ch_names), self.energy_save_dir_epoched /\
                             f"energy_{participant_id}_{condition}_{self.data_type}.pt")
             #print(f"print {combined_energy.shape}")
             return (combined_energy.float(),ch_names)
@@ -574,7 +574,7 @@ class Energy(Dataset):
                 "Permutation save directory path invalid"
             
             save_path = self.perm_save_dir / f"energy_perms_{file_name}"
-            torch.save((shuffled_columns, pseudo_labels, file_name), save_path)
+            torch.save((shuffled_columns.float(), pseudo_labels, file_name), save_path)
             assert os.path.exists(save_path),\
                 f"Data file does not exist: {save_path}"
         return (shuffled_columns.float(),pseudo_labels, file_name) 
@@ -705,7 +705,7 @@ class Energy(Dataset):
                                                     selection=hamming_selection,
                                                     output_file_name= perms_file, 
                                                     save_to_disk=False)
-            torch.save(torch.Tensor(self.permutations), perms_path / perms_file)
+            torch.save(torch.Tensor(self.permutations).float(), perms_path / perms_file)
         else:
             #print("Loading permutations from disk..")
             self.permutations = torch.load(perms_path / perms_file) 
@@ -753,7 +753,7 @@ class Energy(Dataset):
                 "Permutation save directory path invalid"
             
             save_path = self.perm_save_dir / f"energy_perms_{file_name}"
-            torch.save((shuffled_data, pseudo_labels, file_name), save_path)
+            torch.save((shuffled_data.float(), pseudo_labels, file_name), save_path)
             assert os.path.exists(save_path),\
                 f"Data file does not exist: {save_path}"
             
