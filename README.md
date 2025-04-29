@@ -40,6 +40,7 @@ This project was built over several months.
  	 2. Realized a simple way to reduce code repetition:
       
    		1. One of the challenges in building the processing pipeline is dealing with different shapes of data for epoched and non-epoched cases. If a recording is epoched, it would be of shape (n_epochs x n_channels x ...). Otherwise, it would start with (n_channels x ...). In late april, I realized that if I simply reshape all non-epoched data to have 1 epoch dimension, I could have reduce a ton of code duplication and decisions in the code. At the moment, I am going to implement this going forward, without doing a full refactor. This change will be implemented from the get_spatial_permutations method onwards.
+	3. [Code smell](https://en.wikipedia.org/wiki/Code_smell) : In computer programming, a code smell is any characteristic in the source code of a program that possibly indicates a deeper problem (i.e., I smell that something is off). I noticed this when I had to change some things in my function code just to get some of the testing to work. This indicated that there were some flaws in the current implementation. I noticed that I was not properly handling the testing of code that relied on randomness by introducing an unnecessary branch in the production code.
 
 
 ## References
