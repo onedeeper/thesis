@@ -207,6 +207,9 @@ class Energy(Dataset):
         self.save_to_disk : bool = save_to_disk
         self.energy_plots : bool = energy_plots
         self.full_time_series : bool = full_time_series
+        self.data_type : str = "epoched"
+        if self.full_time_series:
+            self.data_type = "full"
         self.method_psd : str = method_psd
         self.fmin_psd : float = fmin_psd
         self.fmax_psd : float = fmax_psd
@@ -296,17 +299,17 @@ class Energy(Dataset):
             label = self.labels_dict[participant_id]
             if self.full_time_series:
                 energy = torch.load(self.energy_save_dir /\
-                                      f'energy_{participant_id}_{condition}.pt')
+                            f'energy_{participant_id}_{condition}_{self.data_type}.pt')
             else:
                 energy = torch.load(self.energy_save_dir_epoched /\
-                                      f'energy_{participant_id}_{condition}.pt')
+                        f'energy_{participant_id}_{condition}_{self.data_type}.pt')
             return energy, label
         except IndexError:
             print(f'Energy for {self.participant_npy_files[idx]} not found')
-            return None, None, None
+            return None, None
         except FileNotFoundError:
             print(f'Energy for {self.participant_npy_files[idx]} not found')
-            return None, None, None
+            return None, None
     
     def plot_energy(self,):
         """Plot the energy of the EEG data for a given participant."""
@@ -409,7 +412,7 @@ class Energy(Dataset):
                 "combined_energy has wrong shape"
             if self.save_to_disk:
                 torch.save((combined_energy,ch_names), self.energy_save_dir /\
-                            f"energy_{participant_id}_{condition}.pt")
+                            f"energy_{participant_id}_{condition}_{self.data_type}.pt")
             return (combined_energy.float(),ch_names)
         else:
             n_channels_included = self.n_eeg_channels - \
@@ -454,7 +457,7 @@ class Energy(Dataset):
 
             if self.save_to_disk:
                 torch.save((combined_energy, ch_names), self.energy_save_dir_epoched /\
-                            f"energy_{participant_id}_{condition}.pt")
+                            f"energy_{participant_id}_{condition}_{self.data_type}.pt")
             #print(f"print {combined_energy.shape}")
             return (combined_energy.float(),ch_names)
         
@@ -720,12 +723,12 @@ class Energy(Dataset):
             9 : ["O1","Oz", "O2"]
         }
 
-        pseudo_labels = np.random.randint(low = 1,
+        pseudo_labels : np.ndarray = np.random.randint(low = 1,
                                             high = 128,
                                             size = n_epochs)
         target_permutaions : torch.Tensor = self.permutations[pseudo_labels,:]
         shuffled_channels : list[list[int]] = []
-        shuffled_data = torch.zeros(data.shape).double()
+        shuffled_data : torch.Tensor = torch.zeros(data.shape).double()
 
         for epoch_num, epoch_permutation in enumerate(target_permutaions): 
             shuffled_channels : list[int] = []
@@ -796,8 +799,7 @@ class Energy(Dataset):
         print(f"Finished processing {len(results)} permutations.")
         assert len(results) == len(energy_files),\
             "Expected numer of permutations results not generated."
-        return results
-        
+        return results        
 
 if __name__ == "__main__":
     # Set seed for reproducibility or testing different runs
@@ -815,11 +817,11 @@ if __name__ == "__main__":
                           include_bad_channels_psd=True,
                           save_to_disk=True,
                           select_freq_bands=['alpha', 'delta','theta'])
-    # for f in dataset.folders_and_files:
-    #     #print(f"f {f}")
-    #     out = dataset.get_energy(*f)
-    #     print(out[0].shape)
+    
     dataset.run_energy_parallel()
-    dataset.run_freq_permutations_parallel(save_to_disk=True)
-    dataset.run_spatial_permutations_parallel(save_to_disk=True)
+    for file in dataset:
+        print(len(file))
+
+    # dataset.run_freq_permutations_parallel(save_to_disk=True)
+    # dataset.run_spatial_permutations_parallel(save_to_disk=True)
 

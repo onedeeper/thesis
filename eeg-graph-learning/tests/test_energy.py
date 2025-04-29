@@ -144,12 +144,14 @@ class TestEnergy:
     def test_get_energy_item(self)-> None:
         """Tests if the __getitem__method returns a processed energy object."""
         # Initialize Energy with the test directory
+
         energy : Energy = Energy(cleaned_path=self.test_dir,
                     select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
                     full_time_series=True,
                     energy_plots=False,
                     verbose_psd=False,
-                    include_bad_channels_psd=False)
+                    include_bad_channels_psd=False,
+                    save_to_disk=True)
         assert energy[0][0][0].shape[0] == 26
         assert energy[0][0][0].shape[1] == 5
 
@@ -451,7 +453,6 @@ class TestEnergy:
         
         self.helper_get_permutations(dataset,save_path)
         self.helper_get_permutations(dataset, save_path, test_file_loading=True)
-
         # Epoched time series
         dataset : Energy = Energy(cleaned_path=cleaned_path,
                         full_time_series=False,
@@ -529,7 +530,7 @@ class TestEnergy:
             else:
                 input_matrix,ch_names = torch.\
                     load(dataset.energy_save_dir / random_file)
-
+                input_matrix = input_matrix.reshape(-1,*input_matrix.shape)
             output_matrix, pseudo_labels, file_name = dataset.\
                     get_spatial_permutation(file_name=random_file)
         else:
@@ -642,9 +643,4 @@ class TestEnergy:
                     
                     assert data.shape == data_iter.shape
                     assert len(labels) == len(para_labels)
-                
-                
-
-
-                
 

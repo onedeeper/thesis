@@ -67,7 +67,7 @@ if __name__ == '__main__':
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal
     plots = True # set to True to create and store plots during preprocessing
     n_processes = 4 # number of processes to use for parallel processing
-    num_samples = 4 # number of samples to process, set to 0 for all samples
+    num_samples = 10 # number of samples to process, set to 0 for all samples
     clean_pipeline(derivates_dir = derivates_dir,
                         preprocessed_dir = preprocessed_dir,
                         sfreq = sfreq,
