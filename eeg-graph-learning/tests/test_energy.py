@@ -11,6 +11,7 @@ This module contains test cases for the Energy class and its functionality inclu
 import os
 import pickle
 import random
+import shutil
 import tempfile
 from itertools import permutations
 from pathlib import Path
@@ -23,9 +24,6 @@ from eeglearn.config import Config
 from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set
-from unittest.mock import patch
-import multiprocessing
-import shutil
 
 #Config.RANDOM_SEED = 1223333
 Config.set_global_seed()
@@ -253,7 +251,20 @@ class TestEnergy:
     def helper_frequency_shuffle(self, energy : Energy, temp_dir : Path,
                                  participant: str,
                                  file_name) -> None:
-        """ Helper function for frequency shuffling testing"""
+        """Generate test permutations for frequency shuffling testing.
+        
+        Args:
+        ----
+            energy : Energy object with all the necessary methods to run the test
+            temp_dir : Temporary directory to save generated permutations
+            participant : participant Id 
+            file_name : The test file name to be loaded.
+
+        Returns:
+        -------
+            None
+
+        """
         band_position : dict = {band : i for i, band \
                                     in enumerate(energy.select_freq_bands)}
             
@@ -469,6 +480,7 @@ class TestEnergy:
             dataset : Energy object containing the information about the dataset
                       and the necessary methods.
             save_path : path to load the saved permutations data
+            test_file_loading : Test to make sure the file loading works as expected.
             
         Returns:
         -------
@@ -565,10 +577,7 @@ class TestEnergy:
                     "Expected permutation has not been applied."
     
     def test_run_spatial_perms_parallel(self, monkeypatch) -> None:
-            """
-            Test if the permutations generated in parallel are as expected
-            """
-
+            """Test if the permutations generated in parallel are as expected."""
             # set up the necessary resources.
             project_root : Path = Path(__file__).resolve().parent.parent.parent
         
@@ -608,9 +617,7 @@ class TestEnergy:
                 dataset.energy_save_dir = test_data_dir / 'energy'
                 dataset.run_energy_parallel()
                 results = dataset.run_spatial_permutations_parallel()
-                parallel_results : dict[str,list] = {file_name : labels for 
-                                                    _,labels,file_name in \
-                                                                            results}
+               
                 seed = 42
                 ctr = 0
                 for data, para_labels, file_name in results:

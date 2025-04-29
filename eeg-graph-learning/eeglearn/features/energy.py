@@ -196,18 +196,11 @@ class Energy(Dataset):
                 "Invalid frequency band."
             self.select_freq_bands = select_freq_bands
         
-        # # get the position in the order of each band
-        # ordered_bands = [(band,self.all_freq_bands[band][1]) for\
-        #                   band in self.select_freq_bands]
-        # # get the band names in this order
-        # self.select_freq_bands : list[str] = [band[0] for band in sorted(ordered_bands,\
-        #                                               key = lambda x : x[1])]
-        
         assert len(self.select_freq_bands) == len(select_freq_bands),\
             "Requested bands and reorderd bands differ in length"
         self.include_bad_channels_psd : bool = include_bad_channels_psd
         if include_bad_channels_psd:
-            assert isinstance(include_bad_channels_psd, bool), \
+            assert isinstance(include_bad_channels_psd, bool),\
                 "include_bad_channels_psd must be a bool"
             self.include_bad_channels_psd : bool = include_bad_channels_psd
         self.ran_energy : bool = False  
@@ -586,17 +579,17 @@ class Energy(Dataset):
         """Compute band energy permutations for all files in parallel.
 
         Uses unique random seeds for each worker.
-
         It uses the get_permutaion method for individual
         file processing and uses a process pool to distribute the workload.
 
         Args:
         ----
-            None
+            save_to_disk (bool): Whether to save the permutations to disk.
+            seed (int, optional): Seed value for reproducible permutations.
+                If None, uses system-based random seed.
 
         Returns:
         -------
-            None : if saved to disk
             list : List of permutations for each energy matrix
 
         NOTE: Problem with sending multiple arguments to starmap solved with AI
@@ -807,18 +800,3 @@ if __name__ == "__main__":
         #print(f"f {f}")
         out = dataset.get_energy(*f)
         print(out[0].shape)
-    #files = dataset.run_energy_parallel()
-    #print(dataset[0][0])
-    #results = dataset.run_freq_permutations_parallel()
-    # for result in results:
-    #     print(result.shape)
-    # print(results[0][0].shape, results[0][1], results[0][2])
-    # for data, label, file_name in results:
-    #     print(file_name, label)
-    # for energy_data in dataset:
-    #     print(len(energy_data[0][1]))
-    #     spatial_perm = dataset.get_spatial_permutation(energy_data[0][0],
-    #                                                    energy_data[0][1])
-    # results = dataset.run_spatial_permutations_parallel()
-    # for result, label, file_name ,in results:
-    #     print(result[0].shape, len(label))
