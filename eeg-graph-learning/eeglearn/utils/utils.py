@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 import torch
-
+from eeglearn.preprocess.preprocessing import Preproccesing
 def get_participant_id_condition_from_string(file_path: str) -> tuple[str, str]:
     """Extract the participant ID and condition from the file path.
     
@@ -172,3 +172,25 @@ def hamming_set(n_regions : int,
         torch.save(f'max_hamming_set_{n_regions}_{n_permutations}.pt', torch.Tensor\
                                                                         (collection))
     return collection
+
+def load_preprocessed_data(folder_path : Path , file_name : str) -> Preproccesing:
+    """Load a preprocesed file.
+
+    Args:
+    ----
+        folder_path : Full folder information leadning to a Preprocessing object
+        file_name : A file name which includes information about the participant,
+                    session, and condition.
+        
+    Returns:
+    -------
+        Preprocessing : All the details relevant to a given participant file after
+                        compeleting the preprocessing pipeline.
+    """
+    try:
+        data : Preproccesing = np.load(folder_path / file_name, allow_pickle=True)
+    except FileNotFoundError:
+        print(f'File {file_name} not found')
+        return None, None, None
+    assert isinstance(data, Preproccesing), "data is not a Preproccesing object"
+    return data
