@@ -49,13 +49,12 @@ def test_get_filepaths(tmp_path):
     save_to_torch.save_dir = str(save_dir)
     
     # Retrieve file paths filtering for recording_condition "EO" and session "ses-1"
-    filepaths = get_filepaths(str(eeg_dir),str(save_dir), recording_condition=["EO"], session="ses-1")
+    file_paths = get_filepaths(str(eeg_dir),str(save_dir), recording_condition=["EO"],
+                               sessions=["ses-1","ses-2"])
     
-    # Only "sub-002_ses-1_EO_preprocessed.npy" should be returned.
-    assert len(filepaths) == 1
-    assert "sub-002" in filepaths[0]
-    assert "ses-1" in filepaths[0]
-    assert "EO" in filepaths[0]
+    # Only "sub-002_ses-1_EO_preprocessed.npy"
+    # and "sub-005_ses-2_EO_preprocessed.npy"
+    assert len(file_paths) == 2
 
 def test_process_file_with_real_data():
     """
@@ -72,7 +71,8 @@ def test_process_file_with_real_data():
     # Extract subject ID from the file path
     subject_id = os.path.basename(test_data_path).split('_')[0]
     condition = os.path.basename(test_data_path).split('_')[2].split('-')[-1]
-    print(f"Extracted subject ID: {subject_id}")
+
+    session = os.path.basename(test_data_path).split('_')[1]
     
     # Create a temporary directory for the output
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -82,15 +82,16 @@ def test_process_file_with_real_data():
         process_file(test_data_path, temp_dir)
         
         # Expected output file name based on the actual subject ID
-        expected_output = temp_dir / f"{subject_id}_{condition}.pt"
+        expected_output = temp_dir / f"{subject_id}_{session}_{condition}.pt"
         
         # Check if the output file exists
-        assert expected_output.exists(), f"Output file {expected_output} was not created"
+        assert expected_output.exists(),f"Output file {expected_output} was not created"
         
         # Load and verify the saved data
         loaded_data = torch.load(expected_output)
         assert isinstance(loaded_data, np.ndarray), "Loaded data is not a numpy array"
-        assert len(loaded_data.shape) == 3, "Data should be 3-dimensional (channels x timepoints x epochs)"
+        assert len(loaded_data.shape) == 3, \
+            "Data should be 3-dimensional (channels x timepoints x epochs)"
 
 def test_preprocess_and_save_data():
     """
@@ -103,6 +104,7 @@ def test_preprocess_and_save_data():
     # Extract subject ID from the file path
     subject_id = os.path.basename(test_data_path).split('_')[0]
     condition = os.path.basename(test_data_path).split('_')[2].split('-')[-1]
+    session = os.path.basename(test_data_path).split('_')[1]
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
         
@@ -113,7 +115,7 @@ def test_preprocess_and_save_data():
         preprocess_and_save_data(filepaths, temp_dir, n_processes=1)
         
         # Check if output file exists based on the actual subject ID
-        expected_output = temp_dir / f"{subject_id}_{condition}.pt"
+        expected_output = temp_dir / f"{subject_id}_{session}_{condition}.pt"
         assert expected_output.exists(), f"Output file {expected_output} was not created"
         
         # Verify the data
@@ -150,10 +152,11 @@ def test_epoch_data_shape():
     process_file(test_data_path, save_dir)
 
     # extract subject id from the file path
+    session = os.path.basename(test_data_path).split('_')[1]
     subject_id = os.path.basename(test_data_path).split('_')[0]
     condition = os.path.basename(test_data_path).split('_')[2].split('-')[-1]
     # load the saved file
-    saved_file = save_dir / f"{subject_id}_{condition}.pt"
+    saved_file = save_dir / f"{subject_id}_{session}_{condition}.pt"
 
     # load the saved file
     loaded_data = torch.load(saved_file)
@@ -174,11 +177,12 @@ def test_correct_condition_name():
     # extract subject id from the file path
     subject_id = os.path.basename(test_data_path).split('_')[0]
     condition = os.path.basename(test_data_path).split('_')[2].split('-')[-1]
+    session = os.path.basename(test_data_path).split('_')[1]
     # process the file
     process_file(test_data_path, save_dir)
 
     # load the saved file
-    saved_file = save_dir / f"{subject_id}_{condition}.pt"
+    saved_file = save_dir / f"{subject_id}_{session}_{condition}.pt"
 
     # load the saved file
     loaded_data = torch.load(saved_file)

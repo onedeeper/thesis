@@ -314,8 +314,7 @@ class Energy(Dataset):
         """Plot the energy of the EEG data for a given participant."""
         pass
 
-    def get_energy(self, folder_path:  Path, file_name: str) -> tuple[torch.Tensor,
-                                                                      list[str]]:
+    def get_energy(self, folder_path: Path, file_name: str) -> tuple[torch.Tensor, list[str]]:
         """Compute the energy of the EEG data for one file.
 
         Args:
@@ -326,21 +325,29 @@ class Energy(Dataset):
         Returns:
         -------
             tuple: Contains:
-                - torch.Tensor: The energy of the EEG data, with shape:
-                  - For full_time_series=True: (n_channels, n_bands)
-                  - For full_time_series=False: (n_epochs, n_channels, n_bands)
-                - list[str]: Channel names corresponding to the rows in the energ
-                             matrix.
+                - combined_energy (torch.Tensor): Energy tensor with shape
+                  • full_time_series=True: (n_channels, n_bands)
+                  • full_time_series=False: (n_epochs, n_channels, n_bands)
+                - ch_names (list[str]): Channel names corresponding to the tensor dimensions
+                - participant_id (str): Identifier of the participant parsed from file_name
+                - condition (str): Experimental condition parsed from file_name
+                - label (str): Participant label looked up from labels_dict
+
+        Saves:
+        ------
+            If save_to_disk is True, saves the tuple
+            (combined_energy, ch_names, participant_id, condition, label) to:
+                - self.energy_save_dir/
+                  "energy_{participant_id}_{condition}_{self.data_type}.pt"
+                  when full_time_series=True
+                - self.energy_save_dir_epoched/
+                  "energy_{participant_id}_{condition}_{self.data_type}.pt"
+                  when full_time_series=False
 
         Notes:
         -----
-            - For full time series, computes energy across all frequency bands and 
-                returns a matrix of shape (n_channels, n_bands).
-            - For epoched data, computes energy for each epoch and returns a tensor of
-              shape (n_epochs, n_channels, n_bands).
-            - If save_to_disk is True, saves the energy data to disk in the appropriate
-              directory (energy_save_dir or energy_save_dir_epoched).
-
+            - For full time series, computes energy over all selected bands.
+            - For epoched data, computes energy for each epoch over selected bands.
         """
         participant_id : str
         condition : str
