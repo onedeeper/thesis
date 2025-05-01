@@ -832,8 +832,7 @@ if __name__ == "__main__":
                           verbose_psd=False,
                           picks_psd = ['eeg'],
                           include_bad_channels_psd=True,
-                          save_to_disk=True,
-                          select_freq_bands=['alpha', 'delta','theta'])
+                          save_to_disk=True)
     
     dataset.run_energy_parallel()
     # print(len(dataset[0]))
