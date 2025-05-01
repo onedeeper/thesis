@@ -138,6 +138,7 @@ class Energy(Dataset):
                  include_bad_channels_psd : bool = True,
                  proj_psd : bool = False, 
                  verbose_psd : bool = False,
+                 work_dir: str | None = None
                  ) -> None:
         """Dataset class for computing and loading energy features from EEG data.
 
@@ -149,25 +150,28 @@ class Energy(Dataset):
 
         Args:
         ----
-            cleaned_path (str): Path to the cleaned data.
-            select_freq_bands (list[str]): List of frequency bands.
-            save_to_disk (bool): Whether to save the energy to disk.
-            get_labels (bool): Whether to get the labels.
-            plots (bool): Whether to plot the energy.
-            verbose (bool): Whether to print verbose output.
-            full_time_series (bool): Whether to use the full time series.
-            method_psd (str): Method to use for PSD computation.
-            fmin_psd (float): Minimum frequency for PSD computation.
-            fmax_psd (float): Maximum frequency for PSD computation.
-            tmax_psd (float): Maximum time for PSD computation.
-            picks_psd (list[str]): List of channels to compute the energy for.
-            energy_plots (bool): Whether to plot the energy.
-            proj_psd (bool): Whether to project the PSD.
-            verbose_psd (bool): Whether to print verbose output.
+            cleaned_path : Path to the cleaned data.
+            select_freq_bands : List of frequency bands.
+            save_to_disk : Whether to save the energy to disk.
+            get_labels : Whether to get the labels.
+            plots : Whether to plot the energy.
+            verbose : Whether to print verbose output.
+            full_time_series : Whether to use the full time series.
+            method_psd : Method to use for PSD computation.
+            fmin_psd: Minimum frequency for PSD computation.
+            fmax_psd : Maximum frequency for PSD computation.
+            tmax_psd : Maximum time for PSD computation.
+            picks_psd : List of channels to compute the energy for.
+            energy_plots : Whether to plot the energy.
+            proj_psd : Whether to project the PSD.
+            verbose_psd: Whether to print verbose output.
             include_bad_channels_psd (bool): Whether to include bad
               channels in the PSD computation.
+            work_dir : A working directory to where all generated data will be saved
+                       defaults to the root directory of this repo.
 
         """
+        Config.set_global_seed(verbose=False)
         self.channel_names: list[str] =  ['Fp1', 'Fp2', 'F7', 
                                'F3', 'Fz', 'F4', 
                                'F8', 'FC3', 'FCz', 
@@ -222,9 +226,13 @@ class Energy(Dataset):
         assert self.labels_dict is not None, "labels_dict is None"
         self.verbose_psd : bool = verbose_psd
 
-        self.project_root : Path = Path(__file__).resolve().parent.parent.parent
-        assert self.project_root.name == \
+        if work_dir is None:
+            self.project_root : Path = Path(__file__).resolve().parent.parent.parent
+            assert self.project_root.name == \
             'eeg-graph-learning',"project_root is not eeg-graph-learning"
+        else:
+            self.project_root = Path(work_dir).expanduser().resolve()
+        
         
         self.plot_save_dir : Path = self.project_root / 'data' / 'energy' / 'plots'
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
@@ -616,6 +624,7 @@ class Energy(Dataset):
             self.save_freq_perms_to_disk = True
         # Files from energy_save_dir are NOT epoched
         full_length_energy_files = os.listdir(self.energy_save_dir)
+        print(f"energy save dir : {self.energy_save_dir}")
         print("full len :",len(full_length_energy_files))
         for filename in full_length_energy_files:
             starmap_args.append((None,filename))

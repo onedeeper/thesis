@@ -278,9 +278,7 @@ def clean_pipeline(derivates_dir : str,preprocessed_dir : str,
                                               line_noise, sfreq, plots)
         n_files_expected : int = \
               n_subjs_left_to_process * len(sessions) * len(conditions)
-        assert len(files_to_process) == n_files_expected, \
-            "Total number of CSVS not as expected"
-    
+        
     with Pool(processes=n_processes) as pool:
         list(tqdm(pool.imap(process_file, files_to_process), 
                            total=len(files_to_process), 

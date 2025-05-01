@@ -23,8 +23,8 @@ import torch
 from eeglearn.config import Config
 from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set
-
+from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set,\
+    get_cleaned_data_paths
 #Config.RANDOM_SEED = 1223333
 Config.set_global_seed()
 
@@ -44,7 +44,7 @@ class TestEnergy:
     """
 
     @pytest.fixture(autouse = True)
-    def setup(self):
+    def setup(self, monkeypatch):
         """Create necessary objects to be used later in testing.
         
         Args:
@@ -92,34 +92,36 @@ class TestEnergy:
                    (self.set_from_regions_dict))== 0,\
             "Not all defined channels from data are in the regions"
         
-
     @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
     def test_get_energy_initialization(self) -> None:
         """Test Energy class initialization with test data."""
         # Initialize Energy with the test directory
-        energy : Energy = Energy(cleaned_path=self.test_dir,
-                    select_freq_bands=['delta', 'theta', 'beta', 'gamma'],
-                    energy_plots=False,
-                    include_bad_channels_psd=True)
-        
-        # Check that initialization correctly set attributes
-        assert energy.cleaned_path == self.test_dir
-        assert len(energy.select_freq_bands) ==4  # Should have 5 frequency bands
-        assert energy.include_bad_channels_psd is True
-        assert len(energy.participant_npy_files) > 0
+        with tempfile.TemporaryDirectory() as temp_dir:
+            energy : Energy = Energy(cleaned_path=self.test_dir,
+                        select_freq_bands=['delta', 'theta', 'beta', 'gamma'],
+                        energy_plots=False,
+                        include_bad_channels_psd=True,
+                        work_dir=temp_dir)
+            
+            # Check that initialization correctly set attributes
+            assert energy.cleaned_path == self.test_dir
+            assert len(energy.select_freq_bands) ==4  # Should have 5 frequency bands
+            assert energy.include_bad_channels_psd is True
+            assert len(energy.participant_npy_files) > 0
 
-        # test with bands = None
-        # Initialize Energy with the test directory
-        energy : Energy = Energy(cleaned_path=self.test_dir,
-                    select_freq_bands=None,
-                    energy_plots=False,  
-                    include_bad_channels_psd=True)
-        
-        assert energy.cleaned_path == self.test_dir
-        assert len(energy.select_freq_bands) == 5  # Should have 5 frequency bands
-        assert energy.include_bad_channels_psd is True
-        assert len(energy.participant_npy_files) > 0
+            # test with bands = None
+            # Initialize Energy with the test directory
+            energy : Energy = Energy(cleaned_path=self.test_dir,
+                        select_freq_bands=None,
+                        energy_plots=False,  
+                        include_bad_channels_psd=True,
+                        work_dir=temp_dir)
+            
+            assert energy.cleaned_path == self.test_dir
+            assert len(energy.select_freq_bands) == 5  # Should have 5 frequency bands
+            assert energy.include_bad_channels_psd is True
+            assert len(energy.participant_npy_files) > 0
 
 
 
@@ -131,12 +133,14 @@ class TestEnergy:
         This wil eventually be the number of energy objects generated. 
         """
         # Initialize Energy with the test directory
-        energy : Energy = Energy(cleaned_path=self.test_dir,
-                    select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
-                    full_time_series=True,
-                    energy_plots=False,
-                    include_bad_channels_psd=False)
-        assert len(energy) > 0, "No files found"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            energy : Energy = Energy(cleaned_path=self.test_dir,
+                        select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
+                        full_time_series=True,
+                        energy_plots=False,
+                        include_bad_channels_psd=False,
+                        work_dir=temp_dir)
+            assert len(energy) > 0, "No files found"
 
 
     @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
@@ -144,67 +148,71 @@ class TestEnergy:
     def test_get_energy_item(self)-> None:
         """Tests if the __getitem__method returns a processed energy object."""
         # Initialize Energy with the test directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            energy : Energy = Energy(cleaned_path=self.test_dir,
+                        select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
+                        full_time_series=True,
+                        energy_plots=False,
+                        verbose_psd=False,
+                        include_bad_channels_psd=False,
+                        save_to_disk=True,
+                        work_dir=temp_dir)
+            assert energy[0][0].shape[0] == 26 , "Should have all channels"
+            assert energy[0][0].shape[1] == 5, "Should have all bands"
+            assert isinstance(energy[0][1], list), "Should be a list of channels"
+            assert len(energy[0][1]) == energy[0][0].shape[0],"Matrix rows != n_channels"
+            assert isinstance(energy[0][2], str), "Should be a participant Id"
+            assert isinstance(energy[0][3], str), "Should be a psychiatric indication"
+            assert isinstance(energy[0][4], str)
 
-        energy : Energy = Energy(cleaned_path=self.test_dir,
-                    select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
-                    full_time_series=True,
-                    energy_plots=False,
-                    verbose_psd=False,
-                    include_bad_channels_psd=False,
-                    save_to_disk=True)
-        assert energy[0][0].shape[0] == 26 , "Should have all channels"
-        assert energy[0][0].shape[1] == 5, "Should have all bands"
-        assert isinstance(energy[0][1], list), "Should be a list of channels"
-        assert len(energy[0][1]) == energy[0][0].shape[0],"Matrix rows != n_channels"
-        assert isinstance(energy[0][2], str), "Should be a participant Id"
-        assert isinstance(energy[0][3], str), "Should be a psychiatric indication"
-        assert isinstance(energy[0][4], str)
     @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment var iable not set")
     def test_get_energy_shape(self)-> None:
         """Test that get_energy returns the correct shape of energy matrix."""
         # Get path from environment variable
-        
-        # Initialize Energy with the test directory
-        energy = Energy(cleaned_path=self.test_dir,
-                    select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
-                    full_time_series=True,
-                    energy_plots=False,
-                    verbose_psd=False,
-                    include_bad_channels_psd=True)
-        
-        # Skip if no files
-        if len(energy.participant_npy_files) == 0:
-            pytest.skip("No .npy files found in the test directory")
-        
-        # Get energy for the first file
-        folder_path : Path
-        file_name : str 
-        folder_path, file_name = energy.folders_and_files[0]
-        band_details : tuple[torch.Tensor, list[str]] = energy.get_energy(folder_path, 
-                                                                        file_name)
-        band_matrix : torch.Tensor = band_details[0]
-        # Check shape: should be (n_channels, n_select_freq_bands)
-        assert isinstance(band_matrix, torch.Tensor),\
-            "Energy matrix should be a torch.Tensor"
-        assert band_matrix.shape[1] == len(energy.select_freq_bands), \
-            "Should have 5 frequency bands"
-        assert band_matrix.shape[0] > 0, "Should have at least one channel"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Initialize Energy with the test directory
+            energy = Energy(cleaned_path=self.test_dir,
+                        select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
+                        full_time_series=True,
+                        energy_plots=False,
+                        verbose_psd=False,
+                        include_bad_channels_psd=True,
+                        work_dir=temp_dir)
+            
+            # Skip if no files
+            if len(energy.participant_npy_files) == 0:
+                pytest.skip("No .npy files found in the test directory")
+            
+            # Get energy for the first file
+            folder_path : Path
+            file_name : str 
+            folder_path, file_name = energy.folders_and_files[0]
+            band_details : tuple[torch.Tensor, list[str]] = energy.get_energy(folder_path, 
+                                                                            file_name)
+            band_matrix : torch.Tensor = band_details[0]
+            # Check shape: should be (n_channels, n_select_freq_bands)
+            assert isinstance(band_matrix, torch.Tensor),\
+                "Energy matrix should be a torch.Tensor"
+            assert band_matrix.shape[1] == len(energy.select_freq_bands), \
+                "Should have 5 frequency bands"
+            assert band_matrix.shape[0] > 0, "Should have at least one channel"
 
-        # Test epoched energy
-        energy = Energy(cleaned_path=self.test_dir,
-                    select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
-                    full_time_series=False,
-                    energy_plots=False,
-                    verbose_psd=False,
-                    include_bad_channels_psd=True)
-        band_details = energy.get_energy(folder_path, file_name)
-        band_matrix =  band_details[0]
-        assert isinstance(band_matrix, torch.Tensor), \
-            "Energy matrix should be a torch.Tensor"
-        assert band_matrix.shape[2] == len(energy.select_freq_bands), \
-            f"Should have {len(energy.select_freq_bands)} frequency bands"
-        assert band_matrix.shape[1] > 0, "Should have at least one channel"
+            # Test epoched energy
+            energy = Energy(cleaned_path=self.test_dir,
+                        select_freq_bands=['delta', 'theta', 'alpha', 'beta', 'gamma'],
+                        full_time_series=False,
+                        energy_plots=False,
+                        verbose_psd=False,
+                        include_bad_channels_psd=True,
+                        work_dir=temp_dir)
+            band_details = energy.get_energy(folder_path, file_name)
+            band_matrix =  band_details[0]
+            assert isinstance(band_matrix, torch.Tensor), \
+                "Energy matrix should be a torch.Tensor"
+            assert band_matrix.shape[2] == len(energy.select_freq_bands), \
+                f"Should have {len(energy.select_freq_bands)} frequency bands"
+            assert band_matrix.shape[1] > 0, "Should have at least one channel"
 
     @pytest.mark.skipif(not os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH'), 
                     reason="EEG_TEST_CLEANED_FOLDER_PATH environment variable not set")
@@ -212,38 +220,41 @@ class TestEnergy:
         """Test that get_energy returns valid energy values."""
         dir_path : str = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
         bands : list[str] = ['delta', 'theta', 'alpha', 'beta', 'gamma'] 
-
-        # test everything with a few different random band configurations
-        for _ in range(10):
-            # test with full time series , bad channels included
-            random_n_bands : list[str] = bands[:random.randint(1,4)]
-            energy = Energy(cleaned_path=dir_path,
-                        select_freq_bands= random_n_bands,
-                        full_time_series= True,
-                        energy_plots=False,
-                        verbose_psd=False,
-                        include_bad_channels_psd=True)
-            
-            band_details : tuple[torch.Tensor, list[str]] =  energy.get_energy\
-                                                    (folder_path=Path(dir_path) \
-                                    / "sub-19740274" / "ses-1" / "eeg" ,
-                                    file_name= TEST_FILE)
-            
-            energy_data_ordered  = band_details[0]
-            
-            assert isinstance(energy_data_ordered,torch.Tensor),\
-                "Should be a torch tensor"
-            assert energy_data_ordered.shape[0] ==  26
-            assert energy_data_ordered.shape[1] == len(random_n_bands)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # test everything with a few different random band configurations
+            for _ in range(10):
+                # test with full time series , bad channels included
+                random_n_bands : list[str] = bands[:random.randint(1,4)]
+                energy = Energy(cleaned_path=dir_path,
+                            select_freq_bands= random_n_bands,
+                            full_time_series= True,
+                            energy_plots=False,
+                            verbose_psd=False,
+                            include_bad_channels_psd=True,
+                            work_dir=temp_dir)
+                
+                band_details : tuple[torch.Tensor, list[str]] =  energy.get_energy\
+                                                        (folder_path=Path(dir_path) \
+                                        / "sub-19740274" / "ses-1" / "eeg" ,
+                                        file_name= TEST_FILE)
+                
+                energy_data_ordered  = band_details[0]
+                
+                assert isinstance(energy_data_ordered,torch.Tensor),\
+                    "Should be a torch tensor"
+                assert energy_data_ordered.shape[0] ==  26
+                assert energy_data_ordered.shape[1] == len(random_n_bands)
 
     def test_parallel_returns(self) -> None:
         """Test that the parallel method returns the correct number of files."""
         dir_path : str = os.environ.get('EEG_TEST_CLEANED_FOLDER_PATH')
-        energy : Energy = Energy(cleaned_path=dir_path,
+        with tempfile.TemporaryDirectory() as temp_dir:
+            energy : Energy = Energy(cleaned_path=dir_path,
                                 select_freq_bands=['delta', 'theta',
                                                     'alpha', 'beta', 'gamma'],
                                 full_time_series=True,
-                                save_to_disk=False)
+                                save_to_disk=False,
+                                work_dir=temp_dir)
         files = energy.run_energy_parallel()
         assert len(files) == 1
 
@@ -314,7 +325,8 @@ class TestEnergy:
             print(f"Created temporary directory at: {temp_dir}")
             temp_dir : Path = Path(temp_dir) / "cleaned"
             temp_dir.mkdir(parents=True,  exist_ok = True)
-            
+            work_dir : Path = Path(temp_dir) / "work"
+            work_dir.mkdir(parents=True,  exist_ok = True)
             # hard set a bad channel and save it
             preprocessed.preprocessed_raw.info['bads'] = ["F7", "Fp1"]
             preprocessed.preprocessed_epochs.info['bads'] = ["F7", "Fp1"]
@@ -332,7 +344,8 @@ class TestEnergy:
                                 select_freq_bands=test_bands,
                                 full_time_series=True,
                                 save_to_disk=False,
-                                include_bad_channels_psd=False)
+                                include_bad_channels_psd=False,
+                                work_dir=work_dir)
             self.helper_frequency_shuffle(energy,temp_dir,participant,file_name)
             
             # Test with full time series bad channels included
@@ -341,7 +354,8 @@ class TestEnergy:
                                 select_freq_bands=test_bands,
                                 full_time_series=True,
                                 save_to_disk=False,
-                                include_bad_channels_psd=True)
+                                include_bad_channels_psd=True,
+                                work_dir=work_dir)
             self.helper_frequency_shuffle(energy,temp_dir,participant, file_name)
             
             # Test with epoched time series with bad channels excluded
@@ -351,7 +365,8 @@ class TestEnergy:
                                             select_freq_bands=test_bands,
                                             full_time_series=False,
                                             save_to_disk=False,
-                                            include_bad_channels_psd=False)
+                                            include_bad_channels_psd=False,
+                                            work_dir=work_dir)
             self.helper_frequency_shuffle(energy,temp_dir,participant,file_name)
 
             # Test with epoched time series with bad channels included
@@ -360,7 +375,8 @@ class TestEnergy:
                                             select_freq_bands=test_bands,
                                             full_time_series=False,
                                             save_to_disk=False,
-                                            include_bad_channels_psd=True)
+                                            include_bad_channels_psd=True,
+                                            work_dir=work_dir)
             self.helper_frequency_shuffle(energy,temp_dir,participant, file_name)
 
 
@@ -373,11 +389,9 @@ class TestEnergy:
             "parallel_test" / "energy"
         test_data_dir.mkdir(parents=True,exist_ok=True)
 
-        cleaned_path = \
-            Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
-            'data' / 'cleaned'
-        
-        dataset_full = Energy(cleaned_path=cleaned_path,
+        cleaned_path = os.environ.get("EEG_TEST_CLEANED_FOLDER_PATH")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dataset_full = Energy(cleaned_path=cleaned_path,
                         full_time_series=True,
                             energy_plots=True,
                             verbose_psd=False,
@@ -385,7 +399,8 @@ class TestEnergy:
                             include_bad_channels_psd=True,
                             save_to_disk=True,
                             select_freq_bands=['gamma', 'delta',
-                                                'theta','alpha','beta']) 
+                                                'theta','alpha','beta'],
+                            work_dir=temp_dir)
         
         dataset_epoched = Energy(cleaned_path=cleaned_path,
                         full_time_series=False,
@@ -395,7 +410,8 @@ class TestEnergy:
                             include_bad_channels_psd=True,
                             save_to_disk=True,
                             select_freq_bands=['gamma', 'delta',
-                                                'theta','alpha','beta']) 
+                                                'theta','alpha','beta'],
+                            work_dir=temp_dir)
         
         datasets : list[Energy] = [dataset_full, dataset_epoched]
 
@@ -405,9 +421,11 @@ class TestEnergy:
             # setting full length directory to be empty for testing purposes
             # This is because run_get_permutations_parallel() handles both epoched
             # and full timeseries data together.
+            dataset.cleaned_path = cleaned_path
             dataset.energy_save_dir= test_data_dir / 'energy_full'
             dataset.energy_save_dir.mkdir(parents=True, exist_ok= True)
-
+            dataset.folders_and_files, _ = \
+                        get_cleaned_data_paths(dataset.participant_list, dataset.cleaned_path)
             dataset.run_energy_parallel()
             seed = Config.RANDOM_SEED
             results = dataset.run_freq_permutations_parallel(seed = seed,
@@ -437,38 +455,41 @@ class TestEnergy:
               "test_data"/ "parallel_test"
         test_data_dir.mkdir(parents=True,exist_ok=True)
 
-        cleaned_path = Path(__file__).resolve().parent.parent.parent /\
-            "eeg-graph-learning"/\
-            'data' / 'cleaned'
+        cleaned_path = os.environ.get("EEG_TEST_CLEANED_FOLDER_PATH")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_dir : Path = Path(temp_dir) / "work"
+            work_dir.mkdir(parents=True,  exist_ok = True)
         
-        # Full time series
-        dataset : Energy = Energy(cleaned_path=cleaned_path,
-                        full_time_series=True,
-                            energy_plots=True,
-                            verbose_psd=False,
-                            picks_psd = ['eeg'],
-                            include_bad_channels_psd=True,
-                            save_to_disk=True,
-                            select_freq_bands=['gamma', 'delta', 'theta','alpha',
-                                               'beta'])
-        
-        save_path : Path = Path(__file__).resolve().parent.parent.parent /\
-                    "eeg-graph-learning" / "tests" / "test_data"
-        
-        self.helper_get_permutations(dataset,save_path)
-        self.helper_get_permutations(dataset, save_path, test_file_loading=True)
-        # Epoched time series
-        dataset : Energy = Energy(cleaned_path=cleaned_path,
-                        full_time_series=False,
-                            energy_plots=True,
-                            verbose_psd=False,
-                            picks_psd = ['eeg'],
-                            include_bad_channels_psd=True,
-                            save_to_disk=True,
-                            select_freq_bands=['gamma', 'delta', 'theta','alpha',
-                                               'beta'])
-        self.helper_get_permutations(dataset,save_path)
-        self.helper_get_permutations(dataset, save_path, test_file_loading=True)
+            # Full time series
+            dataset : Energy = Energy(cleaned_path=cleaned_path,
+                            full_time_series=True,
+                                energy_plots=True,
+                                verbose_psd=False,
+                                picks_psd = ['eeg'],
+                                include_bad_channels_psd=True,
+                                save_to_disk=True,
+                                select_freq_bands=['gamma', 'delta', 'theta','alpha',
+                                                'beta'],
+                                work_dir=work_dir)
+            
+            save_path : Path = Path(__file__).resolve().parent.parent.parent /\
+                        "eeg-graph-learning" / "tests" / "test_data"
+            
+            self.helper_get_permutations(dataset,save_path)
+            self.helper_get_permutations(dataset, save_path, test_file_loading=True)
+            # Epoched time series
+            dataset : Energy = Energy(cleaned_path=cleaned_path,
+                            full_time_series=False,
+                                energy_plots=True,
+                                verbose_psd=False,
+                                picks_psd = ['eeg'],
+                                include_bad_channels_psd=True,
+                                save_to_disk=True,
+                                select_freq_bands=['gamma', 'delta', 'theta','alpha',
+                                                'beta'],
+                                work_dir=work_dir)
+            self.helper_get_permutations(dataset,save_path)
+            self.helper_get_permutations(dataset, save_path, test_file_loading=True)
 
     def helper_get_permutations(self,
                               dataset : Energy,
@@ -583,68 +604,67 @@ class TestEnergy:
     def test_run_spatial_perms_parallel(self, monkeypatch) -> None:
             """Test if the permutations generated in parallel are as expected."""
             # set up the necessary resources.
-            project_root : Path = Path(__file__).resolve().parent.parent.parent
-        
-            test_data_dir : Path \
-                = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
-                "parallel_test" 
-            test_data_dir.mkdir(parents=True,exist_ok=True)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                test_data_dir : Path \
+                    = Path(temp_dir) / "eeg-graph-learning" / "tests"/ "test_data"/\
+                    "parallel_test" 
+                test_data_dir.mkdir(parents=True,exist_ok=True)
 
-            cleaned_path = \
-                Path(__file__).resolve().parent.parent.parent /"eeg-graph-learning"/\
-                'data' / 'cleaned'
-            
-            dataset_full : Energy = Energy(cleaned_path=cleaned_path,
-                                full_time_series=True,
+                cleaned_path = os.environ.get("EEG_TEST_CLEANED_FOLDER_PATH")
+                
+                dataset_full : Energy = Energy(cleaned_path=cleaned_path,
+                                    full_time_series=True,
+                                    energy_plots=True,
+                                    verbose_psd=False,
+                                    picks_psd = ['eeg'],
+                                    include_bad_channels_psd=False,
+                                    save_to_disk=True,
+                                    select_freq_bands=['gamma', 'delta',
+                                                        'theta','alpha','beta'],
+                                    work_dir=temp_dir)
+                
+                dataset_epoched : Energy = Energy(cleaned_path=cleaned_path,
+                                full_time_series=False,
                                 energy_plots=True,
                                 verbose_psd=False,
                                 picks_psd = ['eeg'],
                                 include_bad_channels_psd=False,
                                 save_to_disk=True,
                                 select_freq_bands=['gamma', 'delta',
-                                                    'theta','alpha','beta']) 
-            
-            dataset_epoched : Energy = Energy(cleaned_path=cleaned_path,
-                            full_time_series=False,
-                            energy_plots=True,
-                            verbose_psd=False,
-                            picks_psd = ['eeg'],
-                            include_bad_channels_psd=False,
-                            save_to_disk=True,
-                            select_freq_bands=['gamma', 'delta',
-                                                'theta','alpha','beta']) 
-            
-            for dataset in [dataset_full, dataset_epoched]:
+                                                    'theta','alpha','beta'],
+                                work_dir=temp_dir)
+                
+                for dataset in [dataset_full, dataset_epoched]:
 
-                dataset.energy_save_dir_epoched = test_data_dir / 'energy'
-                dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
-                dataset.energy_save_dir = test_data_dir / 'energy'
-                dataset.run_energy_parallel()
-                results = dataset.run_spatial_permutations_parallel()
-               
-                seed = 42
-                ctr = 0
-                for data, para_labels, file_name in results:
-                    # The last file in the test runs on the same process so it 
-                    # becomes the next number of the sequence.
-                    if ctr < len(results)-1:
-                        random.seed(seed)
-                        np.random.seed(seed)
-                        torch.manual_seed(seed)
-                        ctr += 1
-                    band_details : tuple[torch.Tensor, list[str]] =  torch.\
-                                                    load(test_data_dir / "energy" / \
-                                                        file_name)
-                    energy_file = band_details[0]
-                    ch_info = band_details[1]
-                    data_iter, labels, iter_file = \
-                        dataset.get_spatial_permutation(data = energy_file,
-                                                        ch_names=ch_info) 
-                    
-                    # print(f"iter labels : {labels}")
-                    # print(f"parallel labels : {parallel_results[file_name]}")
-                    # print("------------------------")
-                    
-                    assert data.shape == data_iter.shape
-                    assert len(labels) == len(para_labels)
+                    dataset.energy_save_dir_epoched = test_data_dir / 'energy'
+                    dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
+                    dataset.energy_save_dir = test_data_dir / 'energy'
+                    dataset.run_energy_parallel()
+                    results = dataset.run_spatial_permutations_parallel()
+                
+                    seed = 42
+                    ctr = 0
+                    for data, para_labels, file_name in results:
+                        # The last file in the test runs on the same process so it 
+                        # becomes the next number of the sequence.
+                        if ctr < len(results)-1:
+                            random.seed(seed)
+                            np.random.seed(seed)
+                            torch.manual_seed(seed)
+                            ctr += 1
+                        band_details : tuple[torch.Tensor, list[str]] =  torch.\
+                                                        load(test_data_dir / "energy" / \
+                                                            file_name)
+                        energy_file = band_details[0]
+                        ch_info = band_details[1]
+                        data_iter, labels, iter_file = \
+                            dataset.get_spatial_permutation(data = energy_file,
+                                                            ch_names=ch_info) 
+                        
+                        # print(f"iter labels : {labels}")
+                        # print(f"parallel labels : {parallel_results[file_name]}")
+                        # print("------------------------")
+                        
+                        assert data.shape == data_iter.shape
+                        assert len(labels) == len(para_labels)
 

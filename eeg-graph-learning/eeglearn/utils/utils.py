@@ -84,16 +84,21 @@ def get_cleaned_data_paths(participant_list : list[str], cleaned_path : str) ->\
 
     folders_and_files : list[tuple[Path, str]] = []
     participant_npy_files : list[str] = []
+    sessions = ['ses-1', 'ses-2']
     for participant in participant_list:
-        participant_folder = Path(cleaned_path) / participant / 'ses-1' / 'eeg'
-        try:
-            for file in os.listdir(participant_folder):
-                if file.endswith('.npy'):
-                    participant_npy_files.append(file)
-                    folders_and_files.append((participant_folder, file))
-        except FileNotFoundError as e:
-            raise RuntimeError(f"participant_folder not found for {participant}") from e
-                
+        for session in sessions:
+            participant_folder = Path(cleaned_path) / participant / session / 'eeg'
+            if not (os.path.exists(participant_folder)):
+                continue
+            try:
+                for file in os.listdir(participant_folder):
+                    if file.endswith('.npy'):
+                        participant_npy_files.append(file)
+                        folders_and_files.append((participant_folder, file))
+            except FileNotFoundError as e:
+                raise RuntimeError(f"participant_folder not found for {participant}")\
+                    from e
+                    
     assert len(participant_npy_files) > 0, "No .npy files found in cleaned_path"
     return folders_and_files, participant_npy_files
 

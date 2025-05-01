@@ -109,6 +109,7 @@ class PowerSpectrum(Dataset):
             It only returns the PSD for the EEG channels.
             Does not use exclude. 
         """
+        Config.set_global_seed(verbose=False)
         self.save_to_disk = save_to_disk
         self.cleaned_path = cleaned_path
         self.participant_list = os.listdir(self.cleaned_path)
