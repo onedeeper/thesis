@@ -138,6 +138,7 @@ class Energy(Dataset):
                  include_bad_channels_psd : bool = True,
                  proj_psd : bool = False, 
                  verbose_psd : bool = False,
+                 work_dir: str | None = None
                  ) -> None:
         """Dataset class for computing and loading energy features from EEG data.
 
@@ -149,25 +150,28 @@ class Energy(Dataset):
 
         Args:
         ----
-            cleaned_path (str): Path to the cleaned data.
-            select_freq_bands (list[str]): List of frequency bands.
-            save_to_disk (bool): Whether to save the energy to disk.
-            get_labels (bool): Whether to get the labels.
-            plots (bool): Whether to plot the energy.
-            verbose (bool): Whether to print verbose output.
-            full_time_series (bool): Whether to use the full time series.
-            method_psd (str): Method to use for PSD computation.
-            fmin_psd (float): Minimum frequency for PSD computation.
-            fmax_psd (float): Maximum frequency for PSD computation.
-            tmax_psd (float): Maximum time for PSD computation.
-            picks_psd (list[str]): List of channels to compute the energy for.
-            energy_plots (bool): Whether to plot the energy.
-            proj_psd (bool): Whether to project the PSD.
-            verbose_psd (bool): Whether to print verbose output.
+            cleaned_path : Path to the cleaned data.
+            select_freq_bands : List of frequency bands.
+            save_to_disk : Whether to save the energy to disk.
+            get_labels : Whether to get the labels.
+            plots : Whether to plot the energy.
+            verbose : Whether to print verbose output.
+            full_time_series : Whether to use the full time series.
+            method_psd : Method to use for PSD computation.
+            fmin_psd: Minimum frequency for PSD computation.
+            fmax_psd : Maximum frequency for PSD computation.
+            tmax_psd : Maximum time for PSD computation.
+            picks_psd : List of channels to compute the energy for.
+            energy_plots : Whether to plot the energy.
+            proj_psd : Whether to project the PSD.
+            verbose_psd: Whether to print verbose output.
             include_bad_channels_psd (bool): Whether to include bad
               channels in the PSD computation.
+            work_dir : A working directory to where all generated data will be saved
+                       defaults to the root directory of this repo.
 
         """
+        Config.set_global_seed(verbose=False)
         self.channel_names: list[str] =  ['Fp1', 'Fp2', 'F7', 
                                'F3', 'Fz', 'F4', 
                                'F8', 'FC3', 'FCz', 
@@ -207,6 +211,9 @@ class Energy(Dataset):
         self.save_to_disk : bool = save_to_disk
         self.energy_plots : bool = energy_plots
         self.full_time_series : bool = full_time_series
+        self.data_type : str = "epoched"
+        if self.full_time_series:
+            self.data_type = "full"
         self.method_psd : str = method_psd
         self.fmin_psd : float = fmin_psd
         self.fmax_psd : float = fmax_psd
@@ -219,9 +226,13 @@ class Energy(Dataset):
         assert self.labels_dict is not None, "labels_dict is None"
         self.verbose_psd : bool = verbose_psd
 
-        self.project_root : Path = Path(__file__).resolve().parent.parent.parent
-        assert self.project_root.name == \
+        if work_dir is None:
+            self.project_root : Path = Path(__file__).resolve().parent.parent.parent
+            assert self.project_root.name == \
             'eeg-graph-learning',"project_root is not eeg-graph-learning"
+        else:
+            self.project_root = Path(work_dir).expanduser().resolve()
+        
         
         self.plot_save_dir : Path = self.project_root / 'data' / 'energy' / 'plots'
         self.plot_save_dir.mkdir(parents=True, exist_ok=True)
@@ -293,27 +304,25 @@ class Energy(Dataset):
         try:
             participant_id, condition =  get_participant_id_condition_from_string\
                 (self.participant_npy_files[idx])
-            label = self.labels_dict[participant_id]
             if self.full_time_series:
                 energy = torch.load(self.energy_save_dir /\
-                                      f'energy_{participant_id}_{condition}.pt')
+                            f'energy_{participant_id}_{condition}_{self.data_type}.pt')
             else:
                 energy = torch.load(self.energy_save_dir_epoched /\
-                                      f'energy_{participant_id}_{condition}.pt')
-            return energy, label
+                        f'energy_{participant_id}_{condition}_{self.data_type}.pt')
+            return energy
         except IndexError:
             print(f'Energy for {self.participant_npy_files[idx]} not found')
-            return None, None, None
+            return None, None
         except FileNotFoundError:
             print(f'Energy for {self.participant_npy_files[idx]} not found')
-            return None, None, None
+            return None, None
     
     def plot_energy(self,):
         """Plot the energy of the EEG data for a given participant."""
         pass
 
-    def get_energy(self, folder_path:  Path, file_name: str) -> tuple[torch.Tensor,
-                                                                      list[str]]:
+    def get_energy(self, folder_path: Path, file_name: str) -> tuple[torch.Tensor, list[str]]:
         """Compute the energy of the EEG data for one file.
 
         Args:
@@ -324,28 +333,36 @@ class Energy(Dataset):
         Returns:
         -------
             tuple: Contains:
-                - torch.Tensor: The energy of the EEG data, with shape:
-                  - For full_time_series=True: (n_channels, n_bands)
-                  - For full_time_series=False: (n_epochs, n_channels, n_bands)
-                - list[str]: Channel names corresponding to the rows in the energ
-                             matrix.
+                - combined_energy (torch.Tensor): Energy tensor with shape
+                  • full_time_series=True: (n_channels, n_bands)
+                  • full_time_series=False: (n_epochs, n_channels, n_bands)
+                - ch_names (list[str]): Channel names corresponding to the tensor dimensions
+                - participant_id (str): Identifier of the participant parsed from file_name
+                - condition (str): Experimental condition parsed from file_name
+                - label (str): Participant label looked up from labels_dict
+
+        Saves:
+        ------
+            If save_to_disk is True, saves the tuple
+            (combined_energy, ch_names, participant_id, condition, label) to:
+                - self.energy_save_dir/
+                  "energy_{participant_id}_{condition}_{self.data_type}.pt"
+                  when full_time_series=True
+                - self.energy_save_dir_epoched/
+                  "energy_{participant_id}_{condition}_{self.data_type}.pt"
+                  when full_time_series=False
 
         Notes:
         -----
-            - For full time series, computes energy across all frequency bands and 
-                returns a matrix of shape (n_channels, n_bands).
-            - For epoched data, computes energy for each epoch and returns a tensor of
-              shape (n_epochs, n_channels, n_bands).
-            - If save_to_disk is True, saves the energy data to disk in the appropriate
-              directory (energy_save_dir or energy_save_dir_epoched).
-
+            - For full time series, computes energy over all selected bands.
+            - For epoched data, computes energy for each epoch over selected bands.
         """
         participant_id : str
         condition : str
         participant_id, condition = get_participant_id_condition_from_string(file_name)
         path_to_file : Path = folder_path / file_name
         assert os.path.exists(path_to_file),f"file does not exist: {path_to_file}"
-
+        label = self.labels_dict[participant_id]
         #get the spectrum
         spectra : torch.Tensor
         freqs : torch.Tensor
@@ -408,9 +425,11 @@ class Energy(Dataset):
                                              len(self.select_freq_bands)), \
                 "combined_energy has wrong shape"
             if self.save_to_disk:
-                torch.save((combined_energy,ch_names), self.energy_save_dir /\
-                            f"energy_{participant_id}_{condition}.pt")
-            return (combined_energy.float(),ch_names)
+                assert isinstance(ch_names, list), "Should be a list of strings"
+                torch.save((combined_energy.float(),ch_names,
+                            participant_id, condition, label), self.energy_save_dir /\
+                            f"energy_{participant_id}_{condition}_{self.data_type}.pt")
+            return (combined_energy.float(),ch_names, participant_id, condition, label)
         else:
             n_channels_included = self.n_eeg_channels - \
                 (1 - self.include_bad_channels_psd)*(n_bad_channels)
@@ -453,10 +472,11 @@ class Energy(Dataset):
             f"{combined_energy.shape} != ({expected_shape})"
 
             if self.save_to_disk:
-                torch.save((combined_energy, ch_names), self.energy_save_dir_epoched /\
-                            f"energy_{participant_id}_{condition}.pt")
-            #print(f"print {combined_energy.shape}")
-            return (combined_energy.float(),ch_names)
+                torch.save((combined_energy.float(),
+                            ch_names, participant_id,
+                            condition, label), self.energy_save_dir_epoched /\
+                            f"energy_{participant_id}_{condition}_{self.data_type}.pt")
+            return (combined_energy.float(),ch_names, participant_id, condition, label)
         
 
     def run_energy_parallel(self) -> None | list:
@@ -571,7 +591,7 @@ class Energy(Dataset):
                 "Permutation save directory path invalid"
             
             save_path = self.perm_save_dir / f"energy_perms_{file_name}"
-            torch.save((shuffled_columns, pseudo_labels, file_name), save_path)
+            torch.save((shuffled_columns.float(), pseudo_labels, file_name), save_path)
             assert os.path.exists(save_path),\
                 f"Data file does not exist: {save_path}"
         return (shuffled_columns.float(),pseudo_labels, file_name) 
@@ -604,6 +624,7 @@ class Energy(Dataset):
             self.save_freq_perms_to_disk = True
         # Files from energy_save_dir are NOT epoched
         full_length_energy_files = os.listdir(self.energy_save_dir)
+        print(f"energy save dir : {self.energy_save_dir}")
         print("full len :",len(full_length_energy_files))
         for filename in full_length_energy_files:
             starmap_args.append((None,filename))
@@ -671,15 +692,14 @@ class Energy(Dataset):
             assert file_name is not None,\
                 "If data is not provided, requires a file name to load from disk"
             if os.path.exists(self.energy_save_dir_epoched / file_name):
-                data, ch_names = torch.load(self.energy_save_dir_epoched / file_name)
+                data, ch_names, id,cond,label = torch.load(self.energy_save_dir_epoched / file_name)
             else:
-                data,ch_names = torch.load(self.energy_save_dir / file_name)
-            
-        assert isinstance(data, torch.Tensor)
+                data,ch_names,id,cond,label = torch.load(self.energy_save_dir / file_name)
+        
+        assert isinstance(data, torch.Tensor), "Input should be a torch.T ensor object."
         # Assert shape for non-epoched and epoched cases
         assert len(data.shape) >=2 or len(data.shape) <= 3
 
-        assert isinstance(data, torch.Tensor), "Input should be a torch.Tensor object."
         assert isinstance(ch_names, list), "Input should be a list of strings."
         # for non-epoched objects
         if len(data.shape) == 2:
@@ -702,7 +722,7 @@ class Energy(Dataset):
                                                     selection=hamming_selection,
                                                     output_file_name= perms_file, 
                                                     save_to_disk=False)
-            torch.save(torch.Tensor(self.permutations), perms_path / perms_file)
+            torch.save(torch.Tensor(self.permutations).float(), perms_path / perms_file)
         else:
             #print("Loading permutations from disk..")
             self.permutations = torch.load(perms_path / perms_file) 
@@ -720,12 +740,12 @@ class Energy(Dataset):
             9 : ["O1","Oz", "O2"]
         }
 
-        pseudo_labels = np.random.randint(low = 1,
+        pseudo_labels : np.ndarray = np.random.randint(low = 1,
                                             high = 128,
                                             size = n_epochs)
         target_permutaions : torch.Tensor = self.permutations[pseudo_labels,:]
         shuffled_channels : list[list[int]] = []
-        shuffled_data = torch.zeros(data.shape).double()
+        shuffled_data : torch.Tensor = torch.zeros(data.shape).double()
 
         for epoch_num, epoch_permutation in enumerate(target_permutaions): 
             shuffled_channels : list[int] = []
@@ -750,7 +770,7 @@ class Energy(Dataset):
                 "Permutation save directory path invalid"
             
             save_path = self.perm_save_dir / f"energy_perms_{file_name}"
-            torch.save((shuffled_data, pseudo_labels, file_name), save_path)
+            torch.save((shuffled_data.float(), pseudo_labels, file_name), save_path)
             assert os.path.exists(save_path),\
                 f"Data file does not exist: {save_path}"
             
@@ -796,8 +816,7 @@ class Energy(Dataset):
         print(f"Finished processing {len(results)} permutations.")
         assert len(results) == len(energy_files),\
             "Expected numer of permutations results not generated."
-        return results
-        
+        return results        
 
 if __name__ == "__main__":
     # Set seed for reproducibility or testing different runs
@@ -813,13 +832,15 @@ if __name__ == "__main__":
                           verbose_psd=False,
                           picks_psd = ['eeg'],
                           include_bad_channels_psd=True,
-                          save_to_disk=True,
-                          select_freq_bands=['alpha', 'delta','theta'])
-    # for f in dataset.folders_and_files:
-    #     #print(f"f {f}")
-    #     out = dataset.get_energy(*f)
-    #     print(out[0].shape)
+                          save_to_disk=True)
+    
     dataset.run_energy_parallel()
+    # print(len(dataset[0]))
+    # print(dataset[0][0].shape, dataset[0][1])
+    # for data in dataset:
+    #     print(dataset[0][1])
+
     dataset.run_freq_permutations_parallel(save_to_disk=True)
     dataset.run_spatial_permutations_parallel(save_to_disk=True)
+    
 

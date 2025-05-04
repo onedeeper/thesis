@@ -13,6 +13,7 @@ from tqdm import tqdm
 from eeglearn.config import Config
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.plotting import plot_psd
+from eeglearn.utils.utils import load_preprocessed_data
 class PowerSpectrum(Dataset):
     """
     Dataset class for computing and loading power spectrum features from EEG data.
@@ -108,6 +109,7 @@ class PowerSpectrum(Dataset):
             It only returns the PSD for the EEG channels.
             Does not use exclude. 
         """
+        Config.set_global_seed(verbose=False)
         self.save_to_disk = save_to_disk
         self.cleaned_path = cleaned_path
         self.participant_list = os.listdir(self.cleaned_path)
@@ -249,12 +251,7 @@ class PowerSpectrum(Dataset):
               `self.spectrum_save_dir_epoched` depending on `self.full_time_series`.
         """
         participant_id, condition = get_participant_id_condition_from_string(file_name)
-        try:
-            data : Preproccesing = np.load(folder_path / file_name, allow_pickle=True)
-        except FileNotFoundError:
-            print(f'File {file_name} not found')
-            return None, None, None
-        assert isinstance(data, Preproccesing), "data is not a Preproccesing object"
+        data : Preproccesing = load_preprocessed_data(folder_path, file_name)
 
         condition : str
         participant_id : str

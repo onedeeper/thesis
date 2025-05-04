@@ -61,13 +61,13 @@ if __name__ == '__main__':
    
     # the following parameters can be changed by the user
     conditions = ['EO', 'EC'] # conditions to be preprocessed
-    sessions = ['ses-1'] # sessions to be preprocessed
-    epochs_length = 12 # length of epochs in seconds, comment out for no epoching
+    sessions = ['ses-1', 'ses-2'] # sessions to be preprocessed
+    epochs_length = 9.95 # length of epochs in seconds, comment out for no epoching
     sfreq = 500 # sampling frequency
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal
-    plots = True # set to True to create and store plots during preprocessing
-    n_processes = 4 # number of processes to use for parallel processing
-    num_samples = 4 # number of samples to process, set to 0 for all samples
+    plots = False # set to True to create and store plots during preprocessing
+    num_samples = 0 # number of samples to process, 0 for all
+    n_processes = cpu_count() - 1 # number of processes to use for parallel processing
     clean_pipeline(derivates_dir = derivates_dir,
                         preprocessed_dir = preprocessed_dir,
                         sfreq = sfreq,
@@ -75,8 +75,8 @@ if __name__ == '__main__':
                         line_noise = line_noise,
                         conditions = conditions,
                         sessions = sessions,
-                        plots = plots,
-                        num_samples = num_samples)
+                        num_samples=num_samples,
+                        plots = plots)
     
     project_root = Path(__file__).resolve().parent.parent.parent
 
@@ -88,10 +88,9 @@ if __name__ == '__main__':
     save_dir.mkdir(parents=True, exist_ok=True)
     eeg_dir.mkdir(parents=True, exist_ok=True)
 
-    get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'], session='ses-1')
 
     # save to torch
-    filepaths = get_filepaths(eeg_dir, save_dir, recording_condition=['EC', 'EO'],
-                               session='ses-1')
+    filepaths = get_filepaths(eeg_dir, save_dir, recording_condition=conditions,
+                               sessions=sessions)
     preprocess_and_save_data(filepaths,save_dir, n_processes) 
     assert len(os.listdir(save_dir)) > 0,  "No files were processed"

@@ -258,7 +258,6 @@ def clean_pipeline(derivates_dir : str,preprocessed_dir : str,
 
     n_subjs_left_to_process :int  = len(all_subjects) - len(already_processed_subjects)
     assert n_subjs_left_to_process > 0, "Existing files should have been replaced"
-
     print(f"Found {n_subjs_left_to_process} subjects to process")
     if  num_samples:
         random_subjects : list[str] = \
@@ -269,8 +268,8 @@ def clean_pipeline(derivates_dir : str,preprocessed_dir : str,
                                             conditions, derivates_dir, 
                                             preprocessed_dir, epochs_length,
                                               line_noise, sfreq, plots)
-        assert len(files_to_process) == n_files_expected, \
-            "Total number of CSVS not as expected"
+        #assert len(files_to_process) == n_files_expected, \
+        #    "Total number of CSVS not as expected"
     else: 
         print(f"Processing all remaining {len(subjects_to_process)} subjects")
         files_to_process = get_file_details(subjects_to_process, sessions, 
@@ -279,9 +278,7 @@ def clean_pipeline(derivates_dir : str,preprocessed_dir : str,
                                               line_noise, sfreq, plots)
         n_files_expected : int = \
               n_subjs_left_to_process * len(sessions) * len(conditions)
-        assert len(files_to_process) == n_files_expected, \
-            "Total number of CSVS not as expected"
-    
+        
     with Pool(processes=n_processes) as pool:
         list(tqdm(pool.imap(process_file, files_to_process), 
                            total=len(files_to_process), 

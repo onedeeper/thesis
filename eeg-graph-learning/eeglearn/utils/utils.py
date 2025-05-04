@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 import torch
-
+from eeglearn.preprocess.preprocessing import Preproccesing
 def get_participant_id_condition_from_string(file_path: str) -> tuple[str, str]:
     """Extract the participant ID and condition from the file path.
     
@@ -84,16 +84,21 @@ def get_cleaned_data_paths(participant_list : list[str], cleaned_path : str) ->\
 
     folders_and_files : list[tuple[Path, str]] = []
     participant_npy_files : list[str] = []
+    sessions = ['ses-1', 'ses-2']
     for participant in participant_list:
-        participant_folder = Path(cleaned_path) / participant / 'ses-1' / 'eeg'
-        try:
-            for file in os.listdir(participant_folder):
-                if file.endswith('.npy'):
-                    participant_npy_files.append(file)
-                    folders_and_files.append((participant_folder, file))
-        except FileNotFoundError as e:
-            raise RuntimeError(f"participant_folder not found for {participant}") from e
-                
+        for session in sessions:
+            participant_folder = Path(cleaned_path) / participant / session / 'eeg'
+            if not (os.path.exists(participant_folder)):
+                continue
+            try:
+                for file in os.listdir(participant_folder):
+                    if file.endswith('.npy'):
+                        participant_npy_files.append(file)
+                        folders_and_files.append((participant_folder, file))
+            except FileNotFoundError as e:
+                raise RuntimeError(f"participant_folder not found for {participant}")\
+                    from e
+                    
     assert len(participant_npy_files) > 0, "No .npy files found in cleaned_path"
     return folders_and_files, participant_npy_files
 
@@ -172,3 +177,25 @@ def hamming_set(n_regions : int,
         torch.save(f'max_hamming_set_{n_regions}_{n_permutations}.pt', torch.Tensor\
                                                                         (collection))
     return collection
+
+def load_preprocessed_data(folder_path : Path , file_name : str) -> Preproccesing:
+    """Load a preprocesed file.
+
+    Args:
+    ----
+        folder_path : Full folder information leadning to a Preprocessing object
+        file_name : A file name which includes information about the participant,
+                    session, and condition.
+        
+    Returns:
+    -------
+        Preprocessing : All the details relevant to a given participant file after
+                        compeleting the preprocessing pipeline.
+    """
+    try:
+        data : Preproccesing = np.load(folder_path / file_name, allow_pickle=True)
+    except FileNotFoundError:
+        print(f'File {file_name} not found')
+        return None, None, None
+    assert isinstance(data, Preproccesing), "data is not a Preproccesing object"
+    return data
