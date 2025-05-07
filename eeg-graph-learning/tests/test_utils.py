@@ -5,6 +5,7 @@ import os
 from eeglearn.utils.utils import load_preprocessed_data
 import pickle
 from pathlib import Path
+import torch
 
 def test_load_preprocessed_data() -> None:
     """Tests the loading of a Preprocesing object"""
@@ -18,3 +19,7 @@ def test_load_preprocessed_data() -> None:
         # test a random attribute.
         assert prep_object.bad_channels_after_interpolation ==\
             loaded_prep.bad_channels_after_interpolation
+        
+# def test_adjacency()-> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Tests the generation of the adjacency matrix"""
+

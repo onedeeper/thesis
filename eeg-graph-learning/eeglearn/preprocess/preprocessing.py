@@ -248,10 +248,10 @@ class Preproccesing:
 
 if __name__ == '__main__':
     preprocess = Preproccesing(
-            filename='/Users/udeshhabaraduwa/Library/CloudStorage/GoogleDrive-u.habaraduwakandambige@tilburguniversity.edu/My Drive/Tilburg/Masters CSAI/Semester 4/code/thesis/eeg-graph-learning/tests/test_data/TDBRAIN-dataset/derivatives/sub-19694366/sub-19694366_ses-1_task-restEC_eeg.csv',
+            filename='/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/tests/test_data/TDBRAIN-dataset/derivatives/sub-88046393/ses-1/eeg/sub-88046393_ses-1_task-restEC_eeg.csv',
             epochs_length=0,
             line_noise=[],
             sfreq=500,
             plots=True
         )
-    print(preprocess.status)
+    print(preprocess.preprocessed_raw.get_montage)

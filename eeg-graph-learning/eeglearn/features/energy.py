@@ -84,6 +84,8 @@ from eeglearn.utils.utils import (
     hamming_set,
 )
 
+from operator import itemgetter
+
 
 def worker_init_fn(worker_id : int, seed : int = None) -> None:
     """Initialize random seed for multiprocessing workers.
@@ -515,7 +517,8 @@ class Energy(Dataset):
                 return results
             
     def get_freq_permutation(self, data : torch.Tensor = None,
-                         file_name : str = None) -> tuple[torch.Tensor,int]:
+                         file_name : str = None,
+                         n_perms_per_epoch : int = 4) -> tuple[torch.Tensor,int]:
         """Get all the frequency band permutations of the data.
         
         Takes a (n_epochs x n_channels x n_bands) or (n_channels x n_bands ) energy
@@ -527,7 +530,8 @@ class Energy(Dataset):
             file_name : File name containing participant id and condition ending in
                         .pt.
             save_to_disk : if permutations should be saved to disk, default false
-            is_epoched : If the incoming data is epoched.
+            perms_per_epoch : The number of permutations to generate per epoch in the
+                              data matrix (dim 0)
 
         Returns:
         -------
@@ -551,36 +555,42 @@ class Energy(Dataset):
         if len(data.shape) == 2:
             # reshape to a 3-d matrix with 1 epochs dimension
             data = data.reshape(-1,*data.shape)
-        n_epochs = data.shape[0]
-        #print(f"data shape : {data.shape}")
+        n_epochs, n_channels, n_bands = data.shape
+        
         band_position : dict = {band : i for i, band \
                                 in enumerate(self.select_freq_bands)}
 
-        # pseudolabels, one per epoch.
         pseudo_labels : np.array = np.random.randint(0,
                                         math.factorial(len(self.select_freq_bands))\
-                                            , size = n_epochs)
-        
-        permutations_per_epoch : list[int] = [self.possible_perms[pseudo_label]
-                                            for pseudo_label in pseudo_labels]
-        
-        shuffled_band_indices: list[list[int]] = [
-                                    [band_position[band] for band in permutation]
-                                        for permutation in permutations_per_epoch]
-        
-        try:
-            shuffled_columns : torch.Tensor = torch.zeros(data.shape)
-            for epoch_num, shuffled_bands in enumerate(shuffled_band_indices):
-                shuffled_columns[epoch_num,:,:] = data[epoch_num,:,shuffled_bands]
+                                            , size = n_epochs * n_perms_per_epoch)
+        pseudo_labels = pseudo_labels.reshape(-1,n_perms_per_epoch)
 
+        # n_epochs x n_perms_per_epch x n_bands
+        permutations_per_epoch : np.ndarray =\
+            np.array([itemgetter(*epoch)(self.possible_perms)
+              for epoch in pseudo_labels])
+        
+        shuffled_band_indices: np.ndarray = np.array([
+                    [itemgetter(*permutation)(band_position) for permutation in epoch]
+                                        for epoch in permutations_per_epoch])
+        print(f"shuffled bands : {shuffled_band_indices.shape}")
+        try:
+            shuffled_columns : torch.Tensor = \
+                torch.zeros((n_epochs,n_perms_per_epoch,n_channels, n_bands))
+            for epoch in range(n_epochs):
+                for permutation in range(n_perms_per_epoch):
+                    shuffled_bands = shuffled_band_indices[epoch,permutation,:]
+                    shuffled_columns[epoch,permutation,:,:] = data[epoch,:
+                                                                   ,shuffled_bands]
+            
         except IndexError as err:
             raise IndexError("A mismatch between expected bands. "
                                 "Usually a result of having run test_energy.py. "
                                 "Delete the energy folder in data and retry.") from \
                                 err
-        assert shuffled_columns.shape == data.shape
-        assert shuffled_columns.shape == data.shape,\
-                "Input and shuffled data should match"
+        assert shuffled_columns.shape == \
+            (n_epochs, n_perms_per_epoch, n_channels, n_bands),\
+            "Expected the added the n_perms_per_epoch dimension"
         assert shuffled_columns.shape[0] == len(pseudo_labels),\
                 "Should be as many pseudolabels as there are epochs"
         if self.save_freq_perms_to_disk:
@@ -597,7 +607,8 @@ class Energy(Dataset):
         return (shuffled_columns.float(),pseudo_labels, file_name) 
     
     def run_freq_permutations_parallel(self, save_to_disk : bool = False,
-                                        seed : int = None)-> None | list:
+                                        seed : int = None,
+                                        n_perms_per_epoch :int = 4)-> None | list:
         """Compute band energy permutations for all files in parallel.
 
         Uses unique random seeds for each worker.
@@ -609,6 +620,8 @@ class Energy(Dataset):
             save_to_disk (bool): Whether to save the permutations to disk.
             seed (int, optional): Seed value for reproducible permutations.
                 If None, uses system-based random seed.
+            n_perms_per_epoch : The number of permutations to generate per epoch in the
+                              data matrix (dim 0)
 
         Returns:
         -------
@@ -627,12 +640,12 @@ class Energy(Dataset):
         print(f"energy save dir : {self.energy_save_dir}")
         print("full len :",len(full_length_energy_files))
         for filename in full_length_energy_files:
-            starmap_args.append((None,filename))
+            starmap_args.append((None,filename, n_perms_per_epoch))
 
         # Files from energy_save_dir_epoched ARE epoched
         epoched_energy_files = os.listdir(self.energy_save_dir_epoched)
         for filename in epoched_energy_files:
-            starmap_args.append((None,filename))
+            starmap_args.append((None,filename,n_perms_per_epoch))
             
         print("epoched :",len(epoched_energy_files))
 
@@ -684,8 +697,7 @@ class Energy(Dataset):
                 
         
         """
-        # synchronize seed for testing permutation generation between parallel
-        # serial processing testing.
+        
         n_regions : int = 10
         n_permutations : int = 128
         if data is None:

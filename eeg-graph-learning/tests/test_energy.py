@@ -25,6 +25,7 @@ from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set,\
     get_cleaned_data_paths
+from operator import itemgetter
 #Config.RANDOM_SEED = 1223333
 Config.set_global_seed()
 
@@ -288,7 +289,10 @@ class TestEnergy:
         possible_perms : dict[int, tuple[str, str, str,str,str]] =  \
             dict(enumerate(permutations(energy.select_freq_bands)))
         
-
+        n_perms_per_epoch : int = 4
+        n_epochs :int = 0
+        n_channels : int = 0
+        n_bands: int = 0
         for _ in range(10):
             band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
                                                         (folder_path=temp_dir \
@@ -297,21 +301,31 @@ class TestEnergy:
             input_matrix : torch.Tensor  = band_details[0]
             if len(input_matrix.shape) == 2:
                 input_matrix = input_matrix.reshape(-1, *input_matrix.shape)
+            n_epochs, n_channels, n_bands = input_matrix.shape
             permutations_label : tuple[torch.Tensor,
-                                int] = energy.get_freq_permutation(input_matrix)
+                                int] = energy.get_freq_permutation(data = input_matrix,
+                                                n_perms_per_epoch = n_perms_per_epoch)
             permuted_data : torch.Tensor  = permutations_label[0]
             pseudo_labels : int = permutations_label[1]     
       
-            assert isinstance(permutations_label,tuple)
-            assert isinstance(permuted_data, torch.Tensor)
+            assert isinstance(permutations_label,tuple),\
+                "Should be a tuple containing am data, speudolabels and filename"
+            assert isinstance(permuted_data, torch.Tensor),\
+                "Should be tensor containing the shuffled data"
+            assert len(permuted_data.shape) == 4,\
+                "A matrix of shape (n_epochs x n_perms_per_epoch x n_chanels, n_bands)"
             assert isinstance(pseudo_labels, np.ndarray)
+            assert pseudo_labels.shape == \
+                (n_epochs, n_perms_per_epoch),\
+                "Expecting a matrix with each row giving the applied permutations"
 
-            for i, pseudo_label in enumerate(pseudo_labels):
-                test_permutation : tuple[str] = possible_perms[pseudo_label]
-                test_permutation_idx = [ band_position[permutation]
-                                        for permutation in test_permutation ]
-                assert torch.allclose(input_matrix[i,:,test_permutation_idx],
-                                        permuted_data[i,:,:])
+            for i, pseudo_labels_in_epoch in enumerate(pseudo_labels):
+                test_permutations : tuple[str] = \
+                    itemgetter(*pseudo_labels_in_epoch)(possible_perms)
+                for j, test_permutation in enumerate(test_permutations):
+                    test_permutation_idx = itemgetter(*test_permutation)(band_position)
+                    assert torch.allclose(input_matrix[i,:,test_permutation_idx],
+                                            permuted_data[i,j,:,:])
 
     def test_get_freq_permutations(self)-> None:
         """Test case for generating the energy permutations for a given subject."""
@@ -320,7 +334,7 @@ class TestEnergy:
         condition : str = ""
         participant, condition = get_participant_id_condition_from_string(TEST_FILE)
         preprocessed : Preproccesing = np.load(test_cleaned_file, allow_pickle = True)
-        test_bands : list[str] = ['alpha','beta']
+        test_bands : list[str] = ['alpha','beta','theta','gamma','delta']
         with tempfile.TemporaryDirectory() as temp_dir:
             print(f"Created temporary directory at: {temp_dir}")
             temp_dir : Path = Path(temp_dir) / "cleaned"
@@ -382,15 +396,11 @@ class TestEnergy:
 
     def test_run_freq_permutations_parallel(self)-> None:
         """Compare serial and parallel computations."""
-        project_root : Path = Path(__file__).resolve().parent.parent.parent
-    
-        test_data_dir : Path \
-            = project_root / "eeg-graph-learning" / "tests"/ "test_data"/\
-            "parallel_test" / "energy"
-        test_data_dir.mkdir(parents=True,exist_ok=True)
-
         cleaned_path = os.environ.get("EEG_TEST_CLEANED_FOLDER_PATH")
         with tempfile.TemporaryDirectory() as temp_dir:
+            test_data_dir : Path \
+                = Path(temp_dir) / "parallel_test" / "energy"
+            test_data_dir.mkdir(parents=True,exist_ok=True)
             dataset_full = Energy(cleaned_path=cleaned_path,
                         full_time_series=True,
                             energy_plots=True,
@@ -402,37 +412,38 @@ class TestEnergy:
                                                 'theta','alpha','beta'],
                             work_dir=temp_dir)
         
-        dataset_epoched = Energy(cleaned_path=cleaned_path,
-                        full_time_series=False,
-                            energy_plots=True,
-                            verbose_psd=False,
-                            picks_psd = ['eeg'],
-                            include_bad_channels_psd=True,
-                            save_to_disk=True,
-                            select_freq_bands=['gamma', 'delta',
-                                                'theta','alpha','beta'],
-                            work_dir=temp_dir)
-        
-        datasets : list[Energy] = [dataset_full, dataset_epoched]
+            dataset_epoched = Energy(cleaned_path=cleaned_path,
+                            full_time_series=False,
+                                energy_plots=True,
+                                verbose_psd=False,
+                                picks_psd = ['eeg'],
+                                include_bad_channels_psd=True,
+                                save_to_disk=True,
+                                select_freq_bands=['gamma', 'delta',
+                                                    'theta','alpha','beta'],
+                                work_dir=temp_dir)
+            
+            datasets : list[Energy] = [dataset_full, dataset_epoched]
 
-        for dataset in datasets:
-            dataset.energy_save_dir_epoched = test_data_dir / 'energy_epoched'
-            dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
-            # setting full length directory to be empty for testing purposes
-            # This is because run_get_permutations_parallel() handles both epoched
-            # and full timeseries data together.
-            dataset.cleaned_path = cleaned_path
-            dataset.energy_save_dir= test_data_dir / 'energy_full'
-            dataset.energy_save_dir.mkdir(parents=True, exist_ok= True)
-            dataset.folders_and_files, _ = \
-                        get_cleaned_data_paths(dataset.participant_list, dataset.cleaned_path)
-            dataset.run_energy_parallel()
-            seed = Config.RANDOM_SEED
-            results = dataset.run_freq_permutations_parallel(seed = seed,
-                                                    save_to_disk=True)
+            for dataset in datasets:
+                # setting directories to be empty for testing purposes
+                # This is because run_get_permutations_parallel() handles both epoched
+                # and full timeseries data together.
+                dataset.energy_save_dir_epoched = test_data_dir / 'energy_epoched'
+                dataset.energy_save_dir_epoched.mkdir(parents=True, exist_ok= True)
+                dataset.cleaned_path = cleaned_path
+                dataset.energy_save_dir= test_data_dir / 'energy_full'
+                dataset.energy_save_dir.mkdir(parents=True, exist_ok= True)
+                dataset.folders_and_files, _ = \
+                            get_cleaned_data_paths(dataset.participant_list,
+                                                    dataset.cleaned_path)
+                dataset.run_energy_parallel()
+                seed = Config.RANDOM_SEED
+                results = dataset.run_freq_permutations_parallel(seed = seed,
+                                                        save_to_disk=True)
 
-            assert len(results) == len(dataset)
-            shutil.rmtree("tests/test_data/parallel_test")
+                assert len(results) == len(dataset)
+                shutil.rmtree(test_data_dir)
             
     def test_get_spatial_perms(self) -> None:
         """Test the generated spatial permutations.

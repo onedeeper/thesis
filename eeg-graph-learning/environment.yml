@@ -14,7 +14,7 @@ dependencies:
   - pytorch=2.2.1
   - torchvision=0.17.1
   - torchaudio=2.2.1
-  - pytorch-sparse
+  - pytorch-sparse=0.6.18
   - jupyter=1.0.0
   - scikit-learn=1.6.1  # Updated from 1.4.0 to latest stable
   - mne=1.9.0  # Updated from 1.6.1 to latest stable
@@ -26,3 +26,7 @@ dependencies:
     - pyprep==0.4.3
     - openpyxl==3.1.5
     - ruff==0.3.3  # Added for development linting
+    - pygeodsy==25.5.5
+    - microstructpy==1.5.9
+    - geographiclib==2.0
+    - haversine==2.9.0
