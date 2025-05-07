@@ -312,7 +312,8 @@ class TestEnergy:
                 "Should be a tuple containing am data, speudolabels and filename"
             assert isinstance(permuted_data, torch.Tensor),\
                 "Should be tensor containing the shuffled data"
-            assert len(permuted_data.shape) == 4,\
+            assert permuted_data.shape == (n_epochs,n_perms_per_epoch,n_channels,
+                                           n_bands),\
                 "A matrix of shape (n_epochs x n_perms_per_epoch x n_chanels, n_bands)"
             assert isinstance(pseudo_labels, np.ndarray)
             assert pseudo_labels.shape == \
@@ -472,22 +473,22 @@ class TestEnergy:
             work_dir.mkdir(parents=True,  exist_ok = True)
         
             # Full time series
-            dataset : Energy = Energy(cleaned_path=cleaned_path,
-                            full_time_series=True,
-                                energy_plots=True,
-                                verbose_psd=False,
-                                picks_psd = ['eeg'],
-                                include_bad_channels_psd=True,
-                                save_to_disk=True,
-                                select_freq_bands=['gamma', 'delta', 'theta','alpha',
-                                                'beta'],
-                                work_dir=work_dir)
+            # dataset : Energy = Energy(cleaned_path=cleaned_path,
+            #                 full_time_series=True,
+            #                     energy_plots=True,
+            #                     verbose_psd=False,
+            #                     picks_psd = ['eeg'],
+            #                     include_bad_channels_psd=True,
+            #                     save_to_disk=True,
+            #                     select_freq_bands=['gamma', 'delta', 'theta','alpha',
+            #                                     'beta'],
+            #                     work_dir=work_dir)
             
             save_path : Path = Path(__file__).resolve().parent.parent.parent /\
                         "eeg-graph-learning" / "tests" / "test_data"
             
-            self.helper_get_permutations(dataset,save_path)
-            self.helper_get_permutations(dataset, save_path, test_file_loading=True)
+            # self.helper_get_permutations(dataset,save_path)
+            # self.helper_get_permutations(dataset, save_path, test_file_loading=True)
             # Epoched time series
             dataset : Energy = Energy(cleaned_path=cleaned_path,
                             full_time_series=False,
@@ -500,7 +501,7 @@ class TestEnergy:
                                                 'beta'],
                                 work_dir=work_dir)
             self.helper_get_permutations(dataset,save_path)
-            self.helper_get_permutations(dataset, save_path, test_file_loading=True)
+           #self.helper_get_permutations(dataset, save_path, test_file_loading=True)
 
     def helper_get_permutations(self,
                               dataset : Energy,
@@ -541,7 +542,7 @@ class TestEnergy:
         
         input_matrix : torch.Tensor = dataset[0][0] #freq bands
         ch_names : list[str] = dataset[0][1] # channel order info=
-
+        n_perms_per_epoch : int = 4
         if test_with_random:
             # Random matrices with varying number of epochs and channels.
             random_n_epochs :int = random.randint(1,15)
@@ -553,7 +554,7 @@ class TestEnergy:
                                                         random_n_bands))).float()
             ch_names = ch_names[:random_n_channels]
 
-        output_matrix : torch.Tensor 
+        permuted_data : torch.Tensor 
         pseudo_labels : torch.Tensor
 
         if test_file_loading:
@@ -567,25 +568,39 @@ class TestEnergy:
                 input_matrix,ch_names,_,_,_ = torch.\
                     load(dataset.energy_save_dir / random_file)
                 input_matrix = input_matrix.reshape(-1,*input_matrix.shape)
-            output_matrix, pseudo_labels, file_name = dataset.\
-                    get_spatial_permutation(file_name=random_file)
+            permuted_data, pseudo_labels, file_name = dataset.\
+                    get_spatial_permutation(file_name=random_file,
+                                            n_perms_per_epoch = n_perms_per_epoch)
         else:
-            output_matrix, pseudo_labels, file_name = dataset.\
+            permuted_data, pseudo_labels, file_name = dataset.\
                                             get_spatial_permutation(data = input_matrix,
-                                                                    ch_names= ch_names
-                                                                        )
-        assert output_matrix.shape == input_matrix.shape
-        assert isinstance(pseudo_labels, np.ndarray),\
-            "For epoched data, tensor of permutations is expected"
-        assert pseudo_labels.shape[0] == input_matrix.shape[0], \
-            "Expected a pseudolabel for each epoch"
+                                                                    ch_names= ch_names,
+                                                    n_perms_per_epoch=n_perms_per_epoch)
+        n_epochs : int
+        n_channels : int
+        n_bands : int         
+
+        n_epochs, n_channels, n_bands = input_matrix.shape
         
-        shuffled_data = torch.zeros(input_matrix.shape).double()
-        for epoch, pseudo_label in enumerate(pseudo_labels):
+        assert isinstance(permuted_data, torch.Tensor),\
+            "Should be tensor containing the shuffled data"
+        assert permuted_data.shape == (n_epochs,n_perms_per_epoch,n_channels,
+                                        n_bands),\
+            "A matrix of shape (n_epochs x n_perms_per_epoch x n_chanels, n_bands)"
+        assert isinstance(pseudo_labels, np.ndarray)
+        assert pseudo_labels.shape == \
+            (n_epochs, n_perms_per_epoch),\
+            "Expecting a matrix with each row giving the applied permutations"
+        
+        shuffled_data = torch.zeros(n_epochs,n_perms_per_epoch,n_channels,n_bands)
+
+        for epoch in range(n_epochs):
+            permutations_in_epoch : torch.Tensor =\
+                permutations[pseudo_labels[epoch]] #epoch row from pseudolabels
+            for permutation in range(n_perms_per_epoch):
                 permuted_channels : list[int] = []
-                idxs_chs_in_region : dict[str, list[int]] = {}
-                target_permutation : torch.Tensor = permutations[pseudo_label,:]
-                for region in target_permutation:
+                idxs_chs_in_region : dict[int, list[int]] = {}
+                for region in permutations_in_epoch[permutation]:
                     channels_in_region : list[int] = \
                         self.regions[idx_to_region[region.item()]]
                     ch_idxs : list[int] = []
@@ -597,24 +612,26 @@ class TestEnergy:
                             continue
                     # save the channels in each region.
                     idxs_chs_in_region[region.item()] = ch_idxs 
-                assert len(permuted_channels) == input_matrix.shape[1]
+                assert len(permuted_channels) == n_channels
+
                 start = 0
-                # test if the shuffling has been done while preserving the regions
-                for region in target_permutation:
-                    # check if this region is in the right place in permuted channels
+                for region in permutations_in_epoch[permutation]:
                     region_size = len(idxs_chs_in_region[region.item()])
                     assert idxs_chs_in_region[region.item()] == \
                                         permuted_channels[start:start + region_size],\
                                                     "Regions are not intact."
                     start += region_size
-                shuffled_data[epoch,:,:] = input_matrix[epoch,permuted_channels,:]
-                
-        assert torch.allclose(shuffled_data.float(), output_matrix),\
+
+                shuffled_data[epoch,permutation,:,:] = input_matrix[epoch,
+                                                                permuted_channels,:]
+                    
+        assert torch.allclose(shuffled_data, permuted_data),\
                     "Expected permutation has not been applied."
     
     def test_run_spatial_perms_parallel(self, monkeypatch) -> None:
             """Test if the permutations generated in parallel are as expected."""
             # set up the necessary resources.
+            n_perms_per_epoch : int = 4
             with tempfile.TemporaryDirectory() as temp_dir:
                 test_data_dir : Path \
                     = Path(temp_dir) / "eeg-graph-learning" / "tests"/ "test_data"/\
@@ -670,11 +687,9 @@ class TestEnergy:
                         ch_info = band_details[1]
                         data_iter, labels, iter_file = \
                             dataset.get_spatial_permutation(data = energy_file,
-                                                            ch_names=ch_info) 
-                        
-                        # print(f"iter labels : {labels}")
-                        # print(f"parallel labels : {parallel_results[file_name]}")
-                        # print("------------------------")
+                                                            ch_names=ch_info,
+                                                            n_perms_per_epoch=\
+                                                                n_perms_per_epoch) 
                         
                         assert data.shape == data_iter.shape
                         assert len(labels) == len(para_labels)

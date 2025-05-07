@@ -556,7 +556,7 @@ class Energy(Dataset):
             # reshape to a 3-d matrix with 1 epochs dimension
             data = data.reshape(-1,*data.shape)
         n_epochs, n_channels, n_bands = data.shape
-        
+
         band_position : dict = {band : i for i, band \
                                 in enumerate(self.select_freq_bands)}
 
@@ -573,7 +573,6 @@ class Energy(Dataset):
         shuffled_band_indices: np.ndarray = np.array([
                     [itemgetter(*permutation)(band_position) for permutation in epoch]
                                         for epoch in permutations_per_epoch])
-        print(f"shuffled bands : {shuffled_band_indices.shape}")
         try:
             shuffled_columns : torch.Tensor = \
                 torch.zeros((n_epochs,n_perms_per_epoch,n_channels, n_bands))
@@ -672,7 +671,8 @@ class Energy(Dataset):
                                 file_name : str = None,
                                 ch_names : list[str] = None,
                                 data : torch.Tensor = None,
-                                hamming_selection: str = "max")\
+                                hamming_selection: str = "max",
+                                n_perms_per_epoch : int = 4)\
                                     -> tuple[torch.Tensor, int]:
         """Shuffle the regions of an energy matrix.
         
@@ -687,6 +687,8 @@ class Energy(Dataset):
                        coressponds to that channels row index in the data matrix
             hamming_selection :  Choose the maximally different permutation ("max") 
                                 to be included at iteration or the median ("median"). 
+            n_perms_per_epoch : The number of permutations to generate per epoch in the
+                              data matrix (dim 0) 
 
         Returns:
         -------
@@ -700,11 +702,15 @@ class Energy(Dataset):
         
         n_regions : int = 10
         n_permutations : int = 128
+        n_epochs : int 
+        n_channels : int
+        n_bands : int
         if data is None:
             assert file_name is not None,\
                 "If data is not provided, requires a file name to load from disk"
             if os.path.exists(self.energy_save_dir_epoched / file_name):
-                data, ch_names, id,cond,label = torch.load(self.energy_save_dir_epoched / file_name)
+                data, ch_names, id,cond,label = torch.load(self.energy_save_dir_epoched 
+                                                           / file_name)
             else:
                 data,ch_names,id,cond,label = torch.load(self.energy_save_dir / file_name)
         
@@ -721,14 +727,13 @@ class Energy(Dataset):
             # reshape to a 3-d matrix with 1 epochs dimension
             data = data.reshape(-1,*data.shape)
 
-        n_epochs : int = data.shape[0]
+        n_epochs, n_channels, n_bands = data.shape
 
         self.permutations : torch.Tensor | None = None
         perms_file : str = \
             f"{hamming_selection}_hamming_set_{n_regions}_{n_permutations}.pt"
         perms_path : Path = Path(__file__).resolve().parent.parent.parent / "data"
         if not(os.path.exists(perms_path / perms_file)):
-            #print("Permutations not found in path. Running. It may take a minute.")
             self.permutations : torch.Tensor = hamming_set(n_regions=n_regions,
                                                     n_permutations=n_permutations, 
                                                     selection=hamming_selection,
@@ -736,7 +741,6 @@ class Energy(Dataset):
                                                     save_to_disk=False)
             torch.save(torch.Tensor(self.permutations).float(), perms_path / perms_file)
         else:
-            #print("Loading permutations from disk..")
             self.permutations = torch.load(perms_path / perms_file) 
 
         regions : dict[int,list[str]] = {
@@ -754,25 +758,30 @@ class Energy(Dataset):
 
         pseudo_labels : np.ndarray = np.random.randint(low = 1,
                                             high = 128,
-                                            size = n_epochs)
-        target_permutaions : torch.Tensor = self.permutations[pseudo_labels,:]
+                                            size = n_epochs * n_perms_per_epoch)
+        pseudo_labels  = pseudo_labels.reshape(-1,n_perms_per_epoch)
+        permutations_per_epoch : np.ndarray = \
+                                np.array([self.permutations[pseudo_labels_in_epoch,:]
+                                        for pseudo_labels_in_epoch in pseudo_labels])
         shuffled_channels : list[list[int]] = []
-        shuffled_data : torch.Tensor = torch.zeros(data.shape).double()
-
-        for epoch_num, epoch_permutation in enumerate(target_permutaions): 
-            shuffled_channels : list[int] = []
-            for region in epoch_permutation: # permuted region for that epoch
-                for ch in regions[region.item()]:
-                    try:
-                        ch_index = ch_names.index(ch)
-                        shuffled_channels.append(ch_index)
-                    except ValueError:
-                        # Some channels might be missing due to bad channels 
-                        # and user picks.
-                        continue
-            shuffled_data[epoch_num,:,:] = data[epoch_num,shuffled_channels,:]
+        shuffled_data : torch.Tensor = torch.zeros((n_epochs,n_perms_per_epoch,
+                                                    n_channels, n_bands))
         
-        assert shuffled_data.shape == data.shape
+        for epoch in range(n_epochs): 
+            for permutation in range(n_perms_per_epoch):
+                shuffled_channels : list[int] = []
+                for region in permutations_per_epoch[epoch,permutation,:]:
+                    for ch in regions[region.item()]:
+                        try:
+                            ch_index = ch_names.index(ch)
+                            shuffled_channels.append(ch_index)
+                        except ValueError:
+                            # Some channels might be missing due to bad channels 
+                            # and user picks.
+                            continue
+                shuffled_data[epoch,permutation,:,:] = data[epoch,shuffled_channels,:]
+
+        assert shuffled_data.shape == (n_epochs, n_perms_per_epoch, n_channels,n_bands)
 
         if self.save_freq_perms_to_disk:
             self.perm_save_dir : Path = self.project_root /\
@@ -816,7 +825,7 @@ class Energy(Dataset):
         
         print(f'Using {processes} processes for spatial permutation computation')
         print(f"Processing {len(energy_files)} files...")
-
+        print(energy_files[0])
         with multiprocessing.Pool(processes, initializer=worker_init_fn,
                                     initargs=(os.getpid(),)) \
             as p:
@@ -852,7 +861,7 @@ if __name__ == "__main__":
     # for data in dataset:
     #     print(dataset[0][1])
 
-    dataset.run_freq_permutations_parallel(save_to_disk=True)
+    #dataset.run_freq_permutations_parallel(save_to_disk=True)
     dataset.run_spatial_permutations_parallel(save_to_disk=True)
     
 
