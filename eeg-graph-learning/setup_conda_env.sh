@@ -38,9 +38,9 @@ fi
 
 
 case "$OS_TYPE" in
-  Mac)      YAML="environment.mac.yml"      ;;
-  Linux)    YAML="environment.linux.yml"    ;;
-  Windows)  YAML="environment.windows.yml"  ;;
+  mac)      YAML="environment.mac.yml"      ;;
+  linux)    YAML="environment.linux.yml"    ;;
+  windows)  YAML="environment.windows.yml"  ;;
   *)           echo "Unsupported OS ❌"; exit 1 ;;
 esac
 
