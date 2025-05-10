@@ -1,8 +1,9 @@
 name: eeg-graph-learning
 channels:
-  - pytorch
-  - conda-forge
   - defaults
+  - conda-forge     # ← include conda-forge
+  - pytorch         # ← include PyTorch channel
+  - pyg             # ← PyTorch Geometric channel (hosts torch-sparse)
 dependencies:
   - python=3.10.13
   - pip=23.3.1
