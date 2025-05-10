@@ -1,21 +1,20 @@
 #!/bin/bash
 
-# clean.sh - Script to run the EEG preprocessing pipeline
-# Author: Udesh Habaraduwa
-# Written with AI. 
+# clean.sh - Script to run the EEG preprocessing pipeline 
+# Author: Udesh Habaraduwa 👨‍💻
+# Written with AI 
 
-# Exit on error
+# Exit on error 
 set -e
 
-# Remove the command echoing (set -x) to reduce verbosity
 
-# Get the directory where this script is located
+# Get the directory where this script is located 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Change to the project root directory
+# Change to the project root directory 🏠
 cd "$SCRIPT_DIR"
 
-# Detect operating system
+
 OS="$(uname -s)"
 case "${OS}" in
     Linux*)     OS_TYPE=Linux;;
@@ -26,9 +25,9 @@ case "${OS}" in
     *)          OS_TYPE="UNKNOWN:${OS}"
 esac
 
-echo "Detected operating system: ${OS_TYPE}"
+echo "Detected operating system: ${OS_TYPE} ✅"
 
-# Set up conda environment based on OS
+
 if [ "$OS_TYPE" = "Windows" ]; then
     # For Windows (Git Bash, MSYS2, Cygwin)
     source "$(conda info --base)/etc/profile.d/conda.sh" > /dev/null 2>&1
@@ -37,18 +36,34 @@ else
     eval "$(conda shell.bash hook)" > /dev/null 2>&1
 fi
 
-# Check if the environment exists, create it if it doesn't
-if ! conda env list | grep -q "eeg-graph-learning"; then
-    echo "Creating conda environment from environment.yml..."
-    conda env create -f environment.yml --quiet
+
+case "$OS_TYPE" in
+  Mac)      YAML="environment.mac.yml"      ;;
+  Linux)    YAML="environment.linux.yml"    ;;
+  Windows)  YAML="environment.windows.yml"  ;;
+  *)           echo "Unsupported OS ❌"; exit 1 ;;
+esac
+
+
+ENV_NAME="eeg-graph-learning-${OS_TYPE}"   # bash lowercase trick
+
+# Check if the env exists (name matches file stem) 
+if ! conda info --envs | grep -q "$ENV_NAME"; then
+  echo "Creating $ENV_NAME from $YAML ... 📦"
+  conda env create -f "$YAML" --name "$ENV_NAME" --quiet
 else
-    echo "Using existing eeg-graph-learning conda environment"
+  echo "Using existing $ENV_NAME conda environment 🔄"
 fi
 
-# Activate the conda environment (suppress output)
-echo "Activating conda environment..."
-conda activate eeg-graph-learning > /dev/null 2>&1
+echo "Activating $ENV_NAME ... 🚀"
+conda activate "$ENV_NAME" > /dev/null 2>&1
 
-# Install the IPython kernel for Jupyter
-echo "Installing Jupyter kernel for this environment..."
+
+echo "Installing Jupyter kernel for this environment... 🎯"
 python -m ipykernel install --user --name=eeg-graph-learning --display-name="Python (eeg-graph-learning)"
+
+
+echo "Installing eeg-graph-learning package in development mode... 🛠️"
+pip install -e .
+
+echo "Setup complete! 🎉✅"

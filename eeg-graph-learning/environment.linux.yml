@@ -1,0 +1,49 @@
+# environment.linux.yml  – CUDA‑enabled build for Linux workstations/servers
+
+name: eeg-graph-learning-linux
+channels:
+  - pytorch
+  - nvidia          # cudatoolkit, NCCL, etc.
+  - conda-forge
+  - defaults
+
+dependencies:
+  # ---- language & basics ----
+  - python>=3.10,<3.11
+  - pip>=23.3
+  - setuptools>=68
+
+  # ---- CUDA runtime ----
+  - cudatoolkit=12.1
+
+  # ---- scientific stack ----
+  - numpy>=1.26,<1.27
+  - scipy>=1.12,<1.13
+  - pandas>=2.2,<2.3
+  - matplotlib>=3.8,<3.9
+  - scikit-learn>=1.6,<1.7
+  - mne>=1.9,<2.0
+  - tqdm
+
+  # ---- PyTorch ecosystem ----
+  - pytorch=2.2.1      # build string *_cu121*
+  - torchvision=0.17.1
+  - torchaudio=2.2.1
+
+  # ---- developer tooling ----
+  - jupyter>=1.0
+
+  # ---- pip fallbacks ----
+  - pip:
+      - torch_scatter==2.1.2
+      - torch_sparse==0.6.18
+      - torch_geometric==2.6.1
+      - tensorboard==2.15.1
+      - pytest==7.4.4
+      - optuna==3.5.0
+      - pyprep==0.4.3
+      - openpyxl==3.1.5
+      - pygeodesy==25.5.5
+      - microstructpy==1.5.9
+      - geographiclib==2.0
+      - haversine==2.9.0
