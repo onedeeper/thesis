@@ -17,18 +17,18 @@ cd "$SCRIPT_DIR"
 
 OS="$(uname -s)"
 case "${OS}" in
-    Linux*)     OS_TYPE=Linux;;
-    Darwin*)    OS_TYPE=Mac;;
-    MINGW*)     OS_TYPE=Windows;;
-    MSYS*)      OS_TYPE=Windows;;
-    CYGWIN*)    OS_TYPE=Windows;;
+    Linux*)     OS_TYPE=linux;;
+    Darwin*)    OS_TYPE=mac;;
+    MINGW*)     OS_TYPE=windows;;
+    MSYS*)      OS_TYPE=windows;;
+    CYGWIN*)    OS_TYPE=windows;;
     *)          OS_TYPE="UNKNOWN:${OS}"
 esac
 
 echo "Detected operating system: ${OS_TYPE} ✅"
 
 
-if [ "$OS_TYPE" = "Windows" ]; then
+if [ "$OS_TYPE" = "windows" ]; then
     # For Windows (Git Bash, MSYS2, Cygwin)
     source "$(conda info --base)/etc/profile.d/conda.sh" > /dev/null 2>&1
 else
@@ -45,7 +45,7 @@ case "$OS_TYPE" in
 esac
 
 
-ENV_NAME="eeg-graph-learning-${OS_TYPE}"   # bash lowercase trick
+ENV_NAME="eeg-graph-learning-${OS_TYPE}"  
 
 # Check if the env exists (name matches file stem) 
 if ! conda info --envs | grep -q "$ENV_NAME"; then
