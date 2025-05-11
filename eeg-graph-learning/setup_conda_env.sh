@@ -58,6 +58,24 @@ fi
 echo "Activating $ENV_NAME ... 🚀"
 conda activate "$ENV_NAME" > /dev/null 2>&1
 
+# Determine CUDA availability and version
+CUDA="cpu"
+if python -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
+  CUDA_VERSION=$(python -c "import torch; print(torch.version.cuda.split('.')[0])")
+  if [ "$CUDA_VERSION" = "11" ]; then
+    CUDA="cu118"
+  elif [ "$CUDA_VERSION" = "12" ]; then
+    CUDA="cu121"
+  fi
+  echo "CUDA is available. Using $CUDA version."
+else
+  echo "CUDA is not available. Using CPU version."
+fi
+
+# Install PyG dependencies with the appropriate CUDA version
+echo "Installing pytorch-scatter and pytorch-sparse"
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.1+${CUDA}.html
+pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.1+${CUDA}.html
 
 echo "Installing Jupyter kernel for this environment... 🎯"
 python -m ipykernel install --user --name=eeg-graph-learning --display-name="Python (eeg-graph-learning)"

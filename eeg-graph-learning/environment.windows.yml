@@ -1,57 +1,42 @@
-# environment.windows.yml  – Windows build
-# • Installs the PyTorch CUDA 12.1 variant if an NVIDIA GPU & driver are present.
-# • Comment out the two lines tagged "<GPU>" if you need a CPU‑only setup.
+# environment.linux.yml  – CUDA‑enabled build for Linux
+# This file pulls the official PyTorch CUDA 12.1 build via the
+#   "pytorch-cuda" meta‑package.  It in turn installs the correct
+#   cudatoolkit and drivers from the nvidia channel, so we don't
+#   list "cudatoolkit=" explicitly.
 
-name: eeg-graph-learning-windows
+name: eeg-graph-learning-linux
 channels:
-  - pytorch          # PyTorch, TorchVision, Torchaudio, torch‑cuda meta‑pkg
-  - nvidia           # cudatoolkit / NCCL runtime
+  - pytorch          # PyTorch & pytorch‑cuda meta‑pkg
+  - nvidia           # CUDA runtime libs (pulled transitively)
   - conda-forge
   - defaults
+  - pyg
 
 dependencies:
-  # ─── Language & build tools ─────────────────────────────────────────────
-  - python>=3.10,<3.11
-  - pip>=23.3
-  - setuptools>=68
+  # ---- language & basics ----
+  - python=3.10
+  - pip=23.3
+  - setuptools=68
 
-  # ─── Core scientific stack ─────────────────────────────────────────────
-  - numpy>=1.26,<1.27
-  - scipy>=1.12,<1.13
-  - pandas>=2.2,<2.3
-  - matplotlib>=3.8,<3.9
-  - scikit-learn>=1.6,<1.7
-  - mne>=1.9,<2.0
-  - tqdm
-
-  # ─── Jupyter / dev tooling ─────────────────────────────────────────────
-  - jupyter=1.0
-
-  # ─── PyTorch stack (CUDA 12.1 variant) ─────────────────────────────────
-  - pytorch=2.2.1           # win‑64 build; pulls the CUDA or CPU variant automatically
-  - torchvision=0.17.1
-  - torchaudio=2.2.1
-  - pytorch-cuda=12.1       # <GPU> meta‑package ensures CUDA runtime + cuDNN
-  - cudatoolkit=12.1        # <GPU> actual runtime libs (from nvidia channel)
-
-  # ─── pip‑only packages ─────────────────────────────────────────────────
+  # ---- pip‑only packages ----
   - pip:
-      # PyTorch Geometric ecosystem – no conda builds for Windows PyTorch 2.2 yet
-      - torch-scatter==2.1.2
-      - torch-sparse==0.6.18
+      - numpy==1.26
+      - scipy==1.12
+      - pandas==2.2
+      - matplotlib==3.8
+      - scikit-learn==1.6
+      - torch==2.4.1
+      - torchvision
+      - torchaudio
+      - jupyter==1.0.0
+      - mne==1.9.0
       - torch-geometric==2.6.1
-
-      # Experiment management / optimisation
-      - optuna==3.5.0
       - tensorboard==2.15.1
-
-      # EEG‑specific tooling & misc utilities
+      - pytest==7.4.4
+      - optuna==3.5.0
       - pyprep==0.4.3
+      - openpyxl==3.1.5
+      - pygeodesy
+      - microstructpy==1.5.9
       - geographiclib==2.0
       - haversine==2.9.0
-      - microstructpy==1.5.9
-      - openpyxl==3.1.5
-      - pygeodesy==25.5.5
-
-      # Testing
-      - pytest==7.4.4
