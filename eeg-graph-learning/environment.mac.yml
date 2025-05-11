@@ -26,8 +26,6 @@ dependencies:
       - matplotlib==3.8
       - scikit-learn==1.6
       - torch==2.4.1
-      - torchvision
-      - torchaudio
       - jupyter==1.0.0
       - mne==1.9.0
       - torch-geometric==2.6.1
