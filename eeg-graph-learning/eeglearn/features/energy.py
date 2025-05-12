@@ -825,7 +825,6 @@ class Energy(Dataset):
         
         print(f'Using {processes} processes for spatial permutation computation')
         print(f"Processing {len(energy_files)} files...")
-        print(energy_files[0])
         with multiprocessing.Pool(processes, initializer=worker_init_fn,
                                     initargs=(os.getpid(),)) \
             as p:
