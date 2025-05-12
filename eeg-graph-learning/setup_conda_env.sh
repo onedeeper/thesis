@@ -25,7 +25,7 @@ case "${OS}" in
     *)          OS_TYPE="UNKNOWN:${OS}"
 esac
 
-echo "Detected operating system: ${OS_TYPE}"
+echo "Detected operating system: ${OS_TYPE} ✅"
 
 
 if [ "$OS_TYPE" = "windows" ]; then
@@ -37,14 +37,25 @@ else
 fi
 
 
-
 ENV_NAME="eeg-graph-learning"
-YAML="environment.lock.yml"
+LOCKED_YAML="environment.lock.yml"
+FALLBACK_YAML="environment.yml"
 
 # Check if the env exists (name matches file stem) 
 if ! conda info --envs | grep -q "$ENV_NAME"; then
-  echo "Creating $ENV_NAME from $YAML ... 📦"
-  conda env create -f "$YAML" --name "$ENV_NAME" --quiet
+  # First try the locked YML file
+  if [ -f "$LOCKED_YAML" ]; then
+    echo "Creating $ENV_NAME from locked file $LOCKED_YAML ... 📦"
+    if conda env create -f "$LOCKED_YAML" --name "$ENV_NAME" --quiet; then
+      echo "Successfully created environment from locked file! ✅"
+    else
+      echo "Failed to create environment from locked file, falling back to $FALLBACK_YAML ... ⚠️"
+      conda env create -f "$FALLBACK_YAML" --name "$ENV_NAME" --quiet
+    fi
+  else
+    echo "No locked YML file found, creating $ENV_NAME from $FALLBACK_YAML ... 📦"
+    conda env create -f "$FALLBACK_YAML" --name "$ENV_NAME" --quiet
+  fi
 else
   echo "Using existing $ENV_NAME conda environment 🔄"
 fi
