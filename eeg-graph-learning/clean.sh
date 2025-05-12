@@ -17,11 +17,11 @@ cd "$SCRIPT_DIR"
 # Detect operating system
 OS="$(uname -s)"
 case "${OS}" in
-    Linux*)     OS_TYPE=Linux;;
-    Darwin*)    OS_TYPE=Mac;;
-    MINGW*)     OS_TYPE=Windows;;
-    MSYS*)      OS_TYPE=Windows;;
-    CYGWIN*)    OS_TYPE=Windows;;
+    Linux*)     OS_TYPE=linux;;
+    Darwin*)    OS_TYPE=mac;;
+    MINGW*)     OS_TYPE=windows;;
+    MSYS*)      OS_TYPE=windows;;
+    CYGWIN*)    OS_TYPE=windows;;
     *)          OS_TYPE="UNKNOWN:${OS}"
 esac
 
@@ -36,21 +36,21 @@ else
     eval "$(conda shell.bash hook)" > /dev/null 2>&1
 fi
 
-# Check if the environment exists, create it if it doesn't
-if ! conda env list | grep -q "eeg-graph-learning"; then
-    echo "Creating conda environment from environment.yml..."
-    conda env create -f environment.yml --quiet
+ENV_NAME="eeg-graph-learning"
+# Check if the environment exists first
+if ! conda env list | grep -q "$ENV_NAME"; then
+    echo "Setting up conda environment..."
+    bash setup_conda_env.sh
 else
-    echo "Using existing eeg-graph-learning conda environment"
+    echo "Using existing $ENV_NAME conda environment"
+    # Activate the conda environment (suppress output)
+    echo "Activating conda environment..."
 fi
 
-# Activate the conda environment (suppress output)
-echo "Activating conda environment..."
-conda activate eeg-graph-learning > /dev/null 2>&1
-
+conda activate "$ENV_NAME" > /dev/null 2>&1
 # Install the IPython kernel for Jupyter
 echo "Installing Jupyter kernel for this environment..."
-python -m ipykernel install --user --name=eeg-graph-learning --display-name="Python (eeg-graph-learning)"
+python -m ipykernel install --user --name=$ENV_NAME --display-name="Python ($ENV_NAME)"
 
 # Run the preprocessing pipeline
 echo "Running preprocessing pipeline..."

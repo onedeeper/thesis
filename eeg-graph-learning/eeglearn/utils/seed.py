@@ -60,5 +60,5 @@ def set_seed(seed=42, deterministic=True, verbose=False) -> int:
         pass
         
     if verbose:
-        print(f"✅ Random seed set to {seed}")
+        print(f"Random seed set to {seed} 🎲")
     return seed 

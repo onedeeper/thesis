@@ -25,7 +25,7 @@ case "${OS}" in
     *)          OS_TYPE="UNKNOWN:${OS}"
 esac
 
-echo "Detected operating system: ${OS_TYPE} ✅"
+echo "Detected operating system: ${OS_TYPE}"
 
 
 if [ "$OS_TYPE" = "windows" ]; then
@@ -37,15 +37,9 @@ else
 fi
 
 
-case "$OS_TYPE" in
-  mac)      YAML="environment.mac.yml"      ;;
-  linux)    YAML="environment.linux.yml"    ;;
-  windows)  YAML="environment.windows.yml"  ;;
-  *)           echo "Unsupported OS ❌"; exit 1 ;;
-esac
 
-
-ENV_NAME="eeg-graph-learning-${OS_TYPE}"  
+ENV_NAME="eeg-graph-learning"
+YAML="environment.lock.yml"
 
 # Check if the env exists (name matches file stem) 
 if ! conda info --envs | grep -q "$ENV_NAME"; then
@@ -58,30 +52,11 @@ fi
 echo "Activating $ENV_NAME ... 🚀"
 conda activate "$ENV_NAME" > /dev/null 2>&1
 
-# Determine CUDA availability and version
-CUDA="cpu"
-if python -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
-  CUDA_VERSION=$(python -c "import torch; print(torch.version.cuda.split('.')[0])")
-  if [ "$CUDA_VERSION" = "11" ]; then
-    CUDA="cu118"
-  elif [ "$CUDA_VERSION" = "12" ]; then
-    CUDA="cu121"
-  fi
-  echo "CUDA is available. Using $CUDA version."
-else
-  echo "CUDA is not available. Using CPU version."
-fi
-
-# Install PyG dependencies with the appropriate CUDA version
-echo "Installing pytorch-scatter and pytorch-sparse"
-pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.1+${CUDA}.html
-pip install torch-sparse -f https://data.pyg.org/whl/torch-2.4.1+${CUDA}.html
-
 echo "Installing Jupyter kernel for this environment... 🎯"
 python -m ipykernel install --user --name=eeg-graph-learning --display-name="Python (eeg-graph-learning)"
 
 
 echo "Installing eeg-graph-learning package in development mode... 🛠️"
-pip install -e .
+pip install -e . --no-deps
 
 echo "Setup complete! 🎉✅"
