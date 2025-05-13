@@ -599,7 +599,7 @@ class Energy(Dataset):
             assert os.path.exists(self.perm_save_dir),\
                 "Permutation save directory path invalid"
             
-            save_path = self.perm_save_dir / f"energy_perms_{file_name}"
+            save_path = self.perm_save_dir / f"band_perms_{file_name}"
             torch.save((shuffled_columns.float(), pseudo_labels, file_name), save_path)
             assert os.path.exists(save_path),\
                 f"Data file does not exist: {save_path}"
@@ -783,14 +783,14 @@ class Energy(Dataset):
 
         assert shuffled_data.shape == (n_epochs, n_perms_per_epoch, n_channels,n_bands)
 
-        if self.save_freq_perms_to_disk:
+        if self.save_spatial_perms_to_disk:
             self.perm_save_dir : Path = self.project_root /\
                 'data' / 'energy' / 'spatial_perms'
             self.perm_save_dir.mkdir(parents=True, exist_ok=True)
             assert os.path.exists(self.perm_save_dir),\
                 "Permutation save directory path invalid"
             
-            save_path = self.perm_save_dir / f"energy_perms_{file_name}"
+            save_path = self.perm_save_dir / f"spatial_perms_{file_name}"
             torch.save((shuffled_data.float(), pseudo_labels, file_name), save_path)
             assert os.path.exists(save_path),\
                 f"Data file does not exist: {save_path}"
@@ -859,8 +859,8 @@ if __name__ == "__main__":
     # print(dataset[0][0].shape, dataset[0][1])
     # for data in dataset:
     #     print(dataset[0][1])
-
-    #dataset.run_freq_permutations_parallel(save_to_disk=True)
     dataset.run_spatial_permutations_parallel(save_to_disk=True)
+    dataset.run_freq_permutations_parallel(save_to_disk=True)
+    
     
 
