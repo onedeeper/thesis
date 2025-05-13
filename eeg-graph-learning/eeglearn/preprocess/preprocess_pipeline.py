@@ -41,7 +41,7 @@ if __name__ == '__main__':
     # Get the project root directory (2 levels up from this file)
     project_root = Path(__file__).parent.parent.parent
 
-    derivates_dir = str(project_root / 'data' / 'TDBRAIN-dataset' / 'derivatives')
+    derivates_dir = str(project_root / 'data' / 'tdbrain-dataset' / 'derivatives')
     print(f'Reading data from: {derivates_dir}')
     assert os.path.exists(derivates_dir), \
         f"Derivatives directory does not exist: {derivates_dir}"
