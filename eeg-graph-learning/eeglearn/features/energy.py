@@ -60,6 +60,7 @@ get_energy:
 run_energy_parallel:
     Compute the energy for all participants in parallel.    
 
+    
 """
 
 import math
@@ -560,7 +561,7 @@ class Energy(Dataset):
         band_position : dict = {band : i for i, band \
                                 in enumerate(self.select_freq_bands)}
 
-        pseudo_labels : np.array = np.random.randint(0,
+        pseudo_labels : np.ndarray = np.random.randint(0,
                                         math.factorial(len(self.select_freq_bands))\
                                             , size = n_epochs * n_perms_per_epoch)
         pseudo_labels = pseudo_labels.reshape(-1,n_perms_per_epoch)

@@ -20,6 +20,7 @@ def test_load_preprocessed_data() -> None:
         assert prep_object.bad_channels_after_interpolation ==\
             loaded_prep.bad_channels_after_interpolation
         
+
 # def test_adjacency()-> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Tests the generation of the adjacency matrix"""
 
