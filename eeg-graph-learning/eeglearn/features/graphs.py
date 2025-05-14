@@ -52,7 +52,8 @@ class Graphs():
     """
     def __init__(self, distance : str,
                  cleaned_data_path : str, 
-                 batch_size : int = 256) -> None:
+                 batch_size : int = 256,
+                 n_neighbors : int = 3) -> None:
         """Generate the graph representation for a the data from participants.
 
         Args:
@@ -62,6 +63,7 @@ class Graphs():
                        The distance metric to use when calculating the nearest 
                        neighbors for adjacency.
             batch_size : Size of mini batches to divide the dataset into.
+            n_neighbors : The number of neighbors to consider to add as adjacent
 
         Returns:
         ----
@@ -72,6 +74,7 @@ class Graphs():
             "Must be one of eucledian, great_circle, or ellipsoid"
         self.dist_type  : str = distance
         self.batch_size : int = batch_size
+        self.n_neighbors : int = n_neighbors
         self.ch_positions : dict = {'Fp1' : np.array([-0.02681, 0.08406, -0.01056]),
         'Fp2' : np.array([0.02941, 0.08374, -0.01004]),
         'F7'  : np.array([-0.06699, 0.04169, -0.01596]),
@@ -107,17 +110,35 @@ class Graphs():
                                                 'Pz', 'P4', 'P8', 'O1',
                                                 'Oz', 'O2']
         self.cleaned_data_path : str = cleaned_data_path
+        self.distances : np.array = self.get_distance()
+        
 
     def get_graphs(self,data : list[tuple[torch.Tensor,
                                           np.ndarray,
                                           str]]):
-        
-        dataset = [ participant[0] for participant in data]
+        """Create the graph representations of each epoched recording.
+
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+        dataset = [participant[0] for participant in data]
         #print(len(dataset))
         return DataLoader(dataset, batch_size = self.batch_size)
     
     def get_bad_channels(self) -> None :
-        """Retreive the bad channels from preprocessed data."""
+        """Retreive the bad channels from preprocessed data.
+        
+         Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
         participant_list = os.listdir(self.cleaned_data_path)
         folders_and_files, participant_npy_files = \
             get_cleaned_data_paths(participant_list=participant_list,
@@ -129,12 +150,21 @@ class Graphs():
             preprocessed_file_name : str = file[1]
             prep_data = load_preprocessed_data(folder_path=folder_path,
                                    file_name=preprocessed_file_name)
-            bad= prep_data.bad_channels_after_interpolation['bad_all']
-            bad_channels[preprocessed_file_name] = bad
+            bads= prep_data.bad_channels_after_interpolation['bad_all']
+            # some bad channels are returned as np.str_ class
+            bad_channels[preprocessed_file_name] = [str(item) for item in bads]
         return bad_channels
 
     def get_distance(self) -> np.ndarray:
-        """Calculates the node distance"""
+        """Calculates the node distance.
+        
+         Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
         if self.dist_type == "ellipsoid":
             return self.get_ellipsoid_distance()
         else:
@@ -148,6 +178,13 @@ class Graphs():
         Vincenty algorithm, the Karney algorithm is used to calcualte the distance.
 
         reference : [1] (https://ieeexplore.ieee.org/abstract/document/7833851)
+
+         Args:
+        ----
+
+        Returns:
+        ----
+            None
         """
         e = Ellipsoid()
         # Fit an ellipsoid to the position of the EEG electrodes
@@ -184,6 +221,32 @@ class Graphs():
         return np.array(dists)
     
     def get_adjacency(self) -> None:
-        """Calculate the adajcency matrix for each participant."""
-        
-        return None
+        """Calculate the adajcency matrix for each participant.
+
+        Neighbors are defined by nearest neighbors clustering as defined
+        during initialization. Defaults to 3.
+         Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+        row : list[int] = []
+        col : list[int] = []
+        for ch_i in range(len(self.td_brain_channels)):
+            neighbors = np.argsort(self.distances[ch_i])[1:self.n_neighbors+1]
+            for ch_j in neighbors:
+                row.append(ch_i), col.append(ch_j)
+        edge_weight = np.ones(len(row), dtype=np.float32)
+        return np.array(row), np.array(col), np.array(edge_weight)
+    
+if __name__ == "__main__":
+    Config.set_global_seed()
+    
+    cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
+    graphs =  Graphs(distance="ellipsoid",
+                     cleaned_data_path=cleaned_path)
+    bads = graphs.get_bad_channels()
+    for b  in bads:
+        print(b, bads[b])

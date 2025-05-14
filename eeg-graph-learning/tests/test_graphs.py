@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-
+import tempfile
 from eeglearn.config import Config
 from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
@@ -65,22 +65,39 @@ class TestGraphs:
               for file_id in test_file_ids]
         
     def test_graph_init(self) -> None:
-        """Test creation of Graphs object."""
-        for dist in ["great_circle","eucledian","ellipsoid"]:
-            graphs = Graphs(distance=dist,
-                            cleaned_data_path=self.cleaned_data_path)
-            assert(isinstance(graphs, Graphs))
+        """Test creation of Graphs object.
+        
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+        graphs = Graphs(distance="ellipsoid",
+                        cleaned_data_path=self.cleaned_data_path)
+        assert(isinstance(graphs, Graphs))
 
         # should fail with strings that are not as intended
         with pytest.raises(Exception):
             dist = "sfe323r32asfe"
             graphs = Graphs(distance=dist,
                             cleaned_data_path=self.cleaned_data_path)
-
+        with pytest.raises(NotImplementedError):
+            graphs = Graphs(distance="eucledian",
+                            cleaned_data_path=self.cleaned_data_path)
     def test_get_graphs(self) -> None:
-        """Test the generation of graph objects."""
-        graphs = Graphs(distance="eucledian",
-                        cleaned_data_path=self.cleaned_data_path)
+        """Test the generation of graph objects.
+        
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+        graphs = Graphs(distance="ellipsoid",
+                            cleaned_data_path=self.cleaned_data_path)
         graph_loader = graphs.get_graphs(self.test_file_list)
 
         assert isinstance(graph_loader, DataLoader),\
@@ -94,7 +111,15 @@ class TestGraphs:
         #assert isinstance(first_example, Data)
 
     def test_get_distance(self) -> None:
-        """Test the calculation of distances between electrodes by chosen metric."""
+        """Test the calculation of distances between electrodes by chosen metric.
+        
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
         graphs = Graphs(distance="ellipsoid",
                         cleaned_data_path=self.cleaned_data_path)
         distance = graphs.get_distance()
@@ -105,7 +130,66 @@ class TestGraphs:
         assert np.min(distance) >= 0, "Distances should be strictly greater than 0"
 
     def test_get_bads(self) -> None:
-        """Test the generation of the adjacency matrix for a given participant."""
+        """Test the loading of bad channels for a given participant and sesion.
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bads: list[str] = ["Fp1", "P3"]
+            temp_file, temp_dir = self.create_temp_preprocessed_object(
+                                                    temp_dir=temp_dir,
+                                                            bads=bads)
+            graphs = Graphs(distance="ellipsoid",
+                    cleaned_data_path=temp_dir)
+            bads_found = graphs.get_bad_channels()
+
+            #bad_indices = [graphs.td_brain_channels.index(bad) for bad in bads]
+            assert bads_found[temp_file] == bads,"Should correctly load the forced bads"
+    
+    def test_get_adjacency(self)-> None:
+        """Test the generation of adjacency matrix accounting for bad channels
+        
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bads: list[str] = ["Fp1", "Oz"]
+            temp_file, temp_dir = self.create_temp_preprocessed_object(
+                                                    temp_dir=temp_dir,
+                                                            bads=bads)
+            graphs = Graphs(distance="ellipsoid",
+                    cleaned_data_path=temp_dir)
+            row_idxs, col_idxs, edge_weights = graphs.get_adjacency()
+            
+            assert row_idxs.shape[0] < 26 * 26,\
+                "Expected an array of at most 26 x 26 for a fully connected graph"
+            assert col_idxs.shape[0] < 26 * 26,\
+                "Expected an array of at most 26 x 26 for a fully connected graph"
+            assert edge_weights.shape[0] < 26 * 26,\
+                "Expected an array of at most 26 x 26 for a fully connected graph"
+            
+            #bad_indices = [graphs.td_brain_channels.index(bad) for bad in bads]
+            #assert bads_found[temp_file] == bads,"Should correctly load the forced bads"
+
+    def create_temp_preprocessed_object(self, temp_dir, bads) -> None:
+        """Helper function to create temporary preprocessed objects.
+        
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+
         test_file: str = os.environ.get('TEST_FILE')
         test_cleaned_file: str = os.environ.get('EEG_CLEANED_TEST_FILE')
         participant : str = ""
@@ -113,26 +197,19 @@ class TestGraphs:
         participant, condition = get_participant_id_condition_from_string(test_file)
         preprocessed : Preproccesing = np.load(test_cleaned_file,                         
                             allow_pickle = True)
-        with tempfile.TemporaryDirectory() as temp_dir:
-            print(f"Created temporary directory at: {temp_dir}")
-            temp_dir : Path = Path(temp_dir) / "cleaned"
-            temp_dir.mkdir(parents=True,  exist_ok = True)
-            
-            # hard set a bad channel and save it
-            bads: list[str] = ["Fp1", "P3"]
+        print(f"Created temporary directory at: {temp_dir}")
+        temp_dir : Path = Path(temp_dir) / "cleaned"
+        temp_dir.mkdir(parents=True,  exist_ok = True)
 
-            preprocessed.bad_channels_after_interpolation['bad_all'] = bads
-            file_name : str = \
-                f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
-            save_path : Path = temp_dir / participant / "ses-1" / "eeg"
-            save_path.mkdir(parents=True,exist_ok = True)
-            with open(save_path / file_name , 'wb') as output:   
-                pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
-            assert os.path.exists(save_path/file_name)
-            graphs = Graphs(distance="ellipsoid",
-                    cleaned_data_path=temp_dir)
-            bads_found = graphs.get_bad_channels()
-            #bad_indices = [graphs.td_brain_channels.index(bad) for bad in bads]
-            assert bads_found[file_name] == bads,"Should correctly load the forced bads"
-            
+        preprocessed.bad_channels_after_interpolation['bad_all'] = bads
+        file_name : str = \
+            f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
+        save_path : Path = temp_dir / participant / "ses-1" / "eeg"
+        save_path.mkdir(parents=True,exist_ok = True)
+        with open(save_path / file_name , 'wb') as output:   
+            pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
+        assert os.path.exists(save_path/file_name)
+        return file_name, temp_dir
+        
+
             
