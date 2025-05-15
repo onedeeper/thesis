@@ -5,7 +5,15 @@ target-version = "py38"
 
 [tool.ruff.lint]
 # Enable pycodestyle (`E`), Pyflakes (`F`), etc.
-select = ["E", "F", "I", "N", "D", "UP", "B", "C4"]
+select = [
+  "F",  # Pyflakes — unused imports, etc.
+  "E",  # Pycodestyle
+  "B",  # flake8‑bugbear (defensive programming)
+  "C4", # flake8‑comprehensions
+  "PL", # Pylint‑derived rules (gives us func‑length checks)
+  "ARG" # flake8‑unused‑arguments
+]
+
 ignore = ["D203", "D213"]  # Ignore conflicting rules
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.

@@ -12,6 +12,7 @@ import pickle
 import random
 import shutil
 import tempfile
+import random
 from itertools import permutations
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from pygeodesy.ellipsoidalVincenty import LatLon, Cartesian
 from pygeodesy import Datum
 from pygeodesy import Ellipsoid as pyg_Ellipsoid
 
+Config.RANDOM_SEED = 212112
 Config.set_global_seed()
 
 class TestGraphs:
@@ -54,9 +56,18 @@ class TestGraphs:
         subj_ids : list[int] = [np.random.randint(10000000,15000000)\
                                 for _ in range(n_test_files)]
         
-        test_file_ids = [f"energy_sub-{subj_id}_EO_epoched.pt"\
+        conditions : list[str] = ["EO", "EC"]
+        test_file_ids =\
+            [f"energy_sub-{subj_id}_{random.sample(conditions,1)}_epoched.pt"\
                               for subj_id in subj_ids]
         
+        self.td_brain_channels : list[str] = [  'Fp1', 'Fp2', 'F7', 'F3', 
+                                                'Fz', 'F4', 'F8', 'FC3', 
+                                                'FCz', 'FC4', 'T7', 'C3', 
+                                                'Cz', 'C4', 'T8', 'CP3',
+                                                'CPz', 'CP4', 'P7', 'P3', 
+                                                'Pz', 'P4', 'P8', 'O1',
+                                                'Oz', 'O2']
         self.test_file_list = [(
             torch.rand((n_epochs,n_perms_per_epoch,n_channels,n_bands)), # data
             np.random.randint(0,n_max_test_labels, 
@@ -96,19 +107,60 @@ class TestGraphs:
         ----
             None
         """
-        graphs = Graphs(distance="ellipsoid",
-                            cleaned_data_path=self.cleaned_data_path)
-        graph_loader = graphs.get_graphs(self.test_file_list)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # create some temporary preprocessed objects with bad channels 
+            # Make that the cleaned data path. 
+            # Make these file ids the same as the test data generated here.
+            # created preprocessing objects need to have the same file names
+            # as the files here.
+            for data,_,file_id in self.test_file_list:
+                bads: list[str] = random.sample(self.td_brain_channels,4)
+                temp_file, temp_dir_cleaned= self.create_temp_preprocessed_object(
+                                                    temp_dir=temp_dir,
+                                                            bads=bads,
+                                                            file_id=file_id)
+                save_path : Path = Path(temp_dir) / "perms"
+                save_path.mkdir(parents=True,exist_ok = True)
+                with open(save_path / file_id , 'wb') as output:   
+                    pickle.dump(data, output, pickle.HIGHEST_PROTOCOL)
+                assert os.path.exists(save_path/file_id)
+            graphs = Graphs(distance="ellipsoid",
+                                cleaned_data_path=temp_dir_cleaned)
+            graph_loader = graphs.get_graphs(perms_path=save_path,
+                                            files_to_load=\
+                                                [id for _,_,id in 
+                                                 self.test_file_list[:2]])
+            # want to test of the bads are handled properly
+            # I can pull out the specific rows and columns and check if they are all 0
 
-        assert isinstance(graph_loader, DataLoader),\
-            "Should return torch geometric dataloader"
+            assert isinstance(graph_loader, DataLoader),\
+                "Should return torch geometric dataloader"
         
-        # check the contents of a batch
-        graph_loader_iter = iter(graph_loader)
-        first_example = next(graph_loader_iter)[0]
+            # check the contents of a batch
+            graph_loader_iter = iter(graph_loader)
+            first_example = next(graph_loader_iter)[0]
 
-        # each example should be a graph data object
-        #assert isinstance(first_example, Data)
+            # each example should be a graph data object
+            #assert isinstance(first_example, Data)
+
+    def test_get_ellipsoid_distance(self) -> None:
+        """Test the calculation of ellipsoidal distances between electrodes.
+        
+        Args:
+        ----
+
+        Returns:
+        ----
+            None
+        """
+        graphs = Graphs(distance="ellipsoid",
+                        cleaned_data_path=self.cleaned_data_path)
+        distance = graphs.get_ellipsoid_distance()
+        assert isinstance(distance, np.ndarray), "Expected an array"
+        assert distance.shape == (26,26), "Should contain distance between each node"
+        assert np.allclose(np.diag(distance), np.zeros(26)), "Distance to self == 0"
+        assert np.allclose(distance - distance.T, 0), "Should be symmetric"
+        assert np.min(distance) >= 0, "Distances should be strictly greater than 0"
 
     def test_get_distance(self) -> None:
         """Test the calculation of distances between electrodes by chosen metric.
@@ -155,7 +207,7 @@ class TestGraphs:
         
         Args:
         ----
-
+            
         Returns:
         ----
             None
@@ -179,25 +231,30 @@ class TestGraphs:
             #bad_indices = [graphs.td_brain_channels.index(bad) for bad in bads]
             #assert bads_found[temp_file] == bads,"Should correctly load the forced bads"
 
-    def create_temp_preprocessed_object(self, temp_dir, bads) -> None:
+    def create_temp_preprocessed_object(self, 
+                                        temp_dir : str, 
+                                        bads : list[str], 
+                                        file_id: str = None ) -> None:
         """Helper function to create temporary preprocessed objects.
         
         Args:
         ----
-
+            temp_dir : Path to a temporary directory to save the Preprocessed object.
+            bads : List of bad channels to force.
+            file_id (optional) : a new file id to give the modified Preprocessed object
         Returns:
         ----
             None
         """
-
         test_file: str = os.environ.get('TEST_FILE')
+        if file_id:
+            test_file = file_id
         test_cleaned_file: str = os.environ.get('EEG_CLEANED_TEST_FILE')
         participant : str = ""
         condition : str = ""
         participant, condition, session = get_details_from_file_name(test_file)
         preprocessed : Preproccesing = np.load(test_cleaned_file,                         
                             allow_pickle = True)
-        print(f"Created temporary directory at: {temp_dir}")
         temp_dir : Path = Path(temp_dir) / "cleaned"
         temp_dir.mkdir(parents=True,  exist_ok = True)
 

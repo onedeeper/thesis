@@ -479,22 +479,22 @@ class TestEnergy:
             work_dir.mkdir(parents=True,  exist_ok = True)
         
             # Full time series
-            # dataset : Energy = Energy(cleaned_path=cleaned_path,
-            #                 full_time_series=True,
-            #                     energy_plots=True,
-            #                     verbose_psd=False,
-            #                     picks_psd = ['eeg'],
-            #                     include_bad_channels_psd=True,
-            #                     save_to_disk=True,
-            #                     select_freq_bands=['gamma', 'delta', 'theta','alpha',
-            #                                     'beta'],
-            #                     work_dir=work_dir)
+            dataset : Energy = Energy(cleaned_path=cleaned_path,
+                            full_time_series=True,
+                                energy_plots=True,
+                                verbose_psd=False,
+                                picks_psd = ['eeg'],
+                                include_bad_channels_psd=True,
+                                save_to_disk=True,
+                                select_freq_bands=['gamma', 'delta', 'theta','alpha',
+                                                'beta'],
+                                work_dir=work_dir)
             
             save_path : Path = Path(__file__).resolve().parent.parent.parent /\
                         "eeg-graph-learning" / "tests" / "test_data"
             
-            # self.helper_get_permutations(dataset,save_path)
-            # self.helper_get_permutations(dataset, save_path, test_file_loading=True)
+            self.helper_get_permutations(dataset,save_path)
+            self.helper_get_permutations(dataset, save_path, test_file_loading=True)
             # Epoched time series
             dataset : Energy = Energy(cleaned_path=cleaned_path,
                             full_time_series=False,
@@ -507,7 +507,7 @@ class TestEnergy:
                                                 'beta'],
                                 work_dir=work_dir)
             self.helper_get_permutations(dataset,save_path)
-           #self.helper_get_permutations(dataset, save_path, test_file_loading=True)
+            self.helper_get_permutations(dataset, save_path, test_file_loading=True)
 
     def helper_get_permutations(self,
                               dataset : Energy,

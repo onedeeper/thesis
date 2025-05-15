@@ -102,32 +102,67 @@ class Graphs():
         'Oz'  : np.array([-0.00141, -0.11779, 0.01584]),
         'O2'  : np.array([0.02689, -0.11468, 0.00945])
         }
-        self.td_brain_channels : list[str] = [  'Fp1', 'Fp2', 'F7', 'F3', 
+        self.td_brain_channels : list[str] = [ 'Fp1', 'Fp2', 'F7', 'F3', 
                                                 'Fz', 'F4', 'F8', 'FC3', 
                                                 'FCz', 'FC4', 'T7', 'C3', 
                                                 'Cz', 'C4', 'T8', 'CP3',
                                                 'CPz', 'CP4', 'P7', 'P3', 
                                                 'Pz', 'P4', 'P8', 'O1',
                                                 'Oz', 'O2']
+        n_channels : int = len(self.td_brain_channels)
+        self.ch_names_to_idxs : list[int] = { ch : idx 
+                                             for idx, ch in 
+                                                    enumerate(self.td_brain_channels)}
+        assert os.path.exists(cleaned_data_path)
         self.cleaned_data_path : str = cleaned_data_path
         self.distances : np.array = self.get_distance()
-        
+        assert self.distances.shape == (n_channels, n_channels),\
+            "Distance matrix not as expected. Should be num_channels x num_channels"
+        self.base_adjacency = self.get_adjacency()
 
-    def get_graphs(self,data : list[tuple[torch.Tensor,
-                                          np.ndarray,
-                                          str]]):
-        """Create the graph representations of each epoched recording.
+    def get_graphs(self,perms_path : str,
+                        files_to_load : list[str]):
+        """Create the graph representations of each epoched recording in a collection.
 
         Args:
         ----
-
+            perms_path : Path to directory containing generated permutations.
+                         Can be spatial or band permutations
+            files_to_load : The selected files for which to generate graphs.
+                            Each should be a tuple. For example :
+                            (torch.Size([12, 4, 26, 5]), <-- Data
+                            (12, 4), <- pseudo_labels per epoch 
+                            'energy_sub-88019481_EO_epoched.pt') <-filename
         Returns:
         ----
-            None
+            Dataloader : Each mini-batch contains a 'self.batch_size' set of graphs.
+
+        Note: This work follows https://ieeexplore.ieee.org/abstract/document/9765326
+              relevant code can be found here : https://github.com/CHEN-XDU/GMSS
         """
-        dataset = [participant[0] for participant in data]
-        #print(len(dataset))
-        return DataLoader(dataset, batch_size = self.batch_size)
+        
+        files_with_bad_chs : dict[dict] = {file : bads 
+                                           for file,bads in 
+                                                        self.get_bad_channels().items()
+                                           if len(bads) != 0}
+        
+        print(files_with_bad_chs)
+        for file in files_to_load:
+            print(f"f t l : {file}")
+
+
+
+        
+        
+        # first check if there any bad channels.
+        # if there are, then update the base adjacency
+        #   replace the rows and columns of the specific index
+        # otherwise, use the base adjacency.
+        # load the permutation from disk
+        # create graph object
+        # save to a list
+        # create the dataloader and return.
+        return None
     
     def get_bad_channels(self) -> None :
         """Retreive the bad channels from preprocessed data.
@@ -137,19 +172,24 @@ class Graphs():
 
         Returns:
         ----
-            None
+            bad_channels : dict[str,list[str]] : A dictionary keyed by file_id, with
+                                            list of strings indicating which channels
+                                            are bad in the file.
         """
-        participant_list = os.listdir(self.cleaned_data_path)
-        folders_and_files, participant_npy_files = \
+        participant_list : list[str] = os.listdir(self.cleaned_data_path)
+        folders_and_files : list[str, str] 
+        folders_and_files, _ = \
             get_cleaned_data_paths(participant_list=participant_list,
                                    cleaned_path=self.cleaned_data_path)
+        assert len(folders_and_files) > 0, "Atleast one cleaned file should exist."
         
-        bad_channels : dict[str, list[str]] = {}
+        bad_channels : dict[str, list [str]] = {}
         for file in folders_and_files:
             folder_path : str = file[0]
             preprocessed_file_name : str = file[1]
             prep_data = load_preprocessed_data(folder_path=folder_path,
                                    file_name=preprocessed_file_name)
+            assert isinstance(prep_data, Preproccesing),"Should be a Preprocessing obj"
             bads= prep_data.bad_channels_after_interpolation['bad_all']
             # some bad channels are returned as np.str_ class
             bad_channels[preprocessed_file_name] = [str(item) for item in bads]
@@ -158,13 +198,18 @@ class Graphs():
     def get_distance(self) -> np.ndarray:
         """Calculates the node distance.
         
+        Calculates the distance between each pair of nodes on the scalp using 
+        one of three distance metrics. 
+
+        Eucledian and great circle distance are yet to be implemented
          Args:
         ----
 
         Returns:
         ----
-            None
-        """
+            distances : np.ndarray : A 26x26 matrix indicating the distance between each
+                                    node.
+          """
         if self.dist_type == "ellipsoid":
             return self.get_ellipsoid_distance()
         else:
@@ -175,7 +220,7 @@ class Graphs():
         
         Model the head as an ellipsoid and calculate the distance between electrodes
         as ellipsoid geodesic length. To avoid the problem discussed in [1]  using the
-        Vincenty algorithm, the Karney algorithm is used to calcualte the distance.
+        Vincenty algorithm, the Karney algorithm is used.
 
         reference : [1] (https://ieeexplore.ieee.org/abstract/document/7833851)
 
@@ -194,7 +239,7 @@ class Graphs():
         # center : center of the fitted ellipsoid
         # axes : The radii lengths of the 3 semi-axes
         # rot_seq : How the fitted ellipsoid is rotated in space
-        (center, axes, rot) = (
+        (_, axes, _) = (
             fit_geo.center,
             fit_geo.axes,
             fit_geo.rot_seq
@@ -217,14 +262,17 @@ class Graphs():
                 d   = p1k.distanceTo(p2k)  
                 row.append(d)
             dists.append(row)
-
-        return np.array(dists)
+        dists = np.array(dists)
+        assert dists.shape == (26,26), "Expect each node's distance to another."
+        assert np.all(dists >= 0), "Distances cannot be negative."
+        return dists
     
     def get_adjacency(self) -> None:
         """Calculate the adajcency matrix for each participant.
 
-        Neighbors are defined by nearest neighbors clustering as defined
-        during initialization. Defaults to 3.
+        Neighbors are defined by nearest neighbors clustering. Defaults to k =3
+        clustering.
+
          Args:
         ----
 
@@ -239,6 +287,8 @@ class Graphs():
             for ch_j in neighbors:
                 row.append(ch_i), col.append(ch_j)
         edge_weight = np.ones(len(row), dtype=np.float32)
+        assert len(edge_weight) == len(col) == len(row),\
+            "Expected each edge to have a weight."
         return np.array(row), np.array(col), np.array(edge_weight)
     
 if __name__ == "__main__":
@@ -247,6 +297,4 @@ if __name__ == "__main__":
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
     graphs =  Graphs(distance="ellipsoid",
                      cleaned_data_path=cleaned_path)
-    bads = graphs.get_bad_channels()
-    for b  in bads:
-        print(b, bads[b])
+    graphs.get_graphs()
