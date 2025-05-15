@@ -25,7 +25,7 @@ from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.features.graphs import Graphs
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
-from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set,\
+from eeglearn.utils.utils import get_details_from_file_name, hamming_set,\
     get_cleaned_data_paths
 from operator import itemgetter
 #Config.RANDOM_SEED = 1223333
@@ -194,7 +194,7 @@ class TestGraphs:
         test_cleaned_file: str = os.environ.get('EEG_CLEANED_TEST_FILE')
         participant : str = ""
         condition : str = ""
-        participant, condition = get_participant_id_condition_from_string(test_file)
+        participant, condition, session = get_details_from_file_name(test_file)
         preprocessed : Preproccesing = np.load(test_cleaned_file,                         
                             allow_pickle = True)
         print(f"Created temporary directory at: {temp_dir}")
@@ -203,8 +203,8 @@ class TestGraphs:
 
         preprocessed.bad_channels_after_interpolation['bad_all'] = bads
         file_name : str = \
-            f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
-        save_path : Path = temp_dir / participant / "ses-1" / "eeg"
+            f'{participant}_{session}_task-rest{condition}_preprocessed.npy'
+        save_path : Path = temp_dir / participant / session / "eeg"
         save_path.mkdir(parents=True,exist_ok = True)
         with open(save_path / file_name , 'wb') as output:   
             pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)

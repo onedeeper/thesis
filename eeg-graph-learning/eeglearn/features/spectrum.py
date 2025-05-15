@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas 
 import mne
-from eeglearn.utils.utils import get_participant_id_condition_from_string,\
+from eeglearn.utils.utils import get_details_from_file_name,\
     get_cleaned_data_paths, get_labels_dict
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
@@ -186,19 +186,19 @@ class PowerSpectrum(Dataset):
         if not self.ran_spectrum:
             self.run_spectrum_parallel()
         try:
-            participant_id, condition =  get_participant_id_condition_from_string\
+            participant_id, condition,session =  get_details_from_file_name\
                 (self.participant_npy_files[idx])
             label = self.labels_dict[participant_id]
             if self.full_time_series:
                 spectra = torch.load(self.spectrum_save_dir /\
-                                      f'psd_{participant_id}_{condition}.pt')
+                                      f'psd_{participant_id}_{condition}_{session}.pt')
                 freqs = torch.load(self.spectrum_save_dir /\
-                                      f'freqs_{participant_id}_{condition}.pt')
+                                    f'freqs_{participant_id}_{condition}_{session}.pt')
             else:
                 spectra = torch.load(self.spectrum_save_dir_epoched /\
-                                      f'psd_{participant_id}_{condition}.pt')
+                                      f'psd_{participant_id}_{condition}_{session}.pt')
                 freqs = torch.load(self.spectrum_save_dir_epoched /\
-                                      f'freqs_{participant_id}_{condition}.pt')
+                                    f'freqs_{participant_id}_{condition}_{session}.pt')
             return spectra, freqs, label
         except IndexError:
             print(f'Spectrum for {self.participant_npy_files[idx]} not found')
@@ -250,7 +250,7 @@ class PowerSpectrum(Dataset):
             - Files are saved in `self.spectrum_save_dir` or
               `self.spectrum_save_dir_epoched` depending on `self.full_time_series`.
         """
-        participant_id, condition = get_participant_id_condition_from_string(file_name)
+        participant_id, condition, session = get_details_from_file_name(file_name)
         data : Preproccesing = load_preprocessed_data(folder_path, file_name)
 
         condition : str
@@ -287,10 +287,11 @@ class PowerSpectrum(Dataset):
                                           exclude=exclude)
             if self.save_to_disk:
                 path_to_psd : Path = self.spectrum_save_dir / \
-                    f'psd_{participant_id}_{condition}.pt'
+                    f'psd_{participant_id}_{condition}_{session}.pt'
+                print(f"in spec path : {path_to_psd}")
                 torch.save((torch.from_numpy(spectra), ordered_ch_names), path_to_psd)
                 path_to_freqs : Path = self.spectrum_save_dir / \
-                    f'freqs_{participant_id}_{condition}.pt'
+                    f'freqs_{participant_id}_{condition}_{session}.pt'
                 torch.save(torch.from_numpy(freqs), path_to_freqs)
             if self.plots:  
                 plot_psd(psd=psd, plot_save_dir=self.plot_save_dir, \
@@ -314,10 +315,10 @@ class PowerSpectrum(Dataset):
                                           exclude=exclude)
             if self.save_to_disk:
                 path_to_psd : Path = self.spectrum_save_dir_epoched / \
-                    f'psd_{participant_id}_{condition}.pt'
+                    f'psd_{participant_id}_{condition}_{session}.pt'
                 torch.save((torch.from_numpy(spectra), ordered_ch_names), path_to_psd)
                 path_to_freqs : Path = self.spectrum_save_dir_epoched / \
-                    f'freqs_{participant_id}_{condition}.pt'
+                    f'freqs_{participant_id}_{condition}_{session}.pt'
                 torch.save(torch.from_numpy(freqs), path_to_freqs)
             if self.plots:
                 plot_psd( psd=psd, plot_save_dir=self.plot_save_dir, \

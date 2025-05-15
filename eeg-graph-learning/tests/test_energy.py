@@ -23,7 +23,7 @@ import torch
 from eeglearn.config import Config
 from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set,\
+from eeglearn.utils.utils import get_details_from_file_name, hamming_set,\
     get_cleaned_data_paths
 from operator import itemgetter
 #Config.RANDOM_SEED = 1223333
@@ -268,6 +268,7 @@ class TestEnergy:
 
     def helper_frequency_shuffle(self, energy : Energy, temp_dir : Path,
                                  participant: str,
+                                 session : str, 
                                  file_name) -> None:
         """Generate test permutations for frequency shuffling testing.
         
@@ -275,7 +276,8 @@ class TestEnergy:
         ----
             energy : Energy object with all the necessary methods to run the test
             temp_dir : Temporary directory to save generated permutations
-            participant : participant Id 
+            participant : Participant Id 
+            session : Session Id
             file_name : The test file name to be loaded.
 
         Returns:
@@ -296,7 +298,7 @@ class TestEnergy:
         for _ in range(10):
             band_details : tuple[torch.Tensor, list[str]] = energy.get_energy\
                                                         (folder_path=temp_dir \
-                                                    / participant / "ses-1" / "eeg",
+                                                    / participant / session / "eeg",
                                                     file_name= file_name, )
             input_matrix : torch.Tensor  = band_details[0]
             if len(input_matrix.shape) == 2:
@@ -333,7 +335,7 @@ class TestEnergy:
         test_cleaned_file = os.environ.get('EEG_CLEANED_TEST_FILE')
         participant : str = ""
         condition : str = ""
-        participant, condition = get_participant_id_condition_from_string(TEST_FILE)
+        participant, condition, session = get_details_from_file_name(TEST_FILE)
         preprocessed : Preproccesing = np.load(test_cleaned_file, allow_pickle = True)
         test_bands : list[str] = ['alpha','beta','theta','gamma','delta']
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -346,8 +348,8 @@ class TestEnergy:
             preprocessed.preprocessed_raw.info['bads'] = ["F7", "Fp1"]
             preprocessed.preprocessed_epochs.info['bads'] = ["F7", "Fp1"]
             file_name : str = \
-                f'{participant}_ses-1_task-rest{condition}_preprocessed.npy'
-            save_path : Path = temp_dir / participant / "ses-1" / "eeg"
+                f'{participant}_{session}_task-rest{condition}_preprocessed.npy'
+            save_path : Path = temp_dir / participant / session / "eeg"
             save_path.mkdir(parents=True,exist_ok = True)
             with open(save_path / file_name , 'wb') as output:   
                 pickle.dump(preprocessed, output, pickle.HIGHEST_PROTOCOL)
@@ -361,7 +363,8 @@ class TestEnergy:
                                 save_to_disk=False,
                                 include_bad_channels_psd=False,
                                 work_dir=work_dir)
-            self.helper_frequency_shuffle(energy,temp_dir,participant,file_name)
+            self.helper_frequency_shuffle(energy,
+                                          temp_dir,participant,session, file_name )
             
             # Test with full time series bad channels included
             #--------------------------------#
@@ -371,7 +374,8 @@ class TestEnergy:
                                 save_to_disk=False,
                                 include_bad_channels_psd=True,
                                 work_dir=work_dir)
-            self.helper_frequency_shuffle(energy,temp_dir,participant, file_name)
+            self.helper_frequency_shuffle(energy,
+                                          temp_dir,participant,session, file_name )
             
             # Test with epoched time series with bad channels excluded
             #--------------------------------#
@@ -382,7 +386,8 @@ class TestEnergy:
                                             save_to_disk=False,
                                             include_bad_channels_psd=False,
                                             work_dir=work_dir)
-            self.helper_frequency_shuffle(energy,temp_dir,participant,file_name)
+            self.helper_frequency_shuffle(energy,
+                                          temp_dir,participant,session, file_name )
 
             # Test with epoched time series with bad channels included
             #--------------------------------#
@@ -392,7 +397,8 @@ class TestEnergy:
                                             save_to_disk=False,
                                             include_bad_channels_psd=True,
                                             work_dir=work_dir)
-            self.helper_frequency_shuffle(energy,temp_dir,participant, file_name)
+            self.helper_frequency_shuffle(energy,
+                                          temp_dir,participant,session, file_name )
 
 
     def test_run_freq_permutations_parallel(self)-> None:

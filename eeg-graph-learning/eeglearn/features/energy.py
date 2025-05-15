@@ -81,7 +81,7 @@ from eeglearn.features.spectrum import PowerSpectrum
 from eeglearn.utils.utils import (
     get_cleaned_data_paths,
     get_labels_dict,
-    get_participant_id_condition_from_string,
+    get_details_from_file_name,
     hamming_set,
 )
 
@@ -305,14 +305,14 @@ class Energy(Dataset):
         if not self.ran_energy:
             self.run_energy_parallel()
         try:
-            participant_id, condition =  get_participant_id_condition_from_string\
+            participant_id, condition, session =  get_details_from_file_name\
                 (self.participant_npy_files[idx])
             if self.full_time_series:
                 energy = torch.load(self.energy_save_dir /\
-                            f'energy_{participant_id}_{condition}_{self.data_type}.pt')
+                f'energy_{participant_id}_{condition}_{session}_{self.data_type}.pt')
             else:
                 energy = torch.load(self.energy_save_dir_epoched /\
-                        f'energy_{participant_id}_{condition}_{self.data_type}.pt')
+                f'energy_{participant_id}_{condition}_{session}_{self.data_type}.pt')
             return energy
         except IndexError:
             print(f'Energy for {self.participant_npy_files[idx]} not found')
@@ -362,7 +362,7 @@ class Energy(Dataset):
         """
         participant_id : str
         condition : str
-        participant_id, condition = get_participant_id_condition_from_string(file_name)
+        participant_id, condition, session = get_details_from_file_name(file_name)
         path_to_file : Path = folder_path / file_name
         assert os.path.exists(path_to_file),f"file does not exist: {path_to_file}"
         label = self.labels_dict[participant_id]
@@ -431,8 +431,9 @@ class Energy(Dataset):
                 assert isinstance(ch_names, list), "Should be a list of strings"
                 torch.save((combined_energy.float(),ch_names,
                             participant_id, condition, label), self.energy_save_dir /\
-                            f"energy_{participant_id}_{condition}_{self.data_type}.pt")
-            return (combined_energy.float(),ch_names, participant_id, condition, label)
+                f"energy_{participant_id}_{condition}_{session}_{self.data_type}.pt")
+            return (combined_energy.float(),
+                    ch_names, participant_id, condition, session, label)
         else:
             n_channels_included = self.n_eeg_channels - \
                 (1 - self.include_bad_channels_psd)*(n_bad_channels)
@@ -478,8 +479,9 @@ class Energy(Dataset):
                 torch.save((combined_energy.float(),
                             ch_names, participant_id,
                             condition, label), self.energy_save_dir_epoched /\
-                            f"energy_{participant_id}_{condition}_{self.data_type}.pt")
-            return (combined_energy.float(),ch_names, participant_id, condition, label)
+                f"energy_{participant_id}_{condition}_{session}_{self.data_type}.pt")
+            return (combined_energy.float(),
+                    ch_names, participant_id, condition, session, label)
         
 
     def run_energy_parallel(self) -> None | list:

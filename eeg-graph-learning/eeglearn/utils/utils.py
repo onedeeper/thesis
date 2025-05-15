@@ -20,8 +20,8 @@ import pandas as pd
 from scipy.spatial.distance import cdist
 import torch
 from eeglearn.preprocess.preprocessing import Preproccesing
-def get_participant_id_condition_from_string(file_path: str) -> tuple[str, str]:
-    """Extract the participant ID and condition from the file path.
+def get_details_from_file_name(file_path: str) -> tuple[str, str]:
+    """Extract the participant specific information from a string.
     
     Args:
     ----
@@ -29,19 +29,18 @@ def get_participant_id_condition_from_string(file_path: str) -> tuple[str, str]:
         
     Returns:
     -------
-        tuple: A tuple containing (participant_id, condition)
+        tuple: A tuple containing (participant_id, condition, session)
 
     """
-    # Extract the participant ID and condition from the file path
-
-    participant_match = re.search(r'(sub-\d+)(?=_)', file_path)
-    participant_id = participant_match.group(1) if participant_match else None
+    participant_match : re.Match = re.search(r'(sub-\d+)(?=_)', file_path)
+    participant_id : str = participant_match.group(1) if participant_match else None
     
-    # Extract condition (restEC or restEO) from the task- portion
     condition_match = re.search(r'(E[CO])', file_path)
-    condition = condition_match.group(1) if condition_match else None
+    condition : str = condition_match.group(1) if condition_match else None
 
-    return participant_id, condition
+    session_match :re.Match =  re.search(r'(ses-[12])', file_path)
+    session : str = session_match.group(1) if session_match else None 
+    return participant_id, condition, session
 
 def get_labels_dict() -> dict[str, str]:
     """Get indications for each participant from the details excel file.

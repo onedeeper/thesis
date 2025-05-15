@@ -26,7 +26,7 @@ import torch
 from eeglearn.config import Config
 from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.utils.utils import get_participant_id_condition_from_string, hamming_set,\
+from eeglearn.utils.utils import get_details_from_file_name, hamming_set,\
     get_cleaned_data_paths, load_preprocessed_data
 from operator import itemgetter
 from torch_geometric.data import Data
