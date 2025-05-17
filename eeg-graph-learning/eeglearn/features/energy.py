@@ -365,7 +365,11 @@ class Energy(Dataset):
         participant_id, condition, session = get_details_from_file_name(file_name)
         path_to_file : Path = folder_path / file_name
         assert os.path.exists(path_to_file),f"file does not exist: {path_to_file}"
-        label = self.labels_dict[participant_id]
+        try:
+            label = self.labels_dict[participant_id]
+        except KeyError:
+            print(f"Participant ID {participant_id} not found in labels dictionary")
+            label = "No-label"
         #get the spectrum
         spectra : torch.Tensor
         freqs : torch.Tensor

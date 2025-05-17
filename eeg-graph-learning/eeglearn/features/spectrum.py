@@ -188,7 +188,11 @@ class PowerSpectrum(Dataset):
         try:
             participant_id, condition,session =  get_details_from_file_name\
                 (self.participant_npy_files[idx])
-            label = self.labels_dict[participant_id]
+            try:
+                label = self.labels_dict[participant_id]
+            except KeyError:
+                print(f"Participant ID {participant_id} not found in labels dictionary")
+                label = 'No-label'
             if self.full_time_series:
                 spectra = torch.load(self.spectrum_save_dir /\
                                       f'psd_{participant_id}_{condition}_{session}.pt')
