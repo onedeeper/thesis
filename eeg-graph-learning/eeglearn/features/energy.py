@@ -828,7 +828,6 @@ class Energy(Dataset):
 
 if __name__ == "__main__":
     # Set seed for reproducibility or testing different runs
-    Config.RANDOM_SEED = 33
     Config.set_global_seed()
     
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
@@ -836,7 +835,7 @@ if __name__ == "__main__":
         'TDBRAIN_participants_V2.xlsx'
     dataset = Energy(cleaned_path=cleaned_path,
                      full_time_series=False,
-                          energy_plots=True,
+                          energy_plots=False,
                           verbose_psd=False,
                           picks_psd = ['eeg'],
                           include_bad_channels_psd=True,
