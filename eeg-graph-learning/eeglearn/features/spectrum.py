@@ -288,7 +288,6 @@ class PowerSpectrum(Dataset):
             if self.save_to_disk:
                 path_to_psd : Path = self.spectrum_save_dir / \
                     f'psd_{participant_id}_{condition}_{session}.pt'
-                print(f"in spec path : {path_to_psd}")
                 torch.save((torch.from_numpy(spectra), ordered_ch_names), path_to_psd)
                 path_to_freqs : Path = self.spectrum_save_dir / \
                     f'freqs_{participant_id}_{condition}_{session}.pt'

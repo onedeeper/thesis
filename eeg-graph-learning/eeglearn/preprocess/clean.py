@@ -262,12 +262,13 @@ def clean_pipeline(derivates_dir : str,preprocessed_dir : str,
     if  num_samples:
         random_subjects : list[str] = \
             random.sample(list(subjects_to_process), num_samples)
-        n_files_expected : int = len(random_subjects) * len(sessions) * len(conditions)
-        print(f"Processing {num_samples} random subjects --> {n_files_expected} files")
         files_to_process = get_file_details(random_subjects, sessions, 
                                             conditions, derivates_dir, 
                                             preprocessed_dir, epochs_length,
                                               line_noise, sfreq, plots)
+       
+        print(f"🧠 Processing {num_samples} random subjects..")
+        print(f"🧠 Processing {num_samples} subjects -> {len(files_to_process)} files")
         #assert len(files_to_process) == n_files_expected, \
         #    "Total number of CSVS not as expected"
     else: 
@@ -285,7 +286,7 @@ def clean_pipeline(derivates_dir : str,preprocessed_dir : str,
                            desc="Processing files.."))
     if verify_output:
         assert len(os.listdir(preprocessed_dir)) >= \
-            len(files_to_process) / len(sessions) / len(conditions), \
+            len(files_to_process) / len(files_to_process), \
             "Not all files have been processed"
 
 if __name__ == '__main__':

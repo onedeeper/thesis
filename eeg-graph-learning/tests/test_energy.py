@@ -236,7 +236,7 @@ class TestEnergy:
                 
                 band_details : tuple[torch.Tensor, list[str]] =  energy.get_energy\
                                                         (folder_path=Path(dir_path) \
-                                        / "sub-19740274" / "ses-1" / "eeg" ,
+                                        / "sub-19729054" / "ses-1" / "eeg" ,
                                         file_name= TEST_FILE)
                 
                 energy_data_ordered  = band_details[0]

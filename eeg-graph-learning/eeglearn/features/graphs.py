@@ -12,30 +12,21 @@ Methods
 
 """
 import os
-import pickle
-import random
-import shutil
-import tempfile
-from itertools import permutations
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
-
 from eeglearn.config import Config
-from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.utils.utils import get_details_from_file_name, hamming_set,\
-    get_cleaned_data_paths, load_preprocessed_data
+from eeglearn.utils.utils import get_details_from_file_name, get_cleaned_data_paths,\
+                            load_preprocessed_data
 from operator import itemgetter
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
-import os 
+from multiprocessing import cpu_count
 
 from microstructpy.geometry import Ellipsoid
-from pygeodesy.ellipsoidalVincenty import LatLon, Cartesian
-from pygeodesy import Datum
+from pygeodesy.ellipsoidalVincenty import Cartesian
 from pygeodesy import Ellipsoid as pyg_Ellipsoid
 from pygeodesy.ellipsoidalKarney import LatLon as KLatLon
 class Graphs():
@@ -50,31 +41,51 @@ class Graphs():
     get_adjacency:
         Compute the adjacency matrix for a given example.
     """
-    def __init__(self, distance : str,
-                 cleaned_data_path : str, 
+    def __init__(self,
+                 perm_type : str ,
+                 distance : str,
+                 cleaned_data_path : str,
+                 energy_path : str ,  
                  batch_size : int = 256,
-                 n_neighbors : int = 3) -> None:
+                 n_neighbors : int = 3,
+                 shuffle : bool = True,
+                 drop_last : bool = True,
+                 n_workers : bool = min(4,cpu_count() - 1)) -> None:
         """Generate the graph representation for a the data from participants.
 
         Args:
         ----
-            cleaned_data_path : Path to pre-processed objects (not features)
-            distance : str : "eucledian" | "great_circle" | "ellipsoid"
+            type : spatial | frequency 
+                   The type of permutation to be generated. 
+            distance : "eucledian" | "great_circle" | "ellipsoid"
                        The distance metric to use when calculating the nearest 
                        neighbors for adjacency.
+            cleaned_data_path : Path to pre-processed objects (not features)
+            energy_path : Path to the energy folder containing the permutations
+                          folders : frequency_perms or spatial_perms
             batch_size : Size of mini batches to divide the dataset into.
             n_neighbors : The number of neighbors to consider to add as adjacent
+            shuffle : If the examples within a batch should be shuffled.
+            drop_last : If the lat batch generated from the data should be dropped
+                        if it is less than the requested batch size.
+            n_workers : number of workers to use prepare batches during loading.
 
         Returns:
         ----
-            None
+            None.
         """
         dist_types = ["eucledian", "great_circle", "ellipsoid"]
         assert distance in dist_types,\
-            "Must be one of eucledian, great_circle, or ellipsoid"
+            "Must be one of eucledian, great_circle, or ellipsoid."
         self.dist_type  : str = distance
+        perm_types = ["spatial", "frequency"]
+        assert perm_type in perm_types, "Must be one of spatial or frequency."
+        self.drop_last : bool = drop_last
+        self.shuffle : bool = shuffle
+        self.perm_type = perm_type
         self.batch_size : int = batch_size
         self.n_neighbors : int = n_neighbors
+        self.n_workers : int = n_workers
         self.ch_positions : dict = {'Fp1' : np.array([-0.02681, 0.08406, -0.01056]),
         'Fp2' : np.array([0.02941, 0.08374, -0.01004]),
         'F7'  : np.array([-0.06699, 0.04169, -0.01596]),
@@ -113,21 +124,20 @@ class Graphs():
         self.ch_names_to_idxs : list[int] = { ch : idx 
                                              for idx, ch in 
                                                     enumerate(self.td_brain_channels)}
-        assert os.path.exists(cleaned_data_path)
+        assert os.path.exists(cleaned_data_path), "Cleaned directory does not exist."
         self.cleaned_data_path : str = cleaned_data_path
+        assert os.path.exists(energy_path), "Energy directory does not exist."
+        self.energy_path : str = energy_path
         self.distances : np.array = self.get_distance()
         assert self.distances.shape == (n_channels, n_channels),\
-            "Distance matrix not as expected. Should be num_channels x num_channels"
+            "Distance matrix not as expected. Should be num_channels x num_channels."
         self.base_adjacency = self.get_adjacency()
 
-    def get_graphs(self,perms_path : str,
-                        files_to_load : list[str]):
+    def get_graphs(self, files_to_load : list[str]):
         """Create the graph representations of each epoched recording in a collection.
 
         Args:
         ----
-            perms_path : Path to directory containing generated permutations.
-                         Can be spatial or band permutations
             files_to_load : The selected files for which to generate graphs.
                             Each should be a tuple. For example :
                             (torch.Size([12, 4, 26, 5]), <-- Data
@@ -140,36 +150,84 @@ class Graphs():
         Note: This work follows https://ieeexplore.ieee.org/abstract/document/9765326
               relevant code can be found here : https://github.com/CHEN-XDU/GMSS
         """
+
+        assert isinstance(files_to_load, list), "Expecting a list of strings."
+        perm_folder : str = "frequency_perms"
+        if self.perm_type == "spatial":
+            perm_folder = "spatial_perms"
+
+        files_with_bad_chs : dict[tuple[str,str,str]
+                                  ,list] = {}
+        for file, bads in self.get_bad_channels().items():
+            if len(bads) != 0:
+                participant_details = get_details_from_file_name(file)
+                files_with_bad_chs[participant_details] = bads 
         
-        files_with_bad_chs : dict[dict] = {file : bads 
-                                           for file,bads in 
-                                                        self.get_bad_channels().items()
-                                           if len(bads) != 0}
         
-        print(files_with_bad_chs)
+        #print(f"energy folder : {os.listdir(Path(self.energy_path)/'spatial_perms')}")
+        n_epochs : int  
+        n_perms_per_epoch : int 
+        n_channels : int
+        n_bands : int
+        row : np.ndarray 
+        col : np.ndarray
+        edge_weight : np.ndarray
+        graphs : list[Data] = []
+        row, col, edge_weight = self.base_adjacency
         for file in files_to_load:
-            print(f"f t l : {file}")
+            participant_details = get_details_from_file_name(file)
+            permutation_data = torch.load(Path(self.energy_path) / perm_folder / file)
+            examples : torch.Tensor = permutation_data[0]
+            pseudo_labels : torch.Tensor = permutation_data[1]
 
+            n_epochs, n_perms_per_epoch, n_channels, n_bands = examples.shape
+            assert pseudo_labels.shape == (n_epochs, n_perms_per_epoch),\
+                "Expected as many pseudo labels as epochs and permutations."
+            
+            examples = examples.reshape(n_epochs * n_perms_per_epoch, n_channels, 
+                                         n_bands)
+            examples = torch.unbind(examples, dim =0)
+            pseudo_labels = pseudo_labels.reshape(n_epochs * n_perms_per_epoch)
+            pseudo_labels = torch.unbind(pseudo_labels,dim = 0)
+            bads = files_with_bad_chs.get(participant_details,None)
+            if bads:
+                bad_idxs = torch.Tensor(list(itemgetter(*bads)(self.ch_names_to_idxs)))
+                where_bads_in_row : torch.Tensor = torch.isin(row,
+                                                              torch.Tensor(bad_idxs))
+                where_bad_row_idxs : torch.Tensor = torch.nonzero(where_bads_in_row).\
+                                                    squeeze()
+                where_bads_in_col : torch.Tensor = torch.isin(col,
+                                                              torch.Tensor(bad_idxs))
+                
+                where_bad_col_idxs : torch.Tensor = torch.nonzero(where_bads_in_col).\
+                                                      squeeze()
 
+                mask = torch.zeros(row.shape[0], dtype=torch.bool)
+                mask[where_bad_row_idxs] = True
+                mask[where_bad_col_idxs] = True
+                row = row[~mask].long()
+                col = col[~mask].long()
+                edge_weight = edge_weight[~mask]
 
-        
-        
-        # first check if there any bad channels.
-        # if there are, then update the base adjacency
-        #   replace the rows and columns of the specific index
-        # otherwise, use the base adjacency.
-        # load the permutation from disk
-        # create graph object
-        # save to a list
-        # create the dataloader and return.
-        return None
-    
+            for i, example in enumerate(examples) :
+                edge_index = torch.vstack((row,col))
+                graphs.append(Data(x= example,
+                                   edge_index =  edge_index,
+                                   edge_attr = edge_weight,
+                                   y = pseudo_labels[i]))
+                
+        return DataLoader(dataset = graphs,
+                          batch_size = self.batch_size,
+                          shuffle = self.shuffle,
+                          num_workers = self.n_workers,
+                          drop_last = self.drop_last)
+
     def get_bad_channels(self) -> None :
         """Retreive the bad channels from preprocessed data.
         
          Args:
         ----
-
+            None.
         Returns:
         ----
             bad_channels : dict[str,list[str]] : A dictionary keyed by file_id, with
@@ -204,10 +262,10 @@ class Graphs():
         Eucledian and great circle distance are yet to be implemented
          Args:
         ----
-
+            None.
         Returns:
         ----
-            distances : np.ndarray : A 26x26 matrix indicating the distance between each
+            distances : torch.Tensor : A 26x26 matrix indicating the distance between each
                                     node.
           """
         if self.dist_type == "ellipsoid":
@@ -226,16 +284,16 @@ class Graphs():
 
          Args:
         ----
-
-        Returns:
+            None.
+        Returns: dists : torch.Tensor : A 26x26 Tensor representing the distance
+                                        between the nodes.
         ----
-            None
+            None.
         """
         e = Ellipsoid()
         # Fit an ellipsoid to the position of the EEG electrodes
         fit_geo = e.best_fit(points= [values.tolist() for values in 
                                       self.ch_positions.values()])
-
         # center : center of the fitted ellipsoid
         # axes : The radii lengths of the 3 semi-axes
         # rot_seq : How the fitted ellipsoid is rotated in space
@@ -262,9 +320,9 @@ class Graphs():
                 d   = p1k.distanceTo(p2k)  
                 row.append(d)
             dists.append(row)
-        dists = np.array(dists)
+        dists = torch.Tensor(dists).float()
         assert dists.shape == (26,26), "Expect each node's distance to another."
-        assert np.all(dists >= 0), "Distances cannot be negative."
+        assert torch.all(dists >= 0), "Distances cannot be negative."
         return dists
     
     def get_adjacency(self) -> None:
@@ -273,23 +331,33 @@ class Graphs():
         Neighbors are defined by nearest neighbors clustering. Defaults to k =3
         clustering.
 
+        Only returns edges, not all possible positions. 
+
          Args:
         ----
-
+            None.
         Returns:
         ----
-            None
+            row, col : torch.Tensor : The index position in the 26x26 matrix
+                                     for an edge.
+            edge_wegith : torch.Tensor : The weight of the edge in that position. 
         """
         row : list[int] = []
         col : list[int] = []
         for ch_i in range(len(self.td_brain_channels)):
-            neighbors = np.argsort(self.distances[ch_i])[1:self.n_neighbors+1]
+            neighbors = torch.argsort(self.distances[ch_i])[1:self.n_neighbors+1]
             for ch_j in neighbors:
-                row.append(ch_i), col.append(ch_j)
+                row.append(ch_i), col.append(ch_j.item())
+        row_copy = row.copy()
+        row.extend(col)
+        col.extend(row_copy)
         edge_weight = np.ones(len(row), dtype=np.float32)
+
         assert len(edge_weight) == len(col) == len(row),\
             "Expected each edge to have a weight."
-        return np.array(row), np.array(col), np.array(edge_weight)
+        return (torch.Tensor(row).float(),
+                torch.Tensor(col).float(), 
+                torch.Tensor(edge_weight).float())
     
 if __name__ == "__main__":
     Config.set_global_seed()

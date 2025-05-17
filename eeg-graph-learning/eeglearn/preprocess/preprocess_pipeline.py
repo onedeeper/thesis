@@ -42,7 +42,7 @@ if __name__ == '__main__':
     project_root = Path(__file__).parent.parent.parent
 
     derivates_dir = str(project_root / 'data' / 'tdbrain-dataset' / 'derivatives')
-    print(f'Reading data from: {derivates_dir}')
+    print(f'⚠️ Reading data from: {derivates_dir}')
     assert os.path.exists(derivates_dir), \
         f"Derivatives directory does not exist: {derivates_dir}"
     
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     assert os.path.exists(str(project_root / 'data' / 'cleaned')), \
     f"Preprocessed directory does not exist: {str(project_root / 'data' / 'cleaned')}"
     preprocessed_dir = str(project_root / 'data' / 'cleaned')
-    print(f'Writing preprocessed data to: {preprocessed_dir}')
+    print(f'⚠️ Writing preprocessed data to: {preprocessed_dir}')
 
     # Create the output directory if it doesn't exist
     os.makedirs(preprocessed_dir, exist_ok=True)
@@ -62,11 +62,11 @@ if __name__ == '__main__':
     # the following parameters can be changed by the user
     conditions = ['EO', 'EC'] # conditions to be preprocessed
     sessions = ['ses-1', 'ses-2'] # sessions to be preprocessed
-    epochs_length = 1 # length of epochs in seconds, comment out for no epoching
+    epochs_length = 9.95 # length of epochs in seconds, comment out for no epoching
     sfreq = 500 # sampling frequency
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal
     plots = False # set to True to create and store plots during preprocessing
-    num_samples = 2 # number of samples to process, 0 for all
+    num_samples = 10 # number of samples to process, 0 for all
     n_processes = cpu_count() - 1 # number of processes to use for parallel processing
     clean_pipeline(derivates_dir = derivates_dir,
                         preprocessed_dir = preprocessed_dir,

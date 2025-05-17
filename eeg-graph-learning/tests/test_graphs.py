@@ -10,33 +10,22 @@ This module contains test cases for the Energy class and its functionality inclu
 import os
 import pickle
 import random
-import shutil
 import tempfile
-import random
-from itertools import permutations
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
-import tempfile
 from eeglearn.config import Config
-from eeglearn.features.energy import Energy
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.features.graphs import Graphs
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
-from eeglearn.utils.utils import get_details_from_file_name, hamming_set,\
-    get_cleaned_data_paths
-from operator import itemgetter
+from eeglearn.utils.utils import get_details_from_file_name
 #Config.RANDOM_SEED = 1223333
+import scipy
 
-from microstructpy.geometry import Ellipsoid
-from pygeodesy.ellipsoidalVincenty import LatLon, Cartesian
-from pygeodesy import Datum
-from pygeodesy import Ellipsoid as pyg_Ellipsoid
-
-Config.RANDOM_SEED = 212112
+Config.RANDOM_SEED = 121321212
 Config.set_global_seed()
 
 class TestGraphs:
@@ -46,20 +35,24 @@ class TestGraphs:
     def setup(self):
         self.cleaned_data_path = \
             os.environ.get("EEG_TEST_CLEANED_FOLDER_PATH")
-        n_test_files : int = 5
+        self.n_test_files : int = 5
         # this would be 128 for spatial permutations
-        n_max_test_labels : int = 120
-        n_epochs : int = np.random.randint(1,12)
-        n_perms_per_epoch : int = np.random.randint(2,5)
-        n_channels :int = np.random.randint(1,26)
-        n_bands : int = np.random.randint(1,5)
+        self.n_max_test_labels : int = 120
+        self.n_epochs : int = np.random.randint(1,12)
+        self.n_perms_per_epoch : int = np.random.randint(2,5)
+        self.n_channels :int = np.random.randint(1,26)
+        self.n_bands : int = np.random.randint(1,5)
         subj_ids : list[int] = [np.random.randint(10000000,15000000)\
-                                for _ in range(n_test_files)]
+                                for _ in range(self.n_test_files)]
         
         conditions : list[str] = ["EO", "EC"]
-        test_file_ids =\
-            [f"energy_sub-{subj_id}_{random.sample(conditions,1)}_epoched.pt"\
-                              for subj_id in subj_ids]
+        sessions : list[str] = ["ses-1", "ses-2"]
+        test_file_ids : list[str] = []
+        for subj_id in subj_ids:
+            condition = random.sample(conditions,1)[0]
+            session = random.sample(sessions,1)[0]
+            id = f"band_perms_energy_sub-{subj_id}_{condition}_{session}_epoched.pt"
+            test_file_ids.append(id)
         
         self.td_brain_channels : list[str] = [  'Fp1', 'Fp2', 'F7', 'F3', 
                                                 'Fz', 'F4', 'F8', 'FC3', 
@@ -68,12 +61,21 @@ class TestGraphs:
                                                 'CPz', 'CP4', 'P7', 'P3', 
                                                 'Pz', 'P4', 'P8', 'O1',
                                                 'Oz', 'O2']
-        self.test_file_list = [(
-            torch.rand((n_epochs,n_perms_per_epoch,n_channels,n_bands)), # data
-            np.random.randint(0,n_max_test_labels, 
-                              size = (n_epochs, n_perms_per_epoch)), # labels per epoch
-            file_id)
-              for file_id in test_file_ids]
+        self.ch_names_to_idxs : list[int] = { ch : idx 
+                                             for idx, ch in 
+                                                    enumerate(self.td_brain_channels)}
+        self.test_file_list : list[tuple[torch.Tensor,
+                                         np.ndarray,
+                                         str]] =[]
+        for file_id in test_file_ids:
+            data = torch.rand((self.n_epochs,
+                               self.n_perms_per_epoch,
+                               self.n_channels,
+                               self.n_bands))
+            pseudo_labels : torch.Tensor = \
+                            torch.Tensor(np.random.randint(0,self.n_max_test_labels, 
+                              size = (self.n_epochs, self.n_perms_per_epoch)))
+            self.test_file_list.append((data,pseudo_labels,file_id))
         
     def test_graph_init(self) -> None:
         """Test creation of Graphs object.
@@ -85,63 +87,105 @@ class TestGraphs:
         ----
             None
         """
-        graphs = Graphs(distance="ellipsoid",
-                        cleaned_data_path=self.cleaned_data_path)
-        assert(isinstance(graphs, Graphs))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            energy_path : Path = Path(temp_dir) / "energy"
+            energy_path.mkdir(parents=True,exist_ok = True)
+            graphs = Graphs(perm_type="spatial",
+                            distance="ellipsoid",
+                            cleaned_data_path=self.cleaned_data_path,
+                            energy_path=energy_path)
+            assert(isinstance(graphs, Graphs))
 
-        # should fail with strings that are not as intended
-        with pytest.raises(Exception):
-            dist = "sfe323r32asfe"
-            graphs = Graphs(distance=dist,
-                            cleaned_data_path=self.cleaned_data_path)
-        with pytest.raises(NotImplementedError):
-            graphs = Graphs(distance="eucledian",
-                            cleaned_data_path=self.cleaned_data_path)
+            # should fail with strings that are not as intended
+            with pytest.raises(AssertionError):
+                dist = "sfe323r32asfe"
+                graphs = Graphs(perm_type="spatial",
+                            distance=dist,
+                            cleaned_data_path=self.cleaned_data_path,
+                            energy_path=energy_path)
+            with pytest.raises(NotImplementedError):
+                graphs = Graphs(perm_type="spatial",
+                            distance="eucledian",
+                            cleaned_data_path=self.cleaned_data_path,
+                            energy_path=energy_path)
     def test_get_graphs(self) -> None:
         """Test the generation of graph objects.
         
         Args:
         ----
-
+            None
         Returns:
         ----
             None
         """
         with tempfile.TemporaryDirectory() as temp_dir:
-            # create some temporary preprocessed objects with bad channels 
-            # Make that the cleaned data path. 
-            # Make these file ids the same as the test data generated here.
-            # created preprocessing objects need to have the same file names
-            # as the files here.
-            for data,_,file_id in self.test_file_list:
+            skip = 0
+            participant_bads : dict[str,list[str]] = {}
+            for data,pseudo_labels,file_id in self.test_file_list:
                 bads: list[str] = random.sample(self.td_brain_channels,4)
-                temp_file, temp_dir_cleaned= self.create_temp_preprocessed_object(
+                if skip == 1:
+                    bads = []
+                participant_bads[file_id] = bads
+                _, temp_dir_cleaned= self.create_temp_preprocessed_object(
                                                     temp_dir=temp_dir,
                                                             bads=bads,
                                                             file_id=file_id)
-                save_path : Path = Path(temp_dir) / "perms"
+                save_path : Path = Path(temp_dir) / "energy" / "spatial_perms"
                 save_path.mkdir(parents=True,exist_ok = True)
                 with open(save_path / file_id , 'wb') as output:   
-                    pickle.dump(data, output, pickle.HIGHEST_PROTOCOL)
+                    torch.save((data, pseudo_labels, file_id), output)
                 assert os.path.exists(save_path/file_id)
-            graphs = Graphs(distance="ellipsoid",
-                                cleaned_data_path=temp_dir_cleaned)
-            graph_loader = graphs.get_graphs(perms_path=save_path,
-                                            files_to_load=\
-                                                [id for _,_,id in 
-                                                 self.test_file_list[:2]])
-            # want to test of the bads are handled properly
-            # I can pull out the specific rows and columns and check if they are all 0
+                skip += 1
 
+            batch_size = len(self.test_file_list)
+
+            graphs = Graphs(perm_type="spatial",
+                        distance="ellipsoid",
+                        cleaned_data_path=temp_dir_cleaned,
+                        energy_path=f"{temp_dir}/energy",
+                        batch_size=batch_size,
+                        shuffle=False,
+                        drop_last=False)
+            
+            files_to_load = [id for _,_,id in self.test_file_list]
+            graph_loader = graphs.get_graphs(files_to_load=files_to_load)
+            
             assert isinstance(graph_loader, DataLoader),\
                 "Should return torch geometric dataloader"
-        
-            # check the contents of a batch
-            graph_loader_iter = iter(graph_loader)
-            first_example = next(graph_loader_iter)[0]
-
+            graph_loader= list(graph_loader)
+            first_example = graph_loader[0]
             # each example should be a graph data object
-            #assert isinstance(first_example, Data)
+            assert isinstance(first_example, Data), "Expected a torch geometric graph."
+            all_examples = [ example for graph_batch in graph_loader
+                                            for example in graph_batch.to_data_list()]
+            print(f"all examples : {len(all_examples)}")
+            n_per_participant : int = self.n_epochs * self.n_perms_per_epoch
+            start = 0
+            for p_idx, participant_end in enumerate(range(n_per_participant,
+                                                          len(all_examples) +\
+                                                            n_per_participant,
+                                                          n_per_participant)):
+                participant = all_examples[start:participant_end]
+                print(f"participant : {p_idx}, n_examples : {len(participant)}")
+                for graph in participant:
+                    rows : torch.Tensor = graph.edge_index[0,:]
+                    cols : torch.Tensor = graph.edge_index[1,:]
+                    bads = participant_bads[self.test_file_list[p_idx][2]]
+                    bad_idxs : torch.Tensor = torch.Tensor([self.ch_names_to_idxs[bad] 
+                                                            for bad in bads])
+                    assert graph.y.shape[0] == 1, "Each example should have 1 label."
+                    assert graph.x.shape == (self.n_channels, self.n_bands),\
+f"Participant : {p_idx} : Data matrix should be a 2d representation of an EEg signal."
+                    assert not torch.all(torch.isin(rows, bad_idxs)),\
+                        f"{p_idx}: None of the bad channels should have edges."      
+                    csr = scipy.sparse.csr_matrix((graph.edge_attr, (rows, cols)),
+                                            shape=(26, 26))
+                    assert scipy.linalg.issymmetric(csr.todense()),\
+                        f"{p_idx}: Expecting a symmetric distance matrix." 
+                    assert np.allclose(csr.diagonal(), np.zeros(26)),\
+                        f"Participant : {p_idx} : Expecting no self loops."
+                    
+                start = participant_end
 
     def test_get_ellipsoid_distance(self) -> None:
         """Test the calculation of ellipsoidal distances between electrodes.
@@ -153,14 +197,15 @@ class TestGraphs:
         ----
             None
         """
-        graphs = Graphs(distance="ellipsoid",
-                        cleaned_data_path=self.cleaned_data_path)
-        distance = graphs.get_ellipsoid_distance()
-        assert isinstance(distance, np.ndarray), "Expected an array"
-        assert distance.shape == (26,26), "Should contain distance between each node"
-        assert np.allclose(np.diag(distance), np.zeros(26)), "Distance to self == 0"
-        assert np.allclose(distance - distance.T, 0), "Should be symmetric"
-        assert np.min(distance) >= 0, "Distances should be strictly greater than 0"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            save_path : Path = Path(temp_dir) / "energy"
+            save_path.mkdir(parents=True,exist_ok = True)
+            graphs = Graphs(perm_type="spatial",
+                            distance="ellipsoid",
+                            cleaned_data_path=self.cleaned_data_path,
+                            energy_path= save_path)
+            distance = graphs.get_ellipsoid_distance()
+            self.distance_helper(distance)
 
     def test_get_distance(self) -> None:
         """Test the calculation of distances between electrodes by chosen metric.
@@ -172,14 +217,34 @@ class TestGraphs:
         ----
             None
         """
-        graphs = Graphs(distance="ellipsoid",
-                        cleaned_data_path=self.cleaned_data_path)
-        distance = graphs.get_distance()
-        assert isinstance(distance, np.ndarray), "Expected an array"
-        assert distance.shape == (26,26), "Should contain distance between each node"
-        assert np.allclose(np.diag(distance), np.zeros(26)), "Distance to self == 0"
-        assert np.allclose(distance - distance.T, 0), "Should be symmetric"
-        assert np.min(distance) >= 0, "Distances should be strictly greater than 0"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            energy_path : Path = Path(temp_dir) / "energy"
+            energy_path.mkdir(parents=True,exist_ok = True)
+            graphs = Graphs(perm_type="spatial",
+                            distance="ellipsoid",
+                            cleaned_data_path=self.cleaned_data_path,
+                            energy_path=energy_path)
+            distance = graphs.get_distance()
+            self.distance_helper(distance)
+
+    def distance_helper(self, data : torch.Tensor) -> None:
+        """Test the calculation of distances between electrodes by chosen metric.
+           Checks for some properties we would expect from a distance matrix
+           in an undirected graph.
+        
+        Args:
+        ----
+            data : A square tensor containing the edge information between each node.
+        Returns:
+        ----
+            None
+        """
+        assert isinstance(data, torch.Tensor), "Expected an array"
+        assert data.shape == (26,26), "Should contain distance between each node"
+        assert torch.allclose(torch.diag(data), torch.zeros(26)),"Distance to self == 0"
+        assert torch.allclose(data - data.T, torch.zeros(data.shape)),\
+            "Should be symmetric"
+        assert torch.min(data) >= 0, "Distances should be strictly greater than 0"
 
     def test_get_bads(self) -> None:
         """Test the loading of bad channels for a given participant and sesion.
@@ -191,16 +256,16 @@ class TestGraphs:
             None
         """
         with tempfile.TemporaryDirectory() as temp_dir:
+            energy_path : Path = Path(temp_dir) / "energy"
+            energy_path.mkdir(parents=True,exist_ok = True)
             bads: list[str] = ["Fp1", "P3"]
-            temp_file, temp_dir = self.create_temp_preprocessed_object(
+            temp_file, temp_dir_updated = self.create_temp_preprocessed_object(
                                                     temp_dir=temp_dir,
                                                             bads=bads)
-            graphs = Graphs(distance="ellipsoid",
-                    cleaned_data_path=temp_dir)
+            graphs = Graphs(perm_type="spatial",distance="ellipsoid",
+                            cleaned_data_path=temp_dir_updated,energy_path=energy_path)
             bads_found = graphs.get_bad_channels()
-
-            #bad_indices = [graphs.td_brain_channels.index(bad) for bad in bads]
-            assert bads_found[temp_file] == bads,"Should correctly load the forced bads"
+            assert bads_found[temp_file] ==bads,"Should correctly load the forced bads"
     
     def test_get_adjacency(self)-> None:
         """Test the generation of adjacency matrix accounting for bad channels
@@ -213,12 +278,16 @@ class TestGraphs:
             None
         """
         with tempfile.TemporaryDirectory() as temp_dir:
+            energy_path : Path = Path(temp_dir) / "energy"
+            energy_path.mkdir(parents=True,exist_ok = True)
             bads: list[str] = ["Fp1", "Oz"]
-            temp_file, temp_dir = self.create_temp_preprocessed_object(
+            _, temp_dir_updated = self.create_temp_preprocessed_object(
                                                     temp_dir=temp_dir,
                                                             bads=bads)
             graphs = Graphs(distance="ellipsoid",
-                    cleaned_data_path=temp_dir)
+                            perm_type="spatial",
+                    cleaned_data_path=temp_dir_updated,
+                    energy_path=energy_path)
             row_idxs, col_idxs, edge_weights = graphs.get_adjacency()
             
             assert row_idxs.shape[0] < 26 * 26,\
@@ -227,9 +296,10 @@ class TestGraphs:
                 "Expected an array of at most 26 x 26 for a fully connected graph"
             assert edge_weights.shape[0] < 26 * 26,\
                 "Expected an array of at most 26 x 26 for a fully connected graph"
-            
-            #bad_indices = [graphs.td_brain_channels.index(bad) for bad in bads]
-            #assert bads_found[temp_file] == bads,"Should correctly load the forced bads"
+            csr = scipy.sparse.csr_matrix((edge_weights, (row_idxs, col_idxs)),
+                                          shape=(26, 26))
+            assert scipy.linalg.issymmetric(csr.todense()),\
+                "Expecting a symmetric distance matrix."
 
     def create_temp_preprocessed_object(self, 
                                         temp_dir : str, 
@@ -253,8 +323,7 @@ class TestGraphs:
         participant : str = ""
         condition : str = ""
         participant, condition, session = get_details_from_file_name(test_file)
-        preprocessed : Preproccesing = np.load(test_cleaned_file,                         
-                            allow_pickle = True)
+        preprocessed : Preproccesing = np.load(test_cleaned_file, allow_pickle = True)
         temp_dir : Path = Path(temp_dir) / "cleaned"
         temp_dir.mkdir(parents=True,  exist_ok = True)
 

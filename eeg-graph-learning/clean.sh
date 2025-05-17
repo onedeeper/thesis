@@ -36,13 +36,13 @@ else
     eval "$(conda shell.bash hook)" > /dev/null 2>&1
 fi
 
-ENV_NAME="eeg-graph-learning"
+ENV_NAME="eeg-graph-learning-test"
 # Check if the environment exists first
 if ! conda env list | grep -q "$ENV_NAME"; then
-    echo "Setting up conda environment..."
+    echo "🐍 Setting up conda environment..."
     bash setup_conda_env.sh
 else
-    echo "Using existing $ENV_NAME conda environment"
+    echo "🐍 Using existing $ENV_NAME conda environment"
     # Activate the conda environment (suppress output)
     echo "Activating conda environment..."
 fi
@@ -55,7 +55,7 @@ python -m ipykernel install --user --name=$ENV_NAME --display-name="Python ($ENV
 # Run the preprocessing pipeline
 echo "Running preprocessing pipeline..."
 if python -m eeglearn.preprocess.preprocess_pipeline; then
-    echo "Preprocessing completed successfully!"
+    echo "👍 Done."
 else
     echo "Error: Preprocessing failed with exit code $?"
     exit 1

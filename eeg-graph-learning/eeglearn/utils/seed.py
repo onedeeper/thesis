@@ -36,6 +36,9 @@ def set_seed(seed=42, deterministic=True, verbose=False) -> int:
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)  # For multi-GPU
     
+    # Set default dtype to float32 (torch.float)
+    torch.set_default_dtype(torch.float)
+    
     # Make PyTorch operations deterministic
     if deterministic:
         torch.backends.cudnn.deterministic = True
@@ -60,5 +63,6 @@ def set_seed(seed=42, deterministic=True, verbose=False) -> int:
         pass
         
     if verbose:
-        print(f"Random seed set to {seed} 🎲")
+        print(f"🎲 Random seed set to {seed}")
+        print(f"💡 Default PyTorch dtype set to {torch.get_default_dtype()}")
     return seed 
