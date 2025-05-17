@@ -5,11 +5,53 @@ Author: Udesh Habaraduwa
 
 Attributes
 ----------
-
+dist_type : str
+    The distance metric to use ("eucledian", "great_circle", or "ellipsoid").
+drop_last : bool
+    Whether to drop the last batch if it's smaller than `batch_size`.
+shuffle : bool
+    Whether to shuffle examples within each batch.
+perm_type : str
+    The type of permutation to be generated ("spatial" or "frequency").
+batch_size : int
+    Size of mini-batches for the DataLoader.
+n_neighbors : int
+    The number of nearest neighbors to consider for constructing graph adjacency.
+n_workers : int
+    Number of worker processes for data loading.
+ch_positions : dict
+    A dictionary mapping EEG channel names (str) to their 3D coordinates (np.array).
+td_brain_channels : list[str]
+    A list of standard 10-20 brain channel names used.
+ch_names_to_idxs : dict
+    A dictionary mapping EEG channel names (str) to their corresponding integer indices.
+cleaned_data_path : str
+    Path to the directory containing pre-processed EEG objects (not features).
+energy_path : str
+    Path to the directory containing energy features, organized by permutation type.
+distances : np.ndarray
+    A pre-computed matrix storing the pairwise distances between EEG channels.
+base_adjacency : tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    A tuple containing tensors for row indices, column indices, and edge weights
+    representing the base graph adjacency.
 
 Methods
 -------
-
+__init__(perm_type, distance, cleaned_data_path, energy_path, batch_size, n_neighbors, 
+    shuffle, drop_last, n_workers)
+    Initializes the Graphs object and pre-computes distances and base adjacency.
+get_graphs(files_to_load)
+    Generates a PyTorch Geometric DataLoader for a list of specified data files.
+get_bad_channels()
+    Retrieves a dictionary of bad channels for each preprocessed file.
+get_distance()
+    Calculates the distance matrix between EEG channels based on `dist_type`.
+get_ellipsoid_distance()
+    Calculates the geodesic distance between EEG channels, modeling the head as an 
+    ellipsoid.
+get_adjacency()
+    Computes the base adjacency matrix (row, column, edge_weight) based on 
+    `n_neighbors` and the derived distance.
 """
 import os
 from pathlib import Path
