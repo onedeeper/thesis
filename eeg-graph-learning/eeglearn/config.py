@@ -7,7 +7,8 @@ ensuring consistent settings across all components.
 Created on: March 2025
 Author: Udesh Habaraduwa
 """
-
+import torch
+from pathlib import Path
 class Config:
     """
     Central configuration class for eeglearn.
@@ -20,7 +21,20 @@ class Config:
     DETERMINISTIC = True
     
     # Other global configuration settings can be added here
-    
+    epochs = 100
+    batch_size = 256 
+    lr = 0.01
+    weight_decay = 8e-5
+    drop_rate = 0.25 
+    num_workers = 8
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
+                           if torch.backends.mps.is_available() else 'cpu')
+    num_jigsaw = 4
+    K = 2
+    cleaned_data_path = Path(__file__).resolve().parent.parent / 'data' / 'cleaned'
+    energy_path = Path(__file__).resolve().parent.parent / 'data' / 'energy'
+    model_weights_dir = Path(__file__).resolve().parent.parent / 'data' / 'weights'
+    metrics_dir = Path(__file__).resolve().parent.parent / 'data' / 'metrics'
     @classmethod
     def set_global_seed(cls, verbose=False):
         """

@@ -221,7 +221,9 @@ class Graphs():
             #print(participant_details)
             permutation_data = torch.load(Path(self.energy_path) / perm_folder / file)
             examples : torch.Tensor = permutation_data[0]
-            pseudo_labels : torch.Tensor = torch.Tensor(permutation_data[1])
+            pseudo_labels : torch.Tensor = permutation_data[1]
+            # ensure pseudo_labels is long for classification tasks
+            pseudo_labels : torch.Tensor = torch.Tensor(permutation_data[1]).long()
 
             #print(examples.shape, pseudo_labels.shape)
 
@@ -409,8 +411,8 @@ class Graphs():
 
         assert len(edge_weight) == len(col) == len(row),\
             "Expected each edge to have a weight."
-        return (torch.Tensor(row).float(),
-                torch.Tensor(col).float(), 
+        return (torch.Tensor(row).long(), # Ensure row indices are Long
+                torch.Tensor(col).long(), # Ensure col indices are Long
                 torch.Tensor(edge_weight).float())
     
 if __name__ == "__main__":
