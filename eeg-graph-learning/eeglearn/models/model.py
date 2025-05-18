@@ -20,6 +20,113 @@ import torch.nn.functional as F
 from eeglearn.config import Config
 
 drop_rate = Config.drop_rate
+K = Config.K
+# used for supervised
+class JointlyTrainModel(nn.Module):
+    def __init__(self, inchannel, outchannel, batch, testmode=False, **kwargs):
+        super(JointlyTrainModel, self).__init__()
+        self.batch = batch
+        self.testmode = testmode
+        linearsize = 512
+
+
+        # K = [1,2,3,4,5,6,7,8,9,10]
+        self.conv1 = gnn.ChebConv(inchannel, outchannel, K=K)
+
+        self.HF = nn.Sequential(
+            nn.Linear(outchannel * 26, linearsize),
+            nn.BatchNorm1d(linearsize),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linearsize, linearsize // 2),
+            nn.BatchNorm1d(linearsize//2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linearsize // 2, kwargs['HF'])
+        )
+
+        self.HS = nn.Sequential(
+            nn.Linear(outchannel * 26, linearsize),
+            nn.BatchNorm1d(linearsize),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linearsize, linearsize // 2),
+            nn.BatchNorm1d(linearsize // 2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linearsize // 2, kwargs['HS'])
+        )
+        
+        self.HC = nn.Sequential(
+            nn.Linear(outchannel * 26, linearsize),
+            nn.BatchNorm1d(linearsize),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linearsize, linearsize // 2),
+            nn.BatchNorm1d(linearsize // 2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linearsize // 2, kwargs['HC'])
+        )
+
+        # self.Projection = nn.Sequential(
+        #     nn.Linear(outchannel * 26, linearsize),
+        #     nn.BatchNorm1d(linearsize),
+        #     nn.ReLU(inplace=True),
+        #     nn.Dropout(drop_rate),
+        #     nn.Linear(linearsize, linearsize // 2),
+        #     nn.BatchNorm1d(linearsize // 2),
+        #     nn.ReLU(inplace=True),
+        #     nn.Dropout(drop_rate),
+        #     nn.Linear(linearsize // 2, linearsize // 4)
+        # )
+
+
+    def forward(self, *args):
+        if not self.testmode:
+
+            x1, e1 = args[0].x, args[0].edge_index  # fre_data
+            x2, e2 = args[1].x, args[1].edge_index  # spa_data
+            x3, e3 = args[2].x, args[2].edge_index  # original graph data
+            # x4, e4 = args[3].x, args[3].edge_index  # contrastive learning data
+            # x5, e5 = args[4].x, args[4].edge_index  # contrastive learning data
+
+            # x1 = torch.tensor(x1, dtype=torch.float32)
+            # x1 = x1.float()
+
+            x1 = F.relu(self.conv1(x1, e1))
+            x2 = F.relu(self.conv1(x2, e2))
+            x3 = F.relu(self.conv1(x3, e3))
+            # x4 = F.relu(self.conv1(x4, e4))
+            # x5 = F.relu(self.conv1(x5, e5))
+
+            x1 = x1.view(self.batch, -1)
+            x2 = x2.view(self.batch, -1)
+            x3 = x3.view(self.batch, -1)
+            # x4 = x4.view(self.batch, -1)
+            # x5 = x5.view(self.batch, -1)
+
+            x1 = self.HF(x1)
+            x2 = self.HS(x2)
+            x3 = self.HC(x3)
+            # x4 = self.Projection(x4)
+            # x5 = self.Projection(x5)
+
+            x1 = F.softmax(x1, dim=1)
+            x2 = F.softmax(x2, dim=1)
+            x3 = F.softmax(x3, dim=1)
+            # x4 = F.normalize(x4, dim=-1)
+            # x5 = F.normalize(x5, dim=-1)
+
+            return x1, x2, x3
+        else:
+            x3, e3 = args[0].x, args[0].edge_index  # original graph data
+
+            x3 = F.relu(self.conv1(x3, e3))
+            x3 = x3.view(self.batch, -1)
+            x3 = self.HC(x3)
+            x3 = F.softmax(x3, dim=1)
+            return x3
 
 class SelfSupervisedTrain(nn.Module):
     def __init__(self, inchannel, outchannel, batch, **kwargs):

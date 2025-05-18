@@ -57,7 +57,7 @@ def get_labels_dict() -> dict[str, str]:
         / 'data' / 'TDBRAIN_participants_V2.xlsx'
     labels_df = pd.read_excel(labels_file)
     participant_ids = labels_df['participants_ID']
-    participant_labels = labels_df['indication']
+    participant_labels = labels_df['indication'].astype(str)
     return dict(zip(participant_ids, participant_labels))
 
 def get_cleaned_data_paths(participant_list : list[str], cleaned_path : str) ->\

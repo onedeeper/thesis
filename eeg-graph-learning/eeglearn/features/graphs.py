@@ -71,6 +71,7 @@ from microstructpy.geometry import Ellipsoid
 from pygeodesy.ellipsoidalVincenty import Cartesian
 from pygeodesy import Ellipsoid as pyg_Ellipsoid
 from pygeodesy.ellipsoidalKarney import LatLon as KLatLon
+from sklearn.preprocessing import LabelEncoder
 class Graphs():
     """A container for graph representation generation.
 
@@ -84,10 +85,10 @@ class Graphs():
         Compute the adjacency matrix for a given example.
     """
     def __init__(self,
-                 perm_type : str ,
+                 perm_type : str | None ,
                  distance : str,
                  cleaned_data_path : str,
-                 energy_path : str ,  
+                 energy_path : str , 
                  batch_size : int = 256,
                  n_neighbors : int = 3,
                  shuffle : bool = True,
@@ -120,7 +121,7 @@ class Graphs():
         assert distance in dist_types,\
             "Must be one of eucledian, great_circle, or ellipsoid."
         self.dist_type  : str = distance
-        perm_types = ["spatial", "frequency"]
+        perm_types = ["spatial", "frequency", None]
         assert perm_type in perm_types, "Must be one of spatial or frequency."
         self.drop_last : bool = drop_last
         self.shuffle : bool = shuffle
@@ -175,7 +176,8 @@ class Graphs():
             "Distance matrix not as expected. Should be num_channels x num_channels."
         self.base_adjacency = self.get_adjacency()
 
-    def get_graphs(self, files_to_load : list[str]):
+    def get_graphs(self, files_to_load : list[str], 
+                   label_encoder : LabelEncoder = None):
         """Create the graph representations of each epoched recording in a collection.
 
         Args:
@@ -185,6 +187,7 @@ class Graphs():
                             (torch.Size([12, 4, 26, 5]), <-- Data
                             (12, 4), <- pseudo_labels per epoch 
                             'energy_sub-88019481_EO_epoched.pt') <-filename
+            label_encoder : A label encoder for generating the labels for psych labels
         Returns:
         ----
             Dataloader : Each mini-batch contains a 'self.batch_size' set of graphs.
@@ -218,32 +221,39 @@ class Graphs():
         noise_floor_db_scalar : float = 10 * np.log10(eps)
         for file in files_to_load:
             participant_details = get_details_from_file_name(file)
-            #print(participant_details)
-            permutation_data = torch.load(Path(self.energy_path) / perm_folder / file)
+            if self.perm_type is None:
+                permutation_data = torch.load(Path(self.energy_path) / file)
+            else:
+                permutation_data = torch.load(Path(self.energy_path) / perm_folder /\
+                                              file)
             examples : torch.Tensor = permutation_data[0]
-            pseudo_labels : torch.Tensor = permutation_data[1]
-            # ensure pseudo_labels is long for classification tasks
-            pseudo_labels : torch.Tensor = torch.Tensor(permutation_data[1]).long()
-
-            #print(examples.shape, pseudo_labels.shape)
-
-            n_epochs, n_perms_per_epoch, n_channels, n_bands = examples.shape
+            if self.perm_type is None:
+                n_epochs, n_channels, n_bands = examples.shape
+                n_perms_per_epoch = 1
+                psych_label = permutation_data[4]
+                to_numeric = label_encoder.transform([psych_label])
+                pseudo_labels : torch.Tensor = torch.full((n_epochs,),
+                                                          to_numeric.item()).\
+                                                          reshape((n_epochs,1))
+            else:
+                n_epochs, n_perms_per_epoch, n_channels, n_bands = examples.shape
+                permutation_data = torch.load(Path(self.energy_path) /\
+                                              perm_folder / file)
+                pseudo_labels : torch.Tensor = torch.Tensor(permutation_data[1]).long()
+           
+            
             assert pseudo_labels.shape == (n_epochs, n_perms_per_epoch),\
                 "Expected as many pseudo labels as epochs and permutations."
-            
-            examples = examples.reshape(n_epochs * n_perms_per_epoch, n_channels, 
+            if self.perm_type is not(None):
+                 examples = examples.reshape(n_epochs * n_perms_per_epoch, n_channels, 
                                          n_bands)
+                 pseudo_labels = pseudo_labels.reshape(n_epochs * n_perms_per_epoch)
             examples = torch.unbind(examples, dim =0)
-            pseudo_labels = pseudo_labels.reshape(n_epochs * n_perms_per_epoch)
             pseudo_labels = torch.unbind(pseudo_labels,dim = 0)
             bads = files_with_bad_chs.get(participant_details,None)
-            #print(bads)
             if bads:
-                #print()
-                #bads_idx
                 bad_idxs = torch.Tensor([self.ch_names_to_idxs[bad] for bad in bads])\
                     .long()
-                #print(bad_idxs)
                 where_bads_in_row : torch.Tensor = torch.isin(row,
                                                             torch.Tensor(bad_idxs))
                 where_bad_row_idxs : torch.Tensor = torch.nonzero(where_bads_in_row).\
