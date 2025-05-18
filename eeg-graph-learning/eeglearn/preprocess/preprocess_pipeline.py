@@ -66,7 +66,7 @@ if __name__ == '__main__':
     sfreq = 500 # sampling frequency
     line_noise = np.arange(50, sfreq / 2, 50) # 50 Hz line noise removal
     plots = False # set to True to create and store plots during preprocessing
-    num_samples = 10 # number of samples to process, 0 for all
+    num_samples = 0 # number of samples to process, 0 for all
     n_processes = cpu_count() - 1 # number of processes to use for parallel processing
     clean_pipeline(derivates_dir = derivates_dir,
                         preprocessed_dir = preprocessed_dir,
@@ -85,6 +85,7 @@ if __name__ == '__main__':
     eeg_dir = project_root / 'data' / 'cleaned'
 
     # Ensure the directories exist
+
     save_dir.mkdir(parents=True, exist_ok=True)
     eeg_dir.mkdir(parents=True, exist_ok=True)
 

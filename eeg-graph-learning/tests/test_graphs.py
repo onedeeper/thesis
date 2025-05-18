@@ -67,11 +67,22 @@ class TestGraphs:
         self.test_file_list : list[tuple[torch.Tensor,
                                          np.ndarray,
                                          str]] =[]
-        for file_id in test_file_ids:
-            data = torch.rand((self.n_epochs,
-                               self.n_perms_per_epoch,
-                               self.n_channels,
-                               self.n_bands))
+        for i, file_id in enumerate(test_file_ids):
+            # test the noise floor filtering.
+            if i == 2:
+                data = torch.full((self.n_epochs,
+                                self.n_perms_per_epoch,
+                                self.n_channels,
+                                self.n_bands), 1e-11)
+                #print(data.shape)
+                noise = torch.full((self.n_channels,
+                                self.n_bands), 1e-11)
+                data[0,1,:,:] = noise
+            else:
+                data = torch.rand((self.n_epochs,
+                                self.n_perms_per_epoch,
+                                self.n_channels,
+                                self.n_bands))
             pseudo_labels : torch.Tensor = \
                             torch.Tensor(np.random.randint(0,self.n_max_test_labels, 
                               size = (self.n_epochs, self.n_perms_per_epoch)))
@@ -144,7 +155,7 @@ class TestGraphs:
                         cleaned_data_path=temp_dir_cleaned,
                         energy_path=f"{temp_dir}/energy",
                         batch_size=batch_size,
-                        shuffle=False,
+                        shuffle=True,
                         drop_last=False)
             
             files_to_load = [id for _,_,id in self.test_file_list]

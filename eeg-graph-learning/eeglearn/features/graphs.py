@@ -205,8 +205,6 @@ class Graphs():
                 participant_details = get_details_from_file_name(file)
                 files_with_bad_chs[participant_details] = bads 
         
-        
-        #print(f"energy folder : {os.listdir(Path(self.energy_path)/'spatial_perms')}")
         n_epochs : int  
         n_perms_per_epoch : int 
         n_channels : int
@@ -216,11 +214,16 @@ class Graphs():
         edge_weight : np.ndarray
         graphs : list[Data] = []
         row, col, edge_weight = self.base_adjacency
+        eps : int  = 1e-10
+        noise_floor_db_scalar : float = 10 * np.log10(eps)
         for file in files_to_load:
             participant_details = get_details_from_file_name(file)
+            #print(participant_details)
             permutation_data = torch.load(Path(self.energy_path) / perm_folder / file)
             examples : torch.Tensor = permutation_data[0]
-            pseudo_labels : torch.Tensor = permutation_data[1]
+            pseudo_labels : torch.Tensor = torch.Tensor(permutation_data[1])
+
+            #print(examples.shape, pseudo_labels.shape)
 
             n_epochs, n_perms_per_epoch, n_channels, n_bands = examples.shape
             assert pseudo_labels.shape == (n_epochs, n_perms_per_epoch),\
@@ -232,10 +235,15 @@ class Graphs():
             pseudo_labels = pseudo_labels.reshape(n_epochs * n_perms_per_epoch)
             pseudo_labels = torch.unbind(pseudo_labels,dim = 0)
             bads = files_with_bad_chs.get(participant_details,None)
+            #print(bads)
             if bads:
-                bad_idxs = torch.Tensor(list(itemgetter(*bads)(self.ch_names_to_idxs)))
+                #print()
+                #bads_idx
+                bad_idxs = torch.Tensor([self.ch_names_to_idxs[bad] for bad in bads])\
+                    .long()
+                #print(bad_idxs)
                 where_bads_in_row : torch.Tensor = torch.isin(row,
-                                                              torch.Tensor(bad_idxs))
+                                                            torch.Tensor(bad_idxs))
                 where_bad_row_idxs : torch.Tensor = torch.nonzero(where_bads_in_row).\
                                                     squeeze()
                 where_bads_in_col : torch.Tensor = torch.isin(col,
@@ -252,6 +260,10 @@ class Graphs():
                 edge_weight = edge_weight[~mask]
 
             for i, example in enumerate(examples) :
+                example_db = 10 * torch.log10(torch.clamp(example, 
+                                                          min=1e-10))
+                if torch.any(example_db <= noise_floor_db_scalar):
+                    continue 
                 edge_index = torch.vstack((row,col))
                 graphs.append(Data(x= example,
                                    edge_index =  edge_index,
@@ -405,6 +417,10 @@ if __name__ == "__main__":
     Config.set_global_seed()
     
     cleaned_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'cleaned'
-    graphs =  Graphs(distance="ellipsoid",
-                     cleaned_data_path=cleaned_path)
-    graphs.get_graphs()
+    energy_path = Path(__file__).resolve().parent.parent.parent / 'data' / 'energy' 
+    graphs =  Graphs(
+                    energy_path=energy_path,
+                    distance="ellipsoid", 
+                     cleaned_data_path=cleaned_path,
+                     perm_type="spatial")
+    graphs.get_graphs(os.listdir(energy_path / "spatial_perms"))
