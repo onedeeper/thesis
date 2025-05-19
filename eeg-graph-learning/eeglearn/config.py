@@ -35,7 +35,9 @@ class Config:
     energy_path = Path(__file__).resolve().parent.parent / 'data' / 'energy'
     model_weights_dir = Path(__file__).resolve().parent.parent / 'data' / 'weights'
     metrics_dir = Path(__file__).resolve().parent.parent / 'data' / 'metrics'
+    data_path = Path(__file__).resolve().parent.parent / 'data'
     drop_last : bool = True
+    stop_at : int = 10
     @classmethod
     def set_global_seed(cls, verbose=False):
         """

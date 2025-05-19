@@ -1,42 +1,27 @@
+"""Self-supervised EEG training pipeline.
+
+Implementation of a self-supervised training approach for EEG data based on 
+Li et al. 2023 (https://ieeexplore.ieee.org/abstract/document/9765326).
+This module handles data splitting, model training, and metrics tracking for
+both frequency and spatial graph representations.
+
+Functions:
+    split_data: Split participants into train/test/validation sets
+    train: Train the self-supervised model and save metrics
+"""
+
 import os
 from pathlib import Path
 
-import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 from eeglearn.config import Config
-from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.utils.utils import get_details_from_file_name, get_cleaned_data_paths,\
-                            load_preprocessed_data
-from operator import itemgetter
-from torch_geometric.data import Data
-from torch_geometric.loader import DataLoader
-from multiprocessing import cpu_count
 
-from microstructpy.geometry import Ellipsoid
-from pygeodesy.ellipsoidalVincenty import Cartesian
-from pygeodesy import Ellipsoid as pyg_Ellipsoid
-from pygeodesy.ellipsoidalKarney import LatLon as KLatLon
-import os
-from pathlib import Path
 from sklearn.model_selection import train_test_split
 from AutoWeight import AutomaticWeightedLoss
 from eeglearn.models.model import SelfSupervisedTrain
 from eeglearn.features.graphs import Graphs
-import json
 import pandas as pd
-from eeglearn.config import Config
-
-"""Self-supervised EEG training pipeline.
-
-Implementation of a self-supervised training approach for EEG data based on Li et al. 2023
-(https://ieeexplore.ieee.org/abstract/document/9765326). This module handles data splitting,
-model training, and metrics tracking for both frequency and spatial graph representations.
-
-Functions:
-    split_data: Split participants into train/test/validation sets
-    train: Execute the self-supervised training process and save metrics
-"""
 
 batch_size : int = Config.batch_size
 epochs : int = Config.epochs
@@ -49,16 +34,11 @@ model_weights_dir : Path = Config.model_weights_dir
 metrics_dir  : Path = Config.metrics_dir
 
 def split_data() -> None:
-    """Create the graph representations of each epoched recording in a collection.
+    """Split participants into train, validation, and test sets.
 
-        Args:
-        ----
-            None
-        Returns:
-        ----
-            dict : A dictionary of keyed by `train`, `valid` or `test` with lists
-                  of participant Ids 
-
+    Returns:
+        dict: Dictionary with keys 'train', 'valid', 'test' containing
+             lists of participant IDs for each set
     """
 
     all_participants = cleaned_data_path
@@ -75,15 +55,10 @@ def split_data() -> None:
     return data_dict
 
 def train() -> None:
-    """Train the self-supervised model
-
-        Args:
-        ----
-            None
-        Returns:
-        ----
-            None
-
+    """Train the self-supervised model on frequency and spatial graphs.
+    
+    Loads data, trains the model with both frequency and spatial losses,
+    tracks performance metrics, and saves model weights at specified epochs.
     """
     print(f"⚠️ Saving weights to {model_weights_dir}")
     if not os.path.exists(model_weights_dir):
@@ -173,11 +148,12 @@ def train() -> None:
             freq, spatial, = net(freq_data,spatial_data)
 
             y_freq, y_spatial = freq_data.y, spatial_data.y
-            _, pred_freq = torch.max(y_freq, dim = 1)
+            _, pred_freq = torch.max(freq, dim = 1)
             _, pred_spatial = torch.max(spatial, dim = 1)
 
             correct_pred_freq += sum([1 for a,b in zip(pred_freq,y_freq) if a == b])
-            correct_pred_spatial += sum([1 for a,b in zip(pred_spatial,y_spatial) if a == b])
+            correct_pred_spatial += sum([1 for a,b in zip(pred_spatial,y_spatial)\
+                                         if a == b])
 
             loss_frequency = criterion(freq, y_freq)
             loss_spatial = criterion(spatial, y_spatial)
@@ -218,7 +194,7 @@ def train() -> None:
         print(f'Weighted loss [{epoch_avg_weighted_loss:.4f}]  ')
         print(f'Frequency loss[{epoch_avg_freq_loss:.4f}]')
         print(f'Spatial loss[{epoch_avg_spatial_loss:.4f}]')
-        print(f'ACC@1:')
+        print('ACC@1:')
         print(f'fequency ACC[{correct_pred_freq/denominator:.4f}]')
         print(f'spatial ACC[{correct_pred_spatial/denominator:.4f}]')
         print("----------------------------------------------")

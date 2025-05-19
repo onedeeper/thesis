@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - https://repo.anaconda.com/pkgs/main
   - https://repo.anaconda.com/pkgs/r
+  - pytorch
 dependencies:
   - absl-py=2.2.0
   - aiohappyeyeballs=2.6.1
@@ -107,6 +108,7 @@ dependencies:
   - hyperframe=6.1.0
   - icu=75.1
   - idna=3.10
+  - ignite=0.5.2
   - imagecodecs=2024.12.30
   - imageio=2.37.0
   - imageio-ffmpeg=0.6.0

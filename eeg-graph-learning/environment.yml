@@ -24,6 +24,7 @@ dependencies:
   - ruff=0.3.3
   - conda-forge::pyg-lib
   - conda-forge::pyprep
+  - pytorch::ignite
   - pip:
     - pygeodesy==25.5.5
     - microstructpy==1.5.9

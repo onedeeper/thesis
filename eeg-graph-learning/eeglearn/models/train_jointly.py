@@ -1,35 +1,35 @@
+"""Joint self-supervised and multi-task learning for EEG data.
+
+Implementation of a joint training approach combining self-supervised learning with
+multi-task learning for EEG data based on Li et al. 2023.
+Handles data splitting, model training, and metrics tracking for frequency and spatial
+graph representations.
+
+Functions:
+    split_data: Split participants into train/test/validation sets
+    train: Execute the self-supervised training process and save metrics
+"""
+
 import os
 from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 from eeglearn.config import Config
-from eeglearn.preprocess.preprocessing import Preproccesing
-from eeglearn.utils.utils import get_details_from_file_name, get_cleaned_data_paths,\
-                            load_preprocessed_data, get_labels_dict
-from operator import itemgetter
-from torch_geometric.data import Data
-from torch_geometric.loader import DataLoader
-from multiprocessing import cpu_count
+from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
 
-from microstructpy.geometry import Ellipsoid
-from pygeodesy.ellipsoidalVincenty import Cartesian
-from pygeodesy import Ellipsoid as pyg_Ellipsoid
-from pygeodesy.ellipsoidalKarney import LatLon as KLatLon
-import os
-from pathlib import Path
 from sklearn.model_selection import train_test_split
 from AutoWeight import AutomaticWeightedLoss
-from eeglearn.models.model import SelfSupervisedTrain, JointlyTrainModel,\
-    SelfSupervisedTest
+from eeglearn.models.model import JointlyTrainModel
 from eeglearn.features.graphs import Graphs
-import json
 import pandas as pd
-from eeglearn.config import Config
 from sklearn.preprocessing import LabelEncoder
-from eeglearn.features.graphs import Graphs
 from torch_geometric.data import Batch
+
+from ignite.engine import Engine, Events
+from ignite.handlers import EarlyStopping
+from itertools import cycle
 
 batch_size : int = Config.batch_size
 epochs : int = Config.epochs
@@ -44,32 +44,20 @@ ignore_replication_nans : bool = True
 num_workers : int = Config.num_workers
 random_seed : int = Config.RANDOM_SEED
 drop_last : bool = Config.drop_last
+data_path : Path = Config.data_path
+stop_at : int = Config.stop_at
 
-from itertools import cycle
 
+def split_data(ignore_replication_nans : bool = False) -> dict:
+    """Split participants into train, validation, and test sets.
 
-"""Self-supervised  + multi-task learning EEG training pipeline .
+    Args:
+        ignore_replication_nans: Whether to exclude participants with NaN labels 
+                                 or in replication status.
 
-Implementation of a self-supervised training approach for EEG data based on Li et al. 2023
-(https://ieeexplore.ieee.org/abstract/document/9765326). This module handles data splitting,
-model training, and metrics tracking for both frequency and spatial graph representations.
-
-Functions:
-    split_data: Split participants into train/test/validation sets
-    train: Execute the self-supervised training process and save metrics
-"""
-
-def split_data(ignore_replication_nans : bool = False) -> None:
-    """Create the graph representations of each epoched recording in a collection.
-
-        Args:
-        ----
-            None
-        Returns:
-        ----
-            dict : A dictionary of keyed by `train`, `valid` or `test` with lists
-                  of participant Ids 
-
+    Returns:
+        Dictionary with keys 'train', 'valid', 'test' containing lists of participant 
+                                IDs.
     """
 
     all_participants = cleaned_data_path
@@ -77,7 +65,7 @@ def split_data(ignore_replication_nans : bool = False) -> None:
     participant_files = os.listdir(all_participants)
     N = []
     if ignore_replication_nans:
-        print(f"⚠️ Ignoring participants with Nan labels or in replication")
+        print("⚠️  Ignoring participants with Nan labels or in replication")
         for participant in participant_files:
             try:
                 if labels[participant] in {'nan', 'NaN', np.nan, 'REPLICATION'}:
@@ -101,16 +89,15 @@ def split_data(ignore_replication_nans : bool = False) -> None:
 
 def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder, 
                         testing : bool = False):
-    """Load an energy object for each participant and convert it into a graph
-    with the psych label. 
+    """Load energy objects for participants and convert them into graphs with labels.
 
-            Args:
-            ----
-                None
-            Returns:
-            ----
-                None
+    Args:
+        files_to_load: List of participant files to load.
+        label_encoder: Label encoder for psychological labels.
+        testing: Whether the graphs are for testing (affects drop_last setting).
 
+    Returns:
+        PyTorch geometric graph data loader.
     """
     epoched_path : Path = energy_path / "energy_epoched"
     energy_files : list = os.listdir(epoched_path)
@@ -139,27 +126,28 @@ def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder,
     return graphs.get_graphs(files_to_load=full_file_names_to_load, 
                              label_encoder= label_encoder)
 
-def train()-> None :
-    """Train the self-supervised model jointly on the pre-text and the downstream task
-
-        Args:
-        ----
-            None
-        Returns:
-        ----
-            None
-
+def train()->None :
+    """Train the joint self-supervised model on pretext and downstream tasks.
+    
+    Loads data, builds graph representations, trains the model using frequency,
+    spatial and original graph data, and saves metrics and model weights.
     """
+    assert os.path.exists(cleaned_data_path),\
+            "'data/cleaned' folder should exist and contain preprocessed data."
+    assert os.path.exists(energy_path),\
+            "'data/energy' folder should exist and contain derived energy features."
+    assert os.path.exists(data_path),\
+        "'data' folder should be in root directory for saving metrics and weights."
     highest_acc = 0.0
-    print(f"⚠️ Saving weights to {model_weights_dir}")
+    print(f"⚠️  Saving weights to {model_weights_dir}")
     if not os.path.exists(model_weights_dir):
-        model_weights_dir.mkdir(exist_ok=True)
+        model_weights_dir.mkdir(exist_ok=True, parents=True)
 
-    print(f"⚠️ Saving metrics to {metrics_dir}")
+    print(f"⚠️  Saving metrics to {metrics_dir}")
     if not os.path.exists(metrics_dir):
-        metrics_dir.mkdir(exist_ok=True)
+        metrics_dir.mkdir(exist_ok=True, parents=True)
         
-    print(f"⚠️ Training with data loader drop_last : {drop_last}")
+    print(f"⚠️  Training with data loader drop_last : {drop_last}")
     # Create necessary log files
     with open(metrics_dir / "epoch_log.txt", "w") as f:
         f.write("batch_size\tepoch\tlr\tdrop_rate\tacc\n")
@@ -170,7 +158,7 @@ def train()-> None :
     unique_labels = list(set(psych_labels.values()))
     if ignore_replication_nans:
         unique_labels = sorted([label for label in unique_labels
-                         if not (label == "REPLICATION" or label == "nan")])
+                         if label not in {'nan', 'NaN', np.nan, 'REPLICATION'}])
     encoder = LabelEncoder()
     encoder.fit(list(unique_labels))
     n_classes = len(unique_labels)
@@ -186,16 +174,32 @@ def train()-> None :
                                                            threshold_mode='rel',
                                                            cooldown=1, min_lr=0,
                                                            eps=1e-8)
+    
+    # Create a dummy engine for early stopping
+    def dummy_update_fn(engine, batch):
+        return batch
+    
+    trainer = Engine(dummy_update_fn)
+    
+    # Add early stopping handler
+    early_stopping = EarlyStopping(
+        patience=stop_at,  # Number of epochs to wait before stopping
+        score_function=lambda engine: -engine.state.metrics['val_loss'],
+        trainer=trainer
+    )
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
+
     split : dict[str,list[str]] = split_data(ignore_replication_nans=\
                                              ignore_replication_nans)
     train_participants = split['train']
     validation_participants = split['valid']
     test_participants = split['test']
-    print("⚠️ Participants split..")
+    print("⚠️  Participants split..")
     print(f"n train : {len(train_participants)}")
     print(f"n valid : {len(validation_participants)}")
     print(f"n test : {len(test_participants)}")
 
+    print("🔄  Building graphs.")
     original_graph_loader = get_graphs_original(train_participants, encoder)
     train_freq_data = [fname for participant in train_participants
                        for fname in os.listdir(energy_path / "frequency_perms")
@@ -237,7 +241,8 @@ def train()-> None :
             'spatial_acc' : [],
             'original_acc': [],
         }
-    for epoch in range(2):
+    print(f"⚠️  Training for epochs : {epochs}")
+    for epoch in range(epochs):
         loader = zip(frequency_graph_loader, spatial_graph_loader,
                      cycle(original_graph_loader))
         epoch_weighted_loss = 0.0
@@ -276,19 +281,26 @@ def train()-> None :
             epoch_loss_freq += float(loss_freq.item())
             epoch_loss_spatial += float(loss_spatial.item())
             epoch_loss_original += float(loss_original.item())
-        highest_acc, current_acc = validate(
+        highest_acc, current_acc, epoch_loss = validate(
                                         validate_data=validation_participants,
                                         net = net,
                                         label_encoder= encoder, 
                                         highest_acc=highest_acc,
                                         epoch=epoch)
+        # Update engine metrics and check early stopping
+        trainer.state.metrics = {'val_loss': epoch_loss}
+        trainer.fire_event(Events.EPOCH_COMPLETED)
         
+        # Check if early stopping criteria met
+        if trainer.should_terminate:
+            print(f" 🟢  Early stopping triggered at epoch {epoch}")
+            break
         writeEachEpoch(epoch, batch_size, lr, current_acc)
         scheduler.step(epoch_weighted_loss) 
         denominator = (ind+1)*batch_size
         if epoch % 5 == 0:
                 print()
-                print(f'-----highest_acc {highest_acc:.4f} current_acc {current_acc:.4f}-----')
+                print(f'## highest_acc {highest_acc:.4f} curr_acc {current_acc:.4f}##')
                 print(f'batch {batch_size}, lr {lr}')
                 print()
 
@@ -309,12 +321,12 @@ def train()-> None :
         metrics['spatial_acc'].append(spatial_acc)
         metrics['original_acc'].append(original_acc)
 
-        print(f'Epoch [{epoch}/{epochs}] \\n')
+        print(f'Epoch [{epoch}/{epochs}]')
         print(f'Weighted loss [{epoch_avg_weighted_loss:.4f}]  ')
         print(f'Frequency loss[{epoch_avg_freq_loss:.4f}]')
         print(f'Spatial loss[{epoch_avg_spatial_loss:.4f}]')
         print(f'Original loss[{epoch_avg_original_loss:.4f}]')
-        print(f'ACC@1:')
+        print('ACC@1:')
         print(f'fequency ACC[{correct_pred_freq/denominator:.4f}]')
         print(f'spatial ACC[{correct_pred_spatial/denominator:.4f}]')
         print(f'original ACC[{correct_pred_original/denominator:.4f}]')
@@ -325,6 +337,14 @@ def train()-> None :
 
 
 def writeEachEpoch(epoch, batchsize, lr, current_acc):
+    """Log epoch information to epoch_log.txt.
+    
+    Args:
+        epoch: Current epoch number.
+        batchsize: Batch size used for training.
+        lr: Learning rate used for training.
+        current_acc: Current validation accuracy.
+    """
     drop_rate = Config.drop_rate
     log = []
     log.append(f'{batchsize}\t{epoch}\t{lr}\t{drop_rate}\t{current_acc:.4f}\n')
@@ -333,6 +353,12 @@ def writeEachEpoch(epoch, batchsize, lr, current_acc):
 
 
 def updatelog(epoch, acc):
+    """Update the log file with best model information.
+    
+    Args:
+        epoch: Current epoch number.
+        acc: Current best accuracy.
+    """
     log = []
     log.append(f'{epoch}\t{lr}\t{batch_size}\t{acc:.4f}\n')
     with open(metrics_dir / "update_log.txt", 'a') as f:
@@ -340,6 +366,18 @@ def updatelog(epoch, acc):
 
 
 def validate(net, validate_data, label_encoder, highest_acc, epoch):
+    """Evaluate model performance on validation data.
+    
+    Args:
+        net: Model to evaluate.
+        validate_data: List of validation participant IDs.
+        label_encoder: Label encoder for psychological labels.
+        highest_acc: Current highest accuracy seen so far.
+        epoch: Current epoch number.
+        
+    Returns:
+        Tuple of (highest_acc, current_acc, epoch_loss).
+    """
     criterion = nn.CrossEntropyLoss().to(device)
     gloader = get_graphs_original(validate_data, 
                                   label_encoder=label_encoder,
@@ -349,7 +387,7 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
     epoch_loss = 0.0
     correct_pred = 0
     total_samples = 0
-    for ind, data in enumerate(gloader):
+    for _, data in enumerate(gloader):
         data = data.to(device)
         current_batch_size = data.y.size(0)
         total_samples += batch_size
@@ -383,7 +421,7 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
 
     net.train()
     net.testmode=False
-    return highest_acc, ACC
+    return highest_acc, ACC, epoch_loss
 
 if __name__ == "__main__":
     train()

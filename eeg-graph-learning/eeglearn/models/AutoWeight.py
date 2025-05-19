@@ -1,17 +1,30 @@
+"""Self-supervised EEG training pipeline.
+
+Written by Li et al. 
+Copied from  Li et al. 2023(https://ieeexplore.ieee.org/abstract/document/9765326). 
+Modified by Udesh Habaraduwa, May 2025
+
+"""
+
 import torch
 import torch.nn as nn
 
 
 class AutomaticWeightedLoss(nn.Module):
-    """automatically weighted multi-task loss
-    Params：
-        num: int，the number of loss
-        x: multi-task loss
-    Examples：
-        loss1=1
-        loss2=2
-        awl = AutomaticWeightedLoss(2)
-        loss_sum = awl(loss1, loss2)
+    """Automatically weighted multi-task loss function that
+    learns optimal weights for each task.
+    
+    Args:
+        num (int): Number of loss terms to combine
+        
+    Returns:
+        torch.Tensor: Weighted sum of all loss terms
+        
+    Example:
+        >>> loss1 = torch.tensor(1.0)
+        >>> loss2 = torch.tensor(2.0)
+        >>> awl = AutomaticWeightedLoss(2)
+        >>> total_loss = awl(loss1, loss2)
     """
     def __init__(self, num=2):
         super(AutomaticWeightedLoss, self).__init__()
