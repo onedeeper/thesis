@@ -31,11 +31,12 @@ class Config:
                            if torch.backends.mps.is_available() else 'cpu')
     num_jigsaw = 4
     K = 2
-    cleaned_data_path = Path(__file__).resolve().parent.parent / 'data' / 'cleaned'
-    energy_path = Path(__file__).resolve().parent.parent / 'data' / 'energy'
-    model_weights_dir = Path(__file__).resolve().parent.parent / 'data' / 'weights'
-    metrics_dir = Path(__file__).resolve().parent.parent / 'data' / 'metrics'
-    data_path = Path(__file__).resolve().parent.parent / 'data'
+    project_root : Path = Path(__file__).resolve().parent.parent
+    cleaned_data_path : Path = project_root / 'data' / 'cleaned'
+    energy_path : Path = project_root / 'data' / 'energy'
+    model_weights_dir : Path = project_root / 'data' / 'weights'
+    metrics_dir : Path = project_root / 'data' / 'metrics'
+    data_path : Path  = project_root / 'data'
     drop_last : bool = True
     stop_at : int = 10
     @classmethod
