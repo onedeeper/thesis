@@ -25,6 +25,8 @@ from eeglearn.models.model import SelfSupervisedTrain
 from eeglearn.features.graphs import Graphs
 import json
 import pandas as pd
+from eeglearn.config import Config
+
 """Self-supervised EEG training pipeline.
 
 Implementation of a self-supervised training approach for EEG data based on Li et al. 2023
@@ -35,7 +37,6 @@ Functions:
     split_data: Split participants into train/test/validation sets
     train: Execute the self-supervised training process and save metrics
 """
-from eeglearn.config import Config
 
 batch_size : int = Config.batch_size
 epochs : int = Config.epochs
@@ -172,7 +173,7 @@ def train() -> None:
             freq, spatial, = net(freq_data,spatial_data)
 
             y_freq, y_spatial = freq_data.y, spatial_data.y
-            _, pred_freq = torch.max(freq, dim = 1)
+            _, pred_freq = torch.max(y_freq, dim = 1)
             _, pred_spatial = torch.max(spatial, dim = 1)
 
             correct_pred_freq += sum([1 for a,b in zip(pred_freq,y_freq) if a == b])

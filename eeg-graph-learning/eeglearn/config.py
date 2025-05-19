@@ -26,7 +26,7 @@ class Config:
     lr = 0.01
     weight_decay = 8e-5
     drop_rate = 0.25 
-    num_workers = 8
+    num_workers = 7
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
     num_jigsaw = 4
@@ -35,6 +35,7 @@ class Config:
     energy_path = Path(__file__).resolve().parent.parent / 'data' / 'energy'
     model_weights_dir = Path(__file__).resolve().parent.parent / 'data' / 'weights'
     metrics_dir = Path(__file__).resolve().parent.parent / 'data' / 'metrics'
+    drop_last : bool = True
     @classmethod
     def set_global_seed(cls, verbose=False):
         """
