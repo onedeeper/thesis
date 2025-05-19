@@ -60,3 +60,8 @@ create_directory_structure.py
 
 # Ruff cache
 .ruff_cache/
+
+# Model graph loaders
+models/original_graph_loader.pt
+models/spatial_graph_loader.pt
+models/frequency_graph_loader.pt
