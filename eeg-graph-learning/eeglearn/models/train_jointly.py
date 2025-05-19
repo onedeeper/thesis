@@ -36,6 +36,7 @@ epochs : int = Config.epochs
 lr : float = Config.lr
 weight_decay : float = Config.weight_decay
 device : str = Config.device
+project_root : Path = Config.project_root
 cleaned_data_path : Path = Config.cleaned_data_path
 energy_path : Path = Config.energy_path
 model_weights_dir : Path = Config.model_weights_dir / 'jointly'
@@ -200,7 +201,6 @@ def train()->None :
     print(f"n test : {len(test_participants)}")
 
     print("🔄  Building graphs.")
-    original_graph_loader = get_graphs_original(train_participants, encoder)
     train_freq_data = [fname for participant in train_participants
                        for fname in os.listdir(energy_path / "frequency_perms")
                        if participant in fname] 
@@ -228,8 +228,29 @@ def train()->None :
                             shuffle=True,
                             drop_last=drop_last,
                             n_workers=num_workers)
-    spatial_graph_loader = spatial_graphs.get_graphs(files_to_load=train_spatial_data)
-    frequency_graph_loader = frequency_graphs.get_graphs(files_to_load=train_freq_data)
+    
+    loader_save_path = project_root / 'eeglearn' / 'models' / 'original_graph_loader.pt'
+    if not os.path.exists(loader_save_path):
+        original_graph_loader = get_graphs_original(train_participants, encoder)
+        torch.save(original_graph_loader,loader_save_path)
+    else:
+        original_graph_loader = torch.load(loader_save_path)
+
+    loader_save_path = project_root / 'eeglearn' /'models'/ 'spatial_graph_loader.pt'
+    if not os.path.exists(loader_save_path):
+        spatial_graph_loader = spatial_graphs.get_graphs(files_to_load=
+                                                         train_spatial_data)
+        torch.save(spatial_graph_loader, loader_save_path)
+    else:
+        spatial_graph_loader = torch.load(loader_save_path)
+
+    loader_save_path = project_root / 'eeglearn'/ 'models' / 'frequency_graph_loader.pt'
+    if not os.path.exists(loader_save_path):
+        frequency_graph_loader = frequency_graphs.get_graphs(files_to_load=
+                                                             train_freq_data)
+        torch.save(frequency_graph_loader, loader_save_path)
+    else:
+        frequency_graph_loader = torch.load(loader_save_path)
 
     metrics : dict[str,list] = {
             'epoch' : [],
