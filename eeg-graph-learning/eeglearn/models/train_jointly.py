@@ -49,6 +49,7 @@ drop_last : bool = Config.drop_last
 data_path : Path = Config.data_path
 stop_at : int = Config.stop_at
 skip_bads : int = Config.skip_bads
+main_classes : list[str] = Config.main_classes
 
 def split_data(ignore_replication_nans : bool = False) -> dict:
     """Split participants into train, validation, and test sets.
@@ -70,14 +71,17 @@ def split_data(ignore_replication_nans : bool = False) -> dict:
         print("⚠️  Ignoring participants with Nan labels or in replication")
         for participant in participant_files:
             try:
-                if labels[participant] in {'nan', 'NaN', np.nan, 'REPLICATION'}:
+                if labels[participant] in {'nan', 'NaN', np.nan, 'REPLICATION'} or labels[participant] not in main_classes:
                     continue
             except KeyError:
                 continue 
             N.append(participant)
     else:
         N = participant_files
-            
+    
+    for participant in N:
+        assert labels[participant] in main_classes
+
     train, test_valid = train_test_split(N, test_size=0.2, random_state=random_seed)
     test, valid = train_test_split(test_valid, test_size=0.5, random_state=random_seed)
 
@@ -136,12 +140,11 @@ def train()->None :
     spatial and original graph data, and saves metrics and model weights.
     """
     assert os.path.exists(cleaned_data_path),\
-            "'data/cleaned' folder should exist and contain preprocessed data."
+        "'data/cleaned' folder should exist and contain preprocessed data."
     assert os.path.exists(energy_path),\
             "'data/energy' folder should exist and contain derived energy features."
     assert os.path.exists(data_path),\
         "'data' folder should be in root directory for saving metrics and weights."
-    highest_acc = 0.0
     print(f"⚠️  Saving weights to {model_weights_dir}")
     if not os.path.exists(model_weights_dir):
         model_weights_dir.mkdir(exist_ok=True, parents=True)
@@ -157,14 +160,16 @@ def train()->None :
     with open(metrics_dir / "update_log.txt", "w") as f:
         f.write("epoch\tlr\tbatch_size\tacc\n")
 
-    psych_labels = get_labels_dict()
-    unique_labels = list(set(psych_labels.values()))
+    all_psych_labels = get_labels_dict()
+    all_unique_psych_labels = list(set(all_psych_labels.values()))
     if ignore_replication_nans:
-        unique_labels = sorted([label for label in unique_labels
-                         if label not in {'nan', 'NaN', np.nan, 'REPLICATION'}])
+        selected_unique_psych_labels = sorted([label for label in all_unique_psych_labels 
+                              if label not in {'nan', 'NaN', np.nan, 'REPLICATION'} 
+                              and label in main_classes])
     encoder = LabelEncoder()
-    encoder.fit(list(unique_labels))
-    n_classes = len(unique_labels)
+    encoder.fit(list(selected_unique_psych_labels))
+    n_classes = len(selected_unique_psych_labels)
+
     awl = AutomaticWeightedLoss(3)
     net = JointlyTrainModel(5, 32, batch_size, HF = 120, HS = 128, HC =  n_classes)
     net = net.to(device)
@@ -233,8 +238,8 @@ def train()->None :
     
     loader_save_path = project_root / 'eeglearn' / 'models' / 'original_graph_loader.pt'
     if not os.path.exists(loader_save_path):
-        original_graph_loader = get_graphs_original(train_participants, encoder)
-        torch.save(original_graph_loader,loader_save_path)
+        original_graph_loader = get_graphs_original(train_participants, encoder) 
+        torch.save(original_graph_loader, loader_save_path)
     else:
         original_graph_loader = torch.load(loader_save_path)
 
@@ -268,6 +273,7 @@ def train()->None :
             'f1_score': []
         }
     print(f"⚠️  Training for epochs : {epochs}")
+    highest_acc = 0.0
     for epoch in range(epochs):
         loader = zip(frequency_graph_loader, spatial_graph_loader,
                      cycle(original_graph_loader))

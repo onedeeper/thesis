@@ -23,13 +23,12 @@ class Config:
     # Other global configuration settings can be added here
     epochs = 100
     batch_size = 256 
-    lr = 0.0001 # original : 0.01
+    lr = 0.001 # original : 0.01
     weight_decay = 8e-5
     drop_rate = 0.25 
     num_workers = 4
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
-    num_jigsaw = 4
     K = 2
     project_root : Path = Path(__file__).resolve().parent.parent
     cleaned_data_path : Path = project_root / 'data' / 'cleaned'
@@ -40,6 +39,7 @@ class Config:
     drop_last : bool = True
     stop_at : int = 10
     skip_bads : bool = False 
+    main_classes : list[str] = ["ADHD","HC","MDD","OCD","SMC"]
     @classmethod
     def set_global_seed(cls, verbose=False):
         """
