@@ -39,7 +39,7 @@ class Config:
     data_path : Path  = project_root / 'data'
     drop_last : bool = True
     stop_at : int = 10
-    skip_bads : bool = False # If examples with bad channels should be skipped.
+    skip_bads : bool = False 
     @classmethod
     def set_global_seed(cls, verbose=False):
         """

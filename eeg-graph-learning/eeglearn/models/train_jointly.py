@@ -48,7 +48,7 @@ random_seed : int = Config.RANDOM_SEED
 drop_last : bool = Config.drop_last
 data_path : Path = Config.data_path
 stop_at : int = Config.stop_at
-skip_ads : int = Config.skip_bads
+skip_bads : int = Config.skip_bads
 
 def split_data(ignore_replication_nans : bool = False) -> dict:
     """Split participants into train, validation, and test sets.
@@ -127,7 +127,7 @@ def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder,
                      drop_last=False)
     return graphs.get_graphs(files_to_load=full_file_names_to_load, 
                              label_encoder= label_encoder,
-                             skip_bads=skip_ads)
+                             skip_bads=skip_bads)
 
 def train()->None :
     """Train the joint self-supervised model on pretext and downstream tasks.
@@ -242,7 +242,7 @@ def train()->None :
     if not os.path.exists(loader_save_path):
         spatial_graph_loader = spatial_graphs.get_graphs(files_to_load=
                                                          train_spatial_data,
-                                                         skip_bads=skip_ads)
+                                                         skip_bads=skip_bads)
         torch.save(spatial_graph_loader, loader_save_path)
     else:
         spatial_graph_loader = torch.load(loader_save_path)
@@ -251,7 +251,7 @@ def train()->None :
     if not os.path.exists(loader_save_path):
         frequency_graph_loader = frequency_graphs.get_graphs(files_to_load=
                                                              train_freq_data,
-                                                             skip_bads=skip_ads)
+                                                             skip_bads=skip_bads)
         torch.save(frequency_graph_loader, loader_save_path)
     else:
         frequency_graph_loader = torch.load(loader_save_path)
