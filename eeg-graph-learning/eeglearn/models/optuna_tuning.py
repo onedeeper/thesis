@@ -83,7 +83,7 @@ def objective(trial):
     Config.drop_rate = trial.suggest_float("drop_rate", 0.1, 0.4)
     
     # Training parameters
-    Config.batch_size = trial.suggest_categorical("batch_size", [128, 256, 512])
+    Config.batch_size = trial.suggest_categorical("batch_size", [128, 256])
     Config.lr = trial.suggest_float("lr", 1e-4, 5e-2, log=True)   
     Config.weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
     
