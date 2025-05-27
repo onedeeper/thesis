@@ -50,6 +50,14 @@ data_path : Path = Config.data_path
 stop_at : int = Config.stop_at
 skip_bads : int = Config.skip_bads
 main_classes : list[str] = Config.main_classes
+optuna : bool = Config.optuna
+
+
+# architectural attributes
+drop_rate = Config.drop_rate
+linear_size = Config.linear_size
+gcn_out_size = Config.gcn_out_size
+k = Config.K
 
 def split_data(ignore_replication_nans : bool = False) -> dict:
     """Split participants into train, validation, and test sets.
@@ -120,7 +128,8 @@ def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder,
                     distance="ellipsoid", 
                      cleaned_data_path=cleaned_data_path,
                      n_workers=num_workers,
-                     drop_last=drop_last)
+                     drop_last=drop_last,
+                     batch_size = batch_size)
     if testing:
         graphs =  Graphs(
                     perm_type=None,
@@ -128,16 +137,20 @@ def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder,
                     distance="ellipsoid", 
                      cleaned_data_path=cleaned_data_path,
                      n_workers=num_workers,
-                     drop_last=False)
+                     drop_last=False,
+                     batch_size = batch_size)
     return graphs.get_graphs(files_to_load=full_file_names_to_load, 
                              label_encoder= label_encoder,
                              skip_bads=skip_bads)
 
-def train()->None :
+def train() -> float:
     """Train the joint self-supervised model on pretext and downstream tasks.
     
     Loads data, builds graph representations, trains the model using frequency,
     spatial and original graph data, and saves metrics and model weights.
+    
+    Returns:
+        float: Best F1 score achieved during training
     """
     assert os.path.exists(cleaned_data_path),\
         "'data/cleaned' folder should exist and contain preprocessed data."
@@ -171,8 +184,18 @@ def train()->None :
     n_classes = len(selected_unique_psych_labels)
 
     awl = AutomaticWeightedLoss(3)
-    net = JointlyTrainModel(5, 32, batch_size, HF = 120, HS = 128, HC =  n_classes)
-    net = net.to(device)
+    net = JointlyTrainModel(
+        inchannel=5, 
+        gcn_out_size=gcn_out_size, 
+        batch=batch_size, 
+        K=k,
+        linear_size=linear_size,
+        drop_rate=drop_rate,
+        testmode=False,
+        HF=120, 
+        HS=128, 
+        HC=n_classes
+    ).to(device)
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr = lr, weight_decay = weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', 
@@ -237,14 +260,15 @@ def train()->None :
                             n_workers=num_workers)
     
     loader_save_path = project_root / 'eeglearn' / 'models' / 'original_graph_loader.pt'
-    if not os.path.exists(loader_save_path):
+
+    if not os.path.exists(loader_save_path) or optuna:
         original_graph_loader = get_graphs_original(train_participants, encoder) 
         torch.save(original_graph_loader, loader_save_path)
     else:
         original_graph_loader = torch.load(loader_save_path)
 
     loader_save_path = project_root / 'eeglearn' /'models'/ 'spatial_graph_loader.pt'
-    if not os.path.exists(loader_save_path):
+    if not os.path.exists(loader_save_path) or optuna:
         spatial_graph_loader = spatial_graphs.get_graphs(files_to_load=
                                                          train_spatial_data,
                                                          skip_bads=skip_bads)
@@ -253,7 +277,7 @@ def train()->None :
         spatial_graph_loader = torch.load(loader_save_path)
 
     loader_save_path = project_root / 'eeglearn'/ 'models' / 'frequency_graph_loader.pt'
-    if not os.path.exists(loader_save_path):
+    if not os.path.exists(loader_save_path) or optuna:
         frequency_graph_loader = frequency_graphs.get_graphs(files_to_load=
                                                              train_freq_data,
                                                              skip_bads=skip_bads)
@@ -274,6 +298,7 @@ def train()->None :
         }
     print(f"⚠️  Training for epochs : {epochs}")
     highest_acc = 0.0
+    best_f1_score = 0.0
     for epoch in range(epochs):
         loader = zip(frequency_graph_loader, spatial_graph_loader,
                      cycle(original_graph_loader))
@@ -319,6 +344,8 @@ def train()->None :
                                         label_encoder= encoder, 
                                         highest_acc=highest_acc,
                                         epoch=epoch)
+        if f1 > best_f1_score:
+            best_f1_score = f1
         # Update engine metrics and check early stopping
         trainer.state.metrics = {'val_loss': epoch_loss}
         trainer.fire_event(Events.EPOCH_COMPLETED)
@@ -365,10 +392,10 @@ def train()->None :
         print(f'original ACC[{correct_pred_original/denominator:.4f}]')
         print(f'F1 Score[{f1:.4f}]')
         print("----------------------------------------------")
-            
+        
     pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics_jointly.csv",
                                  index=False)
-
+    return best_f1_score
 
 def writeEachEpoch(epoch, batchsize, lr, current_acc):
     """Log epoch information to epoch_log.txt.
@@ -429,7 +456,7 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
     for _, data in enumerate(gloader):
         data = data.to(device)
         current_batch_size = data.y.size(0)
-        total_samples += batch_size
+        total_samples += current_batch_size
 
         if current_batch_size < batch_size:
             data_list = data.to_data_list()
@@ -438,6 +465,8 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
                                   for i in range(needed)]
             data_list.extend(additional_samples)
             data = Batch.from_data_list(data_list)
+            # Update total_samples to account for padding
+            total_samples = total_samples - current_batch_size + batch_size
         out = net(data)
         y = data.y
         _, pre = torch.max(out, dim=1)

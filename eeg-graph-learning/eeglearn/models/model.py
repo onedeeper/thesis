@@ -19,16 +19,16 @@ import torch_geometric.nn as gnn
 import torch.nn.functional as F
 from eeglearn.config import Config
 
-drop_rate = Config.drop_rate
-K = Config.K
-
 class JointlyTrainModel(nn.Module):
     """Joint training model that combines frequency, spatial, and original graph data.
     
     Args:
         inchannel (int): Number of input features per node
-        outchannel (int): Number of output features after graph convolution
+        gcn_out_size (int): Number of output features after graph convolution
         batch (int): Batch size
+        K (int): Order of Chebyshev polynomials
+        linear_size (int): Size of linear layers
+        drop_rate (float): Dropout rate
         testmode (bool, optional): If True, 
                             only processes original graph data. Defaults to False
         **kwargs: Additional parameters including:
@@ -40,48 +40,49 @@ class JointlyTrainModel(nn.Module):
         tuple: (frequency_output, spatial_output, classification_output) during training
         torch.Tensor: Classification output during testing
     """
-    def __init__(self, inchannel, outchannel, batch, testmode=False, **kwargs):
+    def __init__(self, inchannel, gcn_out_size, batch, K, linear_size, drop_rate,
+                 testmode=False, 
+                 **kwargs):
         super(JointlyTrainModel, self).__init__()
         self.batch = batch
         self.testmode = testmode
-        linearsize = 512
         
-        self.conv1 = gnn.ChebConv(inchannel, outchannel, K=K)
+        self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
 
         self.HF = nn.Sequential(
-            nn.Linear(outchannel * 26, linearsize),
-            nn.BatchNorm1d(linearsize),
+            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize, linearsize // 2),
-            nn.BatchNorm1d(linearsize//2),
+            nn.Linear(linear_size, linear_size // 2),
+            nn.BatchNorm1d(linear_size//2),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize // 2, kwargs['HF'])
+            nn.Linear(linear_size // 2, kwargs['HF'])
         )
 
         self.HS = nn.Sequential(
-            nn.Linear(outchannel * 26, linearsize),
-            nn.BatchNorm1d(linearsize),
+            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize, linearsize // 2),
-            nn.BatchNorm1d(linearsize // 2),
+            nn.Linear(linear_size, linear_size // 2),
+            nn.BatchNorm1d(linear_size // 2),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize // 2, kwargs['HS'])
+            nn.Linear(linear_size // 2, kwargs['HS'])
         )
         
         self.HC = nn.Sequential(
-            nn.Linear(outchannel * 26, linearsize),
-            nn.BatchNorm1d(linearsize),
+            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize, linearsize // 2),
-            nn.BatchNorm1d(linearsize // 2),
+            nn.Linear(linear_size, linear_size // 2),
+            nn.BatchNorm1d(linear_size // 2),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize // 2, kwargs['HC'])
+            nn.Linear(linear_size // 2, kwargs['HC'])
         )
 
     def forward(self, *args):
@@ -125,8 +126,11 @@ class SelfSupervisedTrain(nn.Module):
     
     Args:
         inchannel (int): Number of input features per node
-        outchannel (int): Number of output features after graph convolution
+        gcn_out_size (int): Number of output features after graph convolution
         batch (int): Batch size
+        K (int): Order of Chebyshev polynomials
+        linear_size (int): Size of linear layers
+        drop_rate (float): Dropout rate
         **kwargs: Additional parameters including:
             - HF (int): Output size for frequency head (120 permutations)
             - HS (int): Output size for spatial head (128 permutations)
@@ -134,42 +138,40 @@ class SelfSupervisedTrain(nn.Module):
     Returns:
         tuple: (frequency_output, spatial_output) with softmax applied
     """
-    def __init__(self, inchannel, outchannel, batch, **kwargs):
+    def __init__(self, inchannel, gcn_out_size, batch, K, linear_size, drop_rate, **kwargs):
         super(SelfSupervisedTrain, self).__init__()
         self.batch = batch
 
-        linearsize = 512
-
         # inchannel = 5 , which is the number of features
         # for each electrode 
-        self.conv1 = gnn.ChebConv(inchannel, outchannel, K=2)
+        self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
 
         self.HF = nn.Sequential(
-            nn.Linear(outchannel * 26, linearsize),
-            nn.BatchNorm1d(linearsize),
+            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize, linearsize // 2),
-            nn.BatchNorm1d(linearsize//2),
+            nn.Linear(linear_size, linear_size // 2),
+            nn.BatchNorm1d(linear_size//2),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
             # This is shape (256 x 120) where 120
             # is the number frequency permutations
-            nn.Linear(linearsize // 2, kwargs['HF'])
+            nn.Linear(linear_size // 2, kwargs['HF'])
         )
 
         self.HS = nn.Sequential(
-            nn.Linear(outchannel * 26, linearsize),
-            nn.BatchNorm1d(linearsize),
+            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
-            nn.Linear(linearsize, linearsize // 2),
-            nn.BatchNorm1d(linearsize // 2),
+            nn.Linear(linear_size, linear_size // 2),
+            nn.BatchNorm1d(linear_size // 2),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
             #  this is shape (256 x 128) where 128 is the 
             # number of spatial permutations
-            nn.Linear(linearsize // 2, kwargs['HS'])
+            nn.Linear(linear_size // 2, kwargs['HS'])
         )
 
     def forward(self, *args):
@@ -200,24 +202,23 @@ class SelfSupervisedTest(nn.Module):
     
     Args:
         inchannel (int): Number of input features per node
-        outchannel (int): Number of output features after graph convolution
+        gcn_out_size (int): Number of output features after graph convolution
         batch (int): Batch size
+        K (int): Order of Chebyshev polynomials
         **kwargs: Additional parameters including:
             - classes (int): Number of output classes for classification
     
     Returns:
         torch.Tensor: Classification probabilities with softmax applied
     """
-    def __init__(self, inchannel, outchannel, batch, **kwargs):
+    def __init__(self, inchannel, gcn_out_size, batch, K, **kwargs):
         super(SelfSupervisedTest, self).__init__()
         self.batch = batch
 
-        linearsize = 512
-
-        self.conv1 = gnn.ChebConv(inchannel, outchannel, K=2)
+        self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
 
         self.classifier = nn.Sequential(
-            nn.Linear(outchannel*26, kwargs['classes'])
+            nn.Linear(gcn_out_size*26, kwargs['classes'])
         )
 
     def forward(self, data):

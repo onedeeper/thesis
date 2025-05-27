@@ -25,11 +25,17 @@ class Config:
     batch_size = 256 
     lr = 0.001 # original : 0.01
     weight_decay = 8e-5
-    drop_rate = 0.25 
+    
     num_workers = 4
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
+    
+    drop_rate = 0.25 
+    gcn_out_size = 32
+    linear_size = 512
     K = 2
+
+    optuna :bool = False
     project_root : Path = Path(__file__).resolve().parent.parent
     cleaned_data_path : Path = project_root / 'data' / 'cleaned'
     energy_path : Path = project_root / 'data' / 'energy'

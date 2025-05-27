@@ -33,6 +33,12 @@ energy_path : Path = Config.energy_path
 model_weights_dir : Path = Config.model_weights_dir
 metrics_dir  : Path = Config.metrics_dir
 
+# architectural parameters
+drop_rate : float = Config.drop_rate
+linear_size : int = Config.linear_size
+gcn_out_size : int = Config.gcn_out_size
+K : int = Config.K
+
 def split_data() -> None:
     """Split participants into train, validation, and test sets.
 
@@ -68,8 +74,16 @@ def train() -> None:
     if not os.path.exists(metrics_dir):
         metrics_dir.mkdir(exist_ok=True)
     awl = AutomaticWeightedLoss(2)
-    net = SelfSupervisedTrain(5, 32, batch_size, HF = 120, HS = 128)
-    net = net.to(device)
+    net = SelfSupervisedTrain(
+        inchannel=5, 
+        gcn_out_size=gcn_out_size, 
+        batch=batch_size, 
+        K=K,
+        linear_size=linear_size,
+        drop_rate=drop_rate,
+        HF=120, 
+        HS=128
+    ).to(device)
     print(net)
     # check the device
     print(f"⚠️ Training on device : {device}")
