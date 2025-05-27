@@ -176,7 +176,7 @@ class Graphs():
             "Distance matrix not as expected. Should be num_channels x num_channels."
         self.base_adjacency = self.get_adjacency()
 
-    def get_graphs(self, files_to_load : list[str], 
+    def get_graphs(self, files_to_load : list[str], skip_bads : bool = True,
                    label_encoder : LabelEncoder = None):
         """Create the graph representations of each epoched recording in a collection.
 
@@ -250,26 +250,28 @@ class Graphs():
                  pseudo_labels = pseudo_labels.reshape(n_epochs * n_perms_per_epoch)
             examples = torch.unbind(examples, dim =0)
             pseudo_labels = torch.unbind(pseudo_labels,dim = 0)
-            bads = files_with_bad_chs.get(participant_details,None)
-            if bads:
-                bad_idxs = torch.Tensor([self.ch_names_to_idxs[bad] for bad in bads])\
-                    .long()
-                where_bads_in_row : torch.Tensor = torch.isin(row,
-                                                            torch.Tensor(bad_idxs))
-                where_bad_row_idxs : torch.Tensor = torch.nonzero(where_bads_in_row).\
-                                                    squeeze()
-                where_bads_in_col : torch.Tensor = torch.isin(col,
-                                                              torch.Tensor(bad_idxs))
-                
-                where_bad_col_idxs : torch.Tensor = torch.nonzero(where_bads_in_col).\
-                                                      squeeze()
 
-                mask = torch.zeros(row.shape[0], dtype=torch.bool)
-                mask[where_bad_row_idxs] = True
-                mask[where_bad_col_idxs] = True
-                row = row[~mask].long()
-                col = col[~mask].long()
-                edge_weight = edge_weight[~mask]
+            if skip_bads:
+                bads = files_with_bad_chs.get(participant_details,None)
+                if bads:
+                    bad_idxs = torch.Tensor([self.ch_names_to_idxs[bad] for bad in bads])\
+                        .long()
+                    where_bads_in_row : torch.Tensor = torch.isin(row,
+                                                                torch.Tensor(bad_idxs))
+                    where_bad_row_idxs : torch.Tensor = torch.nonzero(where_bads_in_row).\
+                                                        squeeze()
+                    where_bads_in_col : torch.Tensor = torch.isin(col,
+                                                                torch.Tensor(bad_idxs))
+                    
+                    where_bad_col_idxs : torch.Tensor = torch.nonzero(where_bads_in_col).\
+                                                        squeeze()
+
+                    mask = torch.zeros(row.shape[0], dtype=torch.bool)
+                    mask[where_bad_row_idxs] = True
+                    mask[where_bad_col_idxs] = True
+                    row = row[~mask].long()
+                    col = col[~mask].long()
+                    edge_weight = edge_weight[~mask]
 
             for i, example in enumerate(examples) :
                 example_db = 10 * torch.log10(torch.clamp(example, 

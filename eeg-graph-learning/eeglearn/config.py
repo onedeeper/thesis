@@ -23,10 +23,10 @@ class Config:
     # Other global configuration settings can be added here
     epochs = 100
     batch_size = 256 
-    lr = 0.01
+    lr = 0.0001 # original : 0.01
     weight_decay = 8e-5
     drop_rate = 0.25 
-    num_workers = 7
+    num_workers = 4
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
     num_jigsaw = 4
@@ -39,6 +39,7 @@ class Config:
     data_path : Path  = project_root / 'data'
     drop_last : bool = True
     stop_at : int = 10
+    skip_bads : bool = False # If examples with bad channels should be skipped.
     @classmethod
     def set_global_seed(cls, verbose=False):
         """

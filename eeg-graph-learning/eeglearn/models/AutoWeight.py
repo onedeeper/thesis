@@ -30,7 +30,7 @@ class AutomaticWeightedLoss(nn.Module):
         super(AutomaticWeightedLoss, self).__init__()
         params = torch.ones(num, requires_grad=True)
         self.params = torch.nn.Parameter(params)
-        print(self.params)
+        #print(self.params)
 
     def forward(self, *x):
         loss_sum = 0

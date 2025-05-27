@@ -30,6 +30,7 @@ from torch_geometric.data import Batch
 from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping
 from itertools import cycle
+from sklearn.metrics import f1_score
 
 batch_size : int = Config.batch_size
 epochs : int = Config.epochs
@@ -47,7 +48,7 @@ random_seed : int = Config.RANDOM_SEED
 drop_last : bool = Config.drop_last
 data_path : Path = Config.data_path
 stop_at : int = Config.stop_at
-
+skip_ads : int = Config.skip_bads
 
 def split_data(ignore_replication_nans : bool = False) -> dict:
     """Split participants into train, validation, and test sets.
@@ -125,7 +126,8 @@ def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder,
                      n_workers=num_workers,
                      drop_last=False)
     return graphs.get_graphs(files_to_load=full_file_names_to_load, 
-                             label_encoder= label_encoder)
+                             label_encoder= label_encoder,
+                             skip_bads=skip_ads)
 
 def train()->None :
     """Train the joint self-supervised model on pretext and downstream tasks.
@@ -239,7 +241,8 @@ def train()->None :
     loader_save_path = project_root / 'eeglearn' /'models'/ 'spatial_graph_loader.pt'
     if not os.path.exists(loader_save_path):
         spatial_graph_loader = spatial_graphs.get_graphs(files_to_load=
-                                                         train_spatial_data)
+                                                         train_spatial_data,
+                                                         skip_bads=skip_ads)
         torch.save(spatial_graph_loader, loader_save_path)
     else:
         spatial_graph_loader = torch.load(loader_save_path)
@@ -247,7 +250,8 @@ def train()->None :
     loader_save_path = project_root / 'eeglearn'/ 'models' / 'frequency_graph_loader.pt'
     if not os.path.exists(loader_save_path):
         frequency_graph_loader = frequency_graphs.get_graphs(files_to_load=
-                                                             train_freq_data)
+                                                             train_freq_data,
+                                                             skip_bads=skip_ads)
         torch.save(frequency_graph_loader, loader_save_path)
     else:
         frequency_graph_loader = torch.load(loader_save_path)
@@ -261,6 +265,7 @@ def train()->None :
             'freq_acc' : [],
             'spatial_acc' : [],
             'original_acc': [],
+            'f1_score': []
         }
     print(f"⚠️  Training for epochs : {epochs}")
     for epoch in range(epochs):
@@ -302,7 +307,7 @@ def train()->None :
             epoch_loss_freq += float(loss_freq.item())
             epoch_loss_spatial += float(loss_spatial.item())
             epoch_loss_original += float(loss_original.item())
-        highest_acc, current_acc, epoch_loss = validate(
+        highest_acc, current_acc, epoch_loss, f1 = validate(
                                         validate_data=validation_participants,
                                         net = net,
                                         label_encoder= encoder, 
@@ -341,6 +346,7 @@ def train()->None :
         metrics['freq_acc'].append(freq_acc)
         metrics['spatial_acc'].append(spatial_acc)
         metrics['original_acc'].append(original_acc)
+        metrics['f1_score'].append(f1)
 
         print(f'Epoch [{epoch}/{epochs}]')
         print(f'Weighted loss [{epoch_avg_weighted_loss:.4f}]  ')
@@ -351,6 +357,7 @@ def train()->None :
         print(f'fequency ACC[{correct_pred_freq/denominator:.4f}]')
         print(f'spatial ACC[{correct_pred_spatial/denominator:.4f}]')
         print(f'original ACC[{correct_pred_original/denominator:.4f}]')
+        print(f'F1 Score[{f1:.4f}]')
         print("----------------------------------------------")
             
     pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics_jointly.csv",
@@ -397,7 +404,7 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
         epoch: Current epoch number.
         
     Returns:
-        Tuple of (highest_acc, current_acc, epoch_loss).
+        Tuple of (highest_acc, current_acc, epoch_loss, f1).
     """
     criterion = nn.CrossEntropyLoss().to(device)
     gloader = get_graphs_original(validate_data, 
@@ -408,6 +415,11 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
     epoch_loss = 0.0
     correct_pred = 0
     total_samples = 0
+    
+    # Lists to store all predictions and true labels for f1 calculation
+    all_preds = []
+    all_labels = []
+    
     for _, data in enumerate(gloader):
         data = data.to(device)
         current_batch_size = data.y.size(0)
@@ -424,25 +436,34 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
         y = data.y
         _, pre = torch.max(out, dim=1)
 
+        # Store predictions and labels for f1 calculation
+        all_preds.extend(pre.cpu().numpy())
+        all_labels.extend(y.cpu().numpy())
+        
         correct_pred += sum([1 for a, b in zip(pre, y) if a == b])
         loss = criterion(out, y)
 
         epoch_loss += float(loss.item())
 
     ACC = correct_pred / total_samples
+    
+    # Calculate F1 score
+    f1 = f1_score(all_labels, all_preds, average='weighted')
+    
     if ACC > highest_acc:
-        updatelog(epoch = epoch,acc=ACC)
+        updatelog(epoch = epoch, acc=ACC)
         highest_acc = ACC
         ck = {}
         ck['epoch'] = epoch
         ck['model'] = net.state_dict()
         ck['ACC'] = ACC
+        ck['F1'] = f1
         
         torch.save(ck, model_weights_dir / "checkpoint.pkl")
 
     net.train()
     net.testmode=False
-    return highest_acc, ACC, epoch_loss
+    return highest_acc, ACC, epoch_loss, f1
 
 if __name__ == "__main__":
     train()
