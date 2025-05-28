@@ -5,7 +5,7 @@ and multi-task learning model for EEG data. It uses Optuna's trial-based optimiz
 to find optimal hyperparameters that maximize validation performance.
 
 The script optimizes the following hyperparameters:
-    - batch_size: Training batch size [128, 256, 512]
+    - batch_size: Training batch size [128, 256]
     - lr: Learning rate (log-uniform distribution: 1e-4 to 5e-2)
     - weight_decay: L2 regularization strength (log-uniform: 1e-6 to 1e-3)
     - drop_rate: Dropout rate (uniform: 0.1 to 0.4)
@@ -56,7 +56,7 @@ def objective(trial):
         float: Validation performance metric (accuracy or F1 score) to maximize
         
     Hyperparameters optimized:
-        - batch_size: Categorical choice from [128, 256, 512]
+        - batch_size: Categorical choice from [128, 256]
         - lr: Log-uniform between 1e-4 and 5e-2
         - weight_decay: Log-uniform between 1e-6 and 1e-3  
         - drop_rate: Uniform between 0.1 and 0.4

@@ -36,13 +36,6 @@ from sklearn.metrics import f1_score
 # development settings
 testing_on_sample_data = Config.testing_on_sample_data
 
-# Training hyperparameters
-batch_size : int = Config.batch_size
-epochs : int = Config.epochs
-lr : float = Config.lr
-weight_decay : float = Config.weight_decay
-stop_at : int = Config.stop_at
-
 # Hardware and processing settings
 device : str = Config.device
 num_workers : int = Config.num_workers
@@ -62,12 +55,6 @@ ignore_replication_nans : bool = True
 random_seed : int = Config.RANDOM_SEED
 main_classes : list[str] = Config.main_classes
 optuna : bool = Config.optuna
-
-# Model architecture parameters
-drop_rate: float = Config.drop_rate
-linear_size: int = Config.linear_size
-gcn_out_size: int = Config.gcn_out_size
-K: int = Config.K
 
 def split_data(ignore_replication_nans : bool = False) -> dict:
     """Split participants into train, validation, and test sets using stratified sampling.
@@ -144,7 +131,7 @@ def split_data(ignore_replication_nans : bool = False) -> dict:
 
     return data_dict
 
-def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder, 
+def get_graphs_original(files_to_load : list, label_encoder : LabelEncoder, batch_size,
                         testing : bool = False):
     """Load energy objects for participants and convert them into graphs with labels.
 
@@ -195,6 +182,31 @@ def train() -> float:
     Returns:
         float: Best F1 score achieved during training
     """
+    batch_size = Config.batch_size
+    epochs = Config.epochs
+    lr = Config.lr
+    weight_decay = Config.weight_decay
+    drop_rate = Config.drop_rate
+    gcn_out_size = Config.gcn_out_size
+    linear_size = Config.linear_size
+    K = Config.K
+    stop_at = Config.stop_at
+    optuna = Config.optuna
+    
+    # Pretty print training parameters
+    print("🚀 Training Parameters:")
+    print(f"   Batch Size: {batch_size}")
+    print(f"   Epochs: {epochs}")
+    print(f"   Learning Rate: {lr}")
+    print(f"   Weight Decay: {weight_decay}")
+    print(f"   Dropout Rate: {drop_rate}")
+    print(f"   GCN Output Size: {gcn_out_size}")
+    print(f"   Linear Layer Size: {linear_size}")
+    print(f"   Chebyshev Order (K): {K}")
+    print(f"   Early Stopping Patience: {stop_at}")
+    print(f"   Optuna Mode: {optuna}")
+    print()
+    
     assert os.path.exists(cleaned_data_path),\
         "'data/cleaned' folder should exist and contain preprocessed data."
     assert os.path.exists(energy_path),\
@@ -297,7 +309,8 @@ def train() -> float:
     loader_save_path = project_root / 'eeglearn' / 'models' / 'original_graph_loader.pt'
 
     if not os.path.exists(loader_save_path) or optuna:
-        original_graph_loader = get_graphs_original(train_participants, encoder) 
+        original_graph_loader = get_graphs_original(train_participants, encoder, 
+                                                    batch_size=batch_size) 
         torch.save(original_graph_loader, loader_save_path)
     else:
         original_graph_loader = torch.load(loader_save_path)
@@ -403,7 +416,9 @@ def train() -> float:
                                         label_encoder= encoder, 
                                         highest_acc=highest_acc,
                                         best_f1_score = best_f1_score,
-                                        epoch=epoch)
+                                        epoch=epoch, 
+                                        batch_size=batch_size,
+                                        lr=lr)
         if f1 > best_f1_score:
             best_f1_score = f1
         # Update engine metrics and check early stopping
@@ -473,7 +488,7 @@ def writeEachEpoch(epoch, batchsize, lr, current_acc):
         f.writelines(log)
 
 
-def updatelog(epoch, acc):
+def updatelog(epoch, acc, lr, batch_size):
     """Update the log file with best model information.
     
     Args:
@@ -486,7 +501,7 @@ def updatelog(epoch, acc):
         f.writelines(log)
 
 
-def validate(net, validate_data, label_encoder, highest_acc, best_f1_score,epoch):
+def validate(net, validate_data, label_encoder, highest_acc, best_f1_score,epoch, batch_size, lr):
     """Evaluate model performance on validation data.
     
     Args:
@@ -502,7 +517,8 @@ def validate(net, validate_data, label_encoder, highest_acc, best_f1_score,epoch
     criterion = nn.CrossEntropyLoss().to(device)
     gloader = get_graphs_original(validate_data, 
                                   label_encoder=label_encoder,
-                                  testing=testing_on_sample_data)
+                                  testing=testing_on_sample_data,
+                                  batch_size=batch_size)
     net.testmode = True
     net.eval()
     epoch_loss = 0.0
@@ -552,7 +568,7 @@ def validate(net, validate_data, label_encoder, highest_acc, best_f1_score,epoch
     f1 = f1_score(all_labels, all_preds, average='weighted')
     
     if ACC > highest_acc:
-        updatelog(epoch = epoch, acc=ACC)
+        updatelog(epoch = epoch, acc=ACC, lr=lr, batch_size=batch_size)
         highest_acc = ACC
         ck = {}
         ck['epoch'] = epoch
