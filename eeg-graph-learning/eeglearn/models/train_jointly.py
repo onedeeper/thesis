@@ -390,13 +390,13 @@ def train() -> float:
             freq_out, spatial_out, original_out, = net(fdata, sdata, gdata)
             # the true pseudo labels and true connectivity graphs
             y_freq, y_spatial, y_original = fdata.y, sdata.y, gdata.y
-            _, pred1 = torch.max(freq_out, dim=1)
-            _, pred2 = torch.max(spatial_out, dim=1)
-            _, pred3 = torch.max(original_out, dim=1)
+            pred1 = torch.argmax(freq_out, dim=1)
+            pred2 = torch.argmax(spatial_out, dim=1)
+            pred3 = torch.argmax(original_out, dim=1)
 
-            correct_pred_freq += sum([1 for a,b in zip(pred1, y_freq) if a==b])
-            correct_pred_spatial += sum([1 for a,b in zip(pred2, y_spatial) if a==b])
-            correct_pred_original += sum([1 for a,b in zip(pred3, y_original) if a==b])
+            correct_pred_freq += torch.sum(pred1 == y_freq).item()
+            correct_pred_spatial += torch.sum(pred2 == y_spatial).item()
+            correct_pred_original += torch.sum(pred3 == y_original).item()
             loss_freq = criterion_permuted(freq_out, y_freq)
             loss_spatial = criterion_permuted(spatial_out, y_spatial)
             loss_original = criterion_original(original_out, y_original)
@@ -546,7 +546,7 @@ def validate(net, validate_data, label_encoder, highest_acc, best_f1_score,epoch
             
         out = net(data)
         y = data.y
-        _, pre = torch.max(out, dim=1)
+        pre = torch.argmax(out, dim=1)
 
         # Only store non-padded predictions and labels for f1 calculation
         if testing_on_sample_data and (current_batch_size < batch_size):
@@ -557,7 +557,7 @@ def validate(net, validate_data, label_encoder, highest_acc, best_f1_score,epoch
             all_preds.extend(pre.cpu().numpy())
             all_labels.extend(y.cpu().numpy())
         
-        correct_pred += sum([1 for a, b in zip(pre, y) if a == b])
+        correct_pred += torch.sum(pre == y).item()
         loss = criterion(out, y)
 
         epoch_loss += float(loss.item())
