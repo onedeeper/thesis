@@ -54,8 +54,10 @@ class Config:
     metrics_dir : Path = data_path / 'metrics'
 
     # Classification settings
-    main_classes : list[str] = ["ADHD","MDD"]
-    #main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
+    if testing_on_sample_data:
+        main_classes : list[str] = ["ADHD","MDD"]
+    else:
+        main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
 
     # classes from :
     # https://www.frontiersin.org/journals/aging-neuroscience/articles/10.3389/fnagi.2022.1019869/full#supplementary-material
