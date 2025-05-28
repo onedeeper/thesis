@@ -32,32 +32,42 @@ from ignite.handlers import EarlyStopping
 from itertools import cycle
 from sklearn.metrics import f1_score
 
+
+# development settings
+testing_on_sample_data = Config.testing_on_sample_data
+
+# Training hyperparameters
 batch_size : int = Config.batch_size
 epochs : int = Config.epochs
 lr : float = Config.lr
 weight_decay : float = Config.weight_decay
+stop_at : int = Config.stop_at
+
+# Hardware and processing settings
 device : str = Config.device
+num_workers : int = Config.num_workers
+drop_last : bool = Config.drop_last
+skip_bads : bool = Config.skip_bads
+
+# Path configurations
 project_root : Path = Config.project_root
+data_path : Path = Config.data_path
 cleaned_data_path : Path = Config.cleaned_data_path
 energy_path : Path = Config.energy_path
 model_weights_dir : Path = Config.model_weights_dir / 'jointly'
-metrics_dir  : Path = Config.metrics_dir / 'jointly'
+metrics_dir : Path = Config.metrics_dir / 'jointly'
+
+# Data processing settings
 ignore_replication_nans : bool = True
-num_workers : int = Config.num_workers
 random_seed : int = Config.RANDOM_SEED
-drop_last : bool = Config.drop_last
-data_path : Path = Config.data_path
-stop_at : int = Config.stop_at
-skip_bads : int = Config.skip_bads
 main_classes : list[str] = Config.main_classes
 optuna : bool = Config.optuna
 
-
-# architectural attributes
-drop_rate = Config.drop_rate
-linear_size = Config.linear_size
-gcn_out_size = Config.gcn_out_size
-k = Config.K
+# Model architecture parameters
+drop_rate: float = Config.drop_rate
+linear_size: int = Config.linear_size
+gcn_out_size: int = Config.gcn_out_size
+K: int = Config.K
 
 def split_data(ignore_replication_nans : bool = False) -> dict:
     """Split participants into train, validation, and test sets using stratified sampling.
@@ -122,7 +132,8 @@ def split_data(ignore_replication_nans : bool = False) -> dict:
 
     print(f"Class distribution:")
     for split_name, split_data in [("Train", train), ("Valid", valid), ("Test", test)]:
-        class_counts = {c: sum(1 for p in split_data if labels[p] == c) for c in main_classes}
+        class_counts = {c: sum(1 for p in split_data if labels[p] == c) \
+                        for c in main_classes}
         print(f"{split_name} set class counts:", class_counts)
 
     data_dict = {
@@ -327,7 +338,7 @@ def train() -> float:
         inchannel=5, 
         gcn_out_size=gcn_out_size, 
         batch=batch_size, 
-        K=k,
+        K=K,
         linear_size=linear_size,
         drop_rate=drop_rate,
         testmode=False,
@@ -391,6 +402,7 @@ def train() -> float:
                                         net = net,
                                         label_encoder= encoder, 
                                         highest_acc=highest_acc,
+                                        best_f1_score = best_f1_score,
                                         epoch=epoch)
         if f1 > best_f1_score:
             best_f1_score = f1
@@ -474,7 +486,7 @@ def updatelog(epoch, acc):
         f.writelines(log)
 
 
-def validate(net, validate_data, label_encoder, highest_acc, epoch):
+def validate(net, validate_data, label_encoder, highest_acc, best_f1_score,epoch):
     """Evaluate model performance on validation data.
     
     Args:
@@ -490,7 +502,7 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
     criterion = nn.CrossEntropyLoss().to(device)
     gloader = get_graphs_original(validate_data, 
                                   label_encoder=label_encoder,
-                                  testing=True)
+                                  testing=testing_on_sample_data)
     net.testmode = True
     net.eval()
     epoch_loss = 0.0
@@ -506,7 +518,7 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
         current_batch_size = data.y.size(0)
         total_samples += current_batch_size
 
-        if current_batch_size < batch_size:
+        if testing_on_sample_data and (current_batch_size < batch_size):
             data_list = data.to_data_list()
             needed = batch_size - current_batch_size
             additional_samples = [data_list[i % current_batch_size]\
@@ -515,13 +527,19 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
             data = Batch.from_data_list(data_list)
             # Update total_samples to account for padding
             total_samples = total_samples - current_batch_size + batch_size
+            
         out = net(data)
         y = data.y
         _, pre = torch.max(out, dim=1)
 
-        # Store predictions and labels for f1 calculation
-        all_preds.extend(pre.cpu().numpy())
-        all_labels.extend(y.cpu().numpy())
+        # Only store non-padded predictions and labels for f1 calculation
+        if testing_on_sample_data and (current_batch_size < batch_size):
+            # Only take the original samples, not the padding
+            all_preds.extend(pre[:current_batch_size].cpu().numpy())
+            all_labels.extend(y[:current_batch_size].cpu().numpy())
+        else:
+            all_preds.extend(pre.cpu().numpy())
+            all_labels.extend(y.cpu().numpy())
         
         correct_pred += sum([1 for a, b in zip(pre, y) if a == b])
         loss = criterion(out, y)
@@ -530,7 +548,7 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
 
     ACC = correct_pred / total_samples
     
-    # Calculate F1 score
+    # Calculate F1 score on non-padded samples only
     f1 = f1_score(all_labels, all_preds, average='weighted')
     
     if ACC > highest_acc:
@@ -541,8 +559,8 @@ def validate(net, validate_data, label_encoder, highest_acc, epoch):
         ck['model'] = net.state_dict()
         ck['ACC'] = ACC
         ck['F1'] = f1
-        
-        torch.save(ck, model_weights_dir / "checkpoint.pkl")
+        if f1 > best_f1_score:
+            torch.save(ck, model_weights_dir / f"{ACC:.3f}_{f1:.3f}_checkpoint.pkl")
 
     net.train()
     net.testmode=False
