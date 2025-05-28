@@ -45,7 +45,15 @@ class Config:
     drop_last : bool = True
     stop_at : int = 10
     skip_bads : bool = False 
+
     main_classes : list[str] = ["ADHD","HC","MDD","OCD","SMC"]
+
+    # classes from :
+    # https://www.frontiersin.org/journals/aging-neuroscience/articles/10.3389/fnagi.2022.1019869/full#supplementary-material
+    # main_classes : list[str] = [
+    #     "MDD", "UNKNOWN", "ADHD", "SMC", "OCD", "HEALTHY", "INSOMNIA",
+    #     "TINNITUS", "PARKINSON", "Dyslexia", "CHRONIC PAIN", "BURNOUT"
+    # ]
     @classmethod
     def set_global_seed(cls, verbose=False):
         """

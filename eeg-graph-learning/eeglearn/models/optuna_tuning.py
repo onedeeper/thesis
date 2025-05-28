@@ -100,7 +100,7 @@ if __name__ == "__main__":
     study  = optuna.create_study(direction="maximize", pruner=pruner)
     
     # Run optimization with 30 trials or 8 hour timeout
-    study.optimize(objective, n_trials=30, timeout=60*60*10)   # 8 hour budget
+    study.optimize(objective, n_trials=30, timeout=60*60*24)   # 24 hour budget
 
     print("Best trial:", study.best_trial.params)
     print(f"Best value: {study.best_trial.value:.4f}")

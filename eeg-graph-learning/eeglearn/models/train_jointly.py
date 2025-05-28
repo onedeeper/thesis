@@ -183,28 +183,7 @@ def train() -> float:
     encoder.fit(list(selected_unique_psych_labels))
     n_classes = len(selected_unique_psych_labels)
 
-    awl = AutomaticWeightedLoss(3)
-    net = JointlyTrainModel(
-        inchannel=5, 
-        gcn_out_size=gcn_out_size, 
-        batch=batch_size, 
-        K=k,
-        linear_size=linear_size,
-        drop_rate=drop_rate,
-        testmode=False,
-        HF=120, 
-        HS=128, 
-        HC=n_classes
-    ).to(device)
-    criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(net.parameters(), lr = lr, weight_decay = weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', 
-                                                           factor=0.1, 
-                                                           patience=4,
-                                                           threshold=0.0001,
-                                                           threshold_mode='rel',
-                                                           cooldown=1, min_lr=0,
-                                                           eps=1e-8)
+    
     
     # Create a dummy engine for early stopping
     def dummy_update_fn(engine, batch):
@@ -229,6 +208,19 @@ def train() -> float:
     print(f"n train : {len(train_participants)}")
     print(f"n valid : {len(validation_participants)}")
     print(f"n test : {len(test_participants)}")
+
+    # class weights for rescaling the loss during training.
+    train_labels = np.array([all_psych_labels[p]             
+                             for p in train_participants])
+    train_labels_encoded = encoder.transform(train_labels)     
+
+    class_frequencies = np.bincount(train_labels_encoded,
+                         minlength=n_classes).astype(float)   
+    class_weights = 1.0 / class_frequencies
+    rescaled_class_weights = class_weights * (n_classes / class_weights.sum()) 
+    rescaled_class_weights = torch.as_tensor(rescaled_class_weights,
+                                    dtype=torch.float32,
+                                    device=device)
 
     print("🔄  Building graphs.")
     train_freq_data = [fname for participant in train_participants
@@ -297,6 +289,30 @@ def train() -> float:
             'f1_score': []
         }
     print(f"⚠️  Training for epochs : {epochs}")
+
+    awl = AutomaticWeightedLoss(3)
+    net = JointlyTrainModel(
+        inchannel=5, 
+        gcn_out_size=gcn_out_size, 
+        batch=batch_size, 
+        K=k,
+        linear_size=linear_size,
+        drop_rate=drop_rate,
+        testmode=False,
+        HF=120, 
+        HS=128, 
+        HC=n_classes
+    ).to(device)
+    criterion_original = nn.CrossEntropyLoss(weight = rescaled_class_weights).to(device)
+    criterion_permuted = nn.CrossEntropyLoss().to(device)
+    optimizer = torch.optim.Adam(net.parameters(), lr = lr, weight_decay = weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', 
+                                                           factor=0.1, 
+                                                           patience=4,
+                                                           threshold=0.0001,
+                                                           threshold_mode='rel',
+                                                           cooldown=1, min_lr=0,
+                                                           eps=1e-8)
     highest_acc = 0.0
     best_f1_score = 0.0
     for epoch in range(epochs):
@@ -325,9 +341,9 @@ def train() -> float:
             correct_pred_freq += sum([1 for a,b in zip(pred1, y_freq) if a==b])
             correct_pred_spatial += sum([1 for a,b in zip(pred2, y_spatial) if a==b])
             correct_pred_original += sum([1 for a,b in zip(pred3, y_original) if a==b])
-            loss_freq = criterion(freq_out, y_freq)
-            loss_spatial = criterion(spatial_out, y_spatial)
-            loss_original = criterion(original_out, y_original)
+            loss_freq = criterion_permuted(freq_out, y_freq)
+            loss_spatial = criterion_permuted(spatial_out, y_spatial)
+            loss_original = criterion_original(original_out, y_original)
             # balanced loss from the multiple tasks. 
             loss = awl(loss_freq, loss_spatial, loss_original)
 
