@@ -19,6 +19,67 @@ import torch_geometric.nn as gnn
 import torch.nn.functional as F
 from eeglearn.config import Config
 
+class VanillaGraphModel(nn.Module):
+    """Joint training model that combines frequency, spatial, and original graph data.
+    
+    Args:
+        inchannel (int): Number of input features per node
+        gcn_out_size (int): Number of output features after graph convolution
+        batch (int): Batch size
+        K (int): Order of Chebyshev polynomials
+        linear_size (int): Size of linear layers
+        drop_rate (float): Dropout rate
+        testmode (bool, optional): If True, 
+                            only processes original graph data. Defaults to False
+        **kwargs: Additional parameters including:
+            - HF (int): Output size for frequency head
+            - HS (int): Output size for spatial head
+            - HC (int): Output size for classification head for psych labels
+    
+    Returns:
+        tuple: (frequency_output, spatial_output, classification_output) during training
+        torch.Tensor: Classification output during testing
+    """
+    def __init__(self, inchannel, gcn_out_size, batch, K, linear_size, drop_rate,
+                 testmode=False, 
+                 **kwargs):
+        super(VanillaGraphModel, self).__init__()
+        self.batch = batch
+        self.testmode = testmode
+        
+        self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
+
+        self.HC = nn.Sequential(
+            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.BatchNorm1d(linear_size),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linear_size, linear_size // 2),
+            nn.BatchNorm1d(linear_size // 2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(linear_size // 2, kwargs['HC'])
+        )
+
+    def forward(self, *args):
+        if not self.testmode:
+
+            x3, e3 = args[0].x, args[0].edge_index  # original graph data
+            x3 = F.relu(self.conv1(x3, e3))
+            x3 = x3.view(self.batch, -1)
+            x3 = self.HC(x3)
+            x3 = F.softmax(x3, dim=1)
+            
+            return x3
+        else:
+            x3, e3 = args[0].x, args[0].edge_index  # original graph data
+
+            x3 = F.relu(self.conv1(x3, e3))
+            x3 = x3.view(self.batch, -1)
+            x3 = self.HC(x3)
+            x3 = F.softmax(x3, dim=1)
+            return x3
+
 class JointlyTrainModel(nn.Module):
     """Joint training model that combines frequency, spatial, and original graph data.
     
