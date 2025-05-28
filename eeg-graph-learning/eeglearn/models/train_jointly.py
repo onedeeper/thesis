@@ -60,7 +60,7 @@ gcn_out_size = Config.gcn_out_size
 k = Config.K
 
 def split_data(ignore_replication_nans : bool = False) -> dict:
-    """Split participants into train, validation, and test sets.
+    """Split participants into train, validation, and test sets using stratified sampling.
 
     Args:
         ignore_replication_nans: Whether to exclude participants with NaN labels 
@@ -75,28 +75,60 @@ def split_data(ignore_replication_nans : bool = False) -> dict:
     labels = get_labels_dict()
     participant_files = os.listdir(all_participants)
     N = []
+    participant_labels = []
+    
     if ignore_replication_nans:
         print("⚠️  Ignoring participants with Nan labels or in replication")
         for participant in participant_files:
             try:
-                if labels[participant] in {'nan', 'NaN', np.nan, 'REPLICATION'} or labels[participant] not in main_classes:
+                if labels[participant] in {'nan', 'NaN', np.nan, 'REPLICATION'} \
+                    or labels[participant] not in main_classes:
                     continue
             except KeyError:
                 continue 
             N.append(participant)
+            participant_labels.append(labels[participant])
     else:
         N = participant_files
+        participant_labels = [labels[p] for p in N]
     
     for participant in N:
         assert labels[participant] in main_classes
 
-    train, test_valid = train_test_split(N, test_size=0.2, random_state=random_seed)
-    test, valid = train_test_split(test_valid, test_size=0.5, random_state=random_seed)
+    train, test_valid, train_labels, test_valid_labels = train_test_split(
+        N, participant_labels, 
+        test_size=0.2, 
+        random_state=random_seed,
+        stratify=participant_labels
+    )
+
+    # Second split: Split the 20% into equal parts for test and validation
+    test, valid, _, _ = train_test_split(
+        test_valid,
+        test_valid_labels,
+        test_size=0.5,
+        random_state=random_seed,
+        stratify=test_valid_labels
+    )
+
+    # Verify all classes are present in each split
+    train_classes = set(labels[p] for p in train)
+    valid_classes = set(labels[p] for p in valid)
+    test_classes = set(labels[p] for p in test)
+    
+    assert train_classes == set(main_classes), "Not all classes present in training set"
+    assert valid_classes == set(main_classes), "Not all classes present in validation set"
+    assert test_classes == set(main_classes), "Not all classes present in test set"
+
+    print(f"Class distribution:")
+    for split_name, split_data in [("Train", train), ("Valid", valid), ("Test", test)]:
+        class_counts = {c: sum(1 for p in split_data if labels[p] == c) for c in main_classes}
+        print(f"{split_name} set class counts:", class_counts)
 
     data_dict = {
-        "train" : train,
-        "test" : test,
-        "valid" : valid
+        "train": train,
+        "test": test,
+        "valid": valid
     }
 
     return data_dict
