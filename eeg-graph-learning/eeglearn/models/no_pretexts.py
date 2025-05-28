@@ -32,7 +32,7 @@ from eeglearn.features.graphs import Graphs
 from eeglearn.utils.models import (
     split_data, get_graphs_original, print_training_params,
     setup_directories, setup_label_encoder, calculate_class_weights,
-    write_epoch_log, update_log, validate_model
+    write_epoch_log, update_log, validate_model, create_graph_loaders
 )
 
 testing_on_sample_data = Config.testing_on_sample_data
@@ -92,8 +92,8 @@ def train() -> float:
                                                      n_classes)
     
     print("🔄  Building graphs.")
-    train_loader = get_graphs_original(train_participants, encoder, batch_size)
-    
+    train_loader = create_graph_loaders(train_participants, encoder,batch_size,
+                                        original_only=True)
     metrics = {
         'epoch': [], 'loss': [], 'acc': [], 'f1_score': []
     }
@@ -128,7 +128,7 @@ def train() -> float:
         epoch_loss = 0.0
         correct_predictions = 0
         
-        for ind, data in enumerate(train_loader):
+        for ind, data in enumerate(train_loader['original']):
             data = data.to(device)
             
             out = net(data)

@@ -19,7 +19,7 @@ class Config:
 
     # Development settings
     testing_on_sample_data = True
-
+    
     # Reproducibility settings
     RANDOM_SEED = 42
     DETERMINISTIC = True
@@ -52,12 +52,14 @@ class Config:
     energy_path : Path = data_path / 'energy'
     model_weights_dir : Path = data_path / 'weights'
     metrics_dir : Path = data_path / 'metrics'
-
+    
     # Classification settings
+    main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
+    use_stratify = True
     if testing_on_sample_data:
+        use_stratify = False
         main_classes : list[str] = ["ADHD","MDD"]
-    else:
-        main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
+        
 
     # classes from :
     # https://www.frontiersin.org/journals/aging-neuroscience/articles/10.3389/fnagi.2022.1019869/full#supplementary-material

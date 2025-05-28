@@ -62,26 +62,25 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
     
     for participant in valid_participants:
         assert labels[participant] in Config.main_classes
-
     train, test_valid, train_labels, test_valid_labels = train_test_split(
         valid_participants, valid_labels, 
         test_size=0.2, 
         random_state=Config.RANDOM_SEED,
-        stratify=valid_labels
+        stratify=valid_labels if Config.use_stratify else None
     )
 
     test, valid, _, _ = train_test_split(
         test_valid, test_valid_labels,
         test_size=0.5,
         random_state=Config.RANDOM_SEED,
-        stratify=test_valid_labels
+        stratify=test_valid_labels if Config.use_stratify else None
     )
-
     splits = [("Train", train), ("Valid", valid), ("Test", test)]
-    for split_name, split_data in splits:
-        split_classes = set(labels[p] for p in split_data)
-        assert split_classes == set(Config.main_classes), \
-            f"Not all classes present in {split_name.lower()} set"
+    if Config.use_stratify:        
+        for split_name, split_data in splits:
+            split_classes = set(labels[p] for p in split_data)
+            assert split_classes == set(Config.main_classes), \
+                f"Not all classes present in {split_name.lower()} set"
 
     print("Class distribution:")
     for split_name, split_data in splits:
@@ -131,7 +130,8 @@ def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_
     )
 
 
-def create_graph_loaders(participants: list, encoder: LabelEncoder, batch_size: int):
+def create_graph_loaders(participants: list, encoder: LabelEncoder, batch_size: int,
+                         original_only : bool = False):
     """Create and cache graph loaders for different permutation types."""
     loaders = {}
     
@@ -142,6 +142,9 @@ def create_graph_loaders(participants: list, encoder: LabelEncoder, batch_size: 
         torch.save(loaders['original'], loader_path)
     else:
         loaders['original'] = torch.load(loader_path)
+    
+    if original_only:
+        return loaders
     
     perm_types = ['spatial', 'frequency']
     for perm_type in perm_types:

@@ -177,23 +177,31 @@ class Graphs():
         self.base_adjacency = self.get_adjacency()
 
     def get_graphs(self, files_to_load : list[str], skip_bads : bool = True,
-                   label_encoder : LabelEncoder = None):
-        """Create the graph representations of each epoched recording in a collection.
+                   label_encoder : LabelEncoder = None,
+                   return_data_loader : bool = True):
+        """Create graph representations from epoched EEG recordings.
+
+        This method generates graph representations for each epoch in the provided files,
+        handling both original and permuted data. For original data, it uses psychological
+        labels, while for permuted data it uses pseudo-labels. The method can optionally
+        skip bad channels and return either a DataLoader or raw graph list.
 
         Args:
-        ----
-            files_to_load : The selected files for which to generate graphs.
-                            Each should be a tuple. For example :
-                            (torch.Size([12, 4, 26, 5]), <-- Data
-                            (12, 4), <- pseudo_labels per epoch 
-                            'energy_sub-88019481_EO_epoched.pt') <-filename
-            label_encoder : A label encoder for generating the labels for psych labels
-        Returns:
-        ----
-            Dataloader : Each mini-batch contains a 'self.batch_size' set of graphs.
+            files_to_load (list[str]): List of filenames containing the EEG data to process.
+            skip_bads (bool, optional): Whether to skip bad channels. Defaults to True.
+            label_encoder (LabelEncoder, optional): Encoder for psychological labels. 
+                Required for original data. Defaults to None.
+            return_data_loader (bool, optional): Whether to return a DataLoader or raw graphs.
+                Defaults to True.
 
-        Note: This work follows https://ieeexplore.ieee.org/abstract/document/9765326
-              relevant code can be found here : https://github.com/CHEN-XDU/GMSS
+        Returns:
+            Union[DataLoader, list[Data]]: Either a DataLoader containing batched graphs
+                or a list of individual graph Data objects.
+
+        Note:
+            Implementation follows the methodology from:
+            https://ieeexplore.ieee.org/abstract/document/9765326
+            Reference code: https://github.com/CHEN-XDU/GMSS
         """
 
         assert isinstance(files_to_load, list), "Expecting a list of strings."
@@ -284,11 +292,13 @@ class Graphs():
                                    edge_attr = edge_weight,
                                    y = pseudo_labels[i]))
                 
-        return DataLoader(dataset = graphs,
-                          batch_size = self.batch_size,
-                          shuffle = self.shuffle,
-                          num_workers = self.n_workers,
-                          drop_last = self.drop_last)
+        if return_data_loader:
+            return DataLoader(dataset = graphs,
+                            batch_size = self.batch_size,
+                            shuffle = self.shuffle,
+                            num_workers = self.n_workers,
+                            drop_last = self.drop_last)
+        return graphs
 
     def get_bad_channels(self) -> None :
         """Retreive the bad channels from preprocessed data.
