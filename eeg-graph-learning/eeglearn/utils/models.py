@@ -13,6 +13,8 @@ import pandas as pd
 import torch
 from torch import nn
 from torch_geometric.data import Batch
+from torch.utils.data import Sampler
+from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import f1_score
@@ -54,35 +56,44 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
         valid_participants = participant_files
         valid_labels = [labels[p] for p in valid_participants]
     
+    # Verify all participants have valid labels
     for participant in valid_participants:
-        assert labels[participant] in Config.main_classes
+        assert labels[participant] in Config.main_classes, \
+            f"Invalid label {labels[participant]} for participant {participant}"
+
+    # First split: train vs test+valid
     train, test_valid, train_labels, test_valid_labels = train_test_split(
         valid_participants, valid_labels, 
-        test_size=0.2, 
+        test_size=1 - Config.p_train, 
         random_state=Config.RANDOM_SEED,
         stratify=valid_labels if Config.use_stratify else None
     )
 
-    test, valid, _, _ = train_test_split(
+    # Second split: test vs valid
+    test, valid, test_labels, valid_labels = train_test_split(
         test_valid, test_valid_labels,
-        test_size=0.5,
+        test_size=0.5,  # Split remaining data equally
         random_state=Config.RANDOM_SEED,
         stratify=test_valid_labels if Config.use_stratify else None
     )
+
     splits = [("Train", train), ("Valid", valid), ("Test", test)]
+    
+    # Verify class distribution if using stratification
     if Config.use_stratify:        
         for split_name, split_data in splits:
             split_classes = set(labels[p] for p in split_data)
             assert split_classes == set(Config.main_classes), \
                 f"Not all classes present in {split_name.lower()} set"
 
-    print("Class distribution:")
+    # Print class distribution statistics
+    print("\nClass distribution:")
     for split_name, split_data in splits:
         class_counts = {c: sum(1 for p in split_data if labels[p] == c) 
-                        for c in Config.main_classes}
+                       for c in Config.main_classes}
         print(f"{split_name} set class counts:", class_counts)
 
-    return {"train": train, "test": test, "valid": valid}
+    return {"train": train, "valid": valid, "test": test}
 
 
 def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_size: int, 
@@ -149,11 +160,21 @@ def create_graph_loaders(data_split: str, participants: list, encoder: LabelEnco
                                     data_split=data_split)
     
     for graph_type, graphs in graph_lists.items():
-        loader = DataLoader(dataset=graphs,
-                            batch_size=batch_size,
-                            shuffle=True,
-                            num_workers=Config.num_workers,
-                            drop_last=drop_last)
+        if data_split == "train" and graph_type == "original" and Config.use_sampler:
+            print("⚠️  Using balanced sampler")
+            sampler = BalancedGraphSampler(graphs)
+            loader = DataLoader(graphs,
+                                    batch_size=batch_size,      
+                                    sampler=sampler,        
+                                    num_workers=Config.num_workers,
+                                    drop_last=drop_last)
+        else:
+            loader = DataLoader(dataset=graphs,
+                                batch_size=batch_size,
+                                shuffle=True,
+                                num_workers=Config.num_workers,
+                                drop_last=drop_last,
+                                )
         loaders[graph_type] = loader
     return loaders
 
@@ -438,8 +459,49 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
                 'F1': f1
             }
             torch.save(checkpoint, model_weights_dir /\
-                       f"{ACC:.3f}_{f1:.3f}_checkpoint.pkl")
+                       f"Acc_{ACC:.3f}_f1_{f1:.3f}_checkpoint.pkl")
 
     net.train()
     net.testmode = False
     return highest_acc, ACC, epoch_loss, f1
+
+
+
+class BalancedGraphSampler(Sampler):
+    """A PyTorch Sampler that balances class distribution in graph datasets.
+    
+    This sampler implements a weighted sampling strategy where the probability
+    of selecting a sample is inversely proportional to its class frequency.
+    This ensures each class is equally likely to be sampled, helping to address
+    class imbalance in the dataset.
+    
+    Args:
+        data_list (list): List of graph data objects, each with a 'y' attribute
+                         containing the class label
+        replacement (bool, optional): Whether to sample with replacement.
+                                    Defaults to True.
+    
+    Attributes:
+        weights (torch.DoubleTensor): Sampling weights for each sample
+        num_nodes (int): Total number of samples in the dataset
+        replacement (bool): Whether sampling is done with replacement
+    
+    WRITTEN BY AI
+    VERIFIED BY AUTHOR
+    """
+    def __init__(self, data_list, replacement=True):
+        labels         = [int(g.y) for g in data_list]
+        freq           = Counter(labels)
+        self.weights   = torch.DoubleTensor([1.0 / freq[l] for l in labels])
+        self.num_nodes = len(data_list)
+        
+        self.replacement = replacement
+        print("⚠️  Class weights:", {l: 1.0 / freq[l] for l in freq})
+
+    def __iter__(self):
+        return iter(torch.multinomial(self.weights,
+                                      self.num_nodes,
+                                      self.replacement).tolist())
+
+    def __len__(self):
+        return self.num_nodes

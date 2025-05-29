@@ -32,6 +32,10 @@ class Config:
     drop_rate = 0.25 
     stop_at = 10
 
+    # Dat selection
+    use_sampler = True
+    p_train = 0.4
+
     # Model architecture parameters
     gcn_out_size = 32
     linear_size = 512
@@ -57,8 +61,8 @@ class Config:
     main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
     use_stratify = True
     if testing_on_sample_data:
-        use_stratify = False
-        main_classes : list[str] = ["ADHD","MDD"]
+        use_stratify = True
+        main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
         
 
     # classes from :

@@ -93,7 +93,7 @@ def train() -> float:
                                                      n_classes)
     
     print("🔄  Building graphs.")
-    loaders = create_graph_loaders(participants=train_participants, 
+    train_loaders = create_graph_loaders(participants=train_participants, 
                                    encoder=encoder, 
                                    batch_size=batch_size,
                                    data_split="train",
@@ -114,7 +114,7 @@ def train() -> float:
      
     print("\n📊 Graph Loader Information:")
     print(f"  • Training loaders:")
-    for loader_type, loader in loaders.items():
+    for loader_type, loader in train_loaders.items():
         print(f"    - {loader_type}: {len(loader)} batches")
     
     print(f"\n  • Validation loader:")
@@ -141,6 +141,9 @@ def train() -> float:
     ).to(device)
     
     criterion_original = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(device)
+    if Config.use_sampler:
+        criterion_original = nn.CrossEntropyLoss().to(device)
+
     criterion_permuted = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -159,14 +162,16 @@ def train() -> float:
     highest_acc = 0.0
     best_f1_score = 0.0
     
-    for epoch in range(1):
-        loader = zip(loaders['frequency'], loaders['spatial'], 
-                     cycle(loaders['original']))
+    for epoch in range(epochs):
+        loader = zip(train_loaders['frequency'], train_loaders['spatial'], 
+                     cycle(train_loaders['original']))
         
         epoch_losses = {'weighted': 0.0, 'freq': 0.0, 'spatial': 0.0, 'original': 0.0}
         correct_predictions = {'freq': 0, 'spatial': 0, 'original': 0}
         
         for ind, (fdata, sdata, gdata) in enumerate(loader):
+            unique_labels, counts = torch.unique(gdata.y, return_counts=True)
+
             fdata, sdata, gdata = fdata.to(device), sdata.to(device), gdata.to(device)
             freq_out, spatial_out, original_out = net(fdata, sdata, gdata)
             y_freq, y_spatial, y_original = fdata.y, sdata.y, gdata.y
@@ -194,6 +199,8 @@ def train() -> float:
             epoch_losses['freq'] += loss_freq.item()
             epoch_losses['spatial'] += loss_spatial.item()
             epoch_losses['original'] += loss_original.item()
+            
+            
         
         highest_acc, current_acc, epoch_loss, f1 = validate_model(
             net, validation_loader, encoder, highest_acc, best_f1_score,
@@ -233,16 +240,21 @@ def train() -> float:
             print(f'batch {batch_size}, lr {lr}\n')
         
         print(f'Epoch [{epoch}/{epochs}]')
-        print(f'Weighted loss [{avg_losses["weighted"]:.4f}]')
-        print(f'Frequency loss[{avg_losses["freq"]:.4f}]')
-        print(f'Spatial loss[{avg_losses["spatial"]:.4f}]')
-        print(f'Original loss[{avg_losses["original"]:.4f}]')
-        print('ACC@1:')
-        print(f'Frequency ACC[{accuracies["freq"]:.4f}]')
-        print(f'Spatial ACC[{accuracies["spatial"]:.4f}]')
-        print(f'Original ACC[{accuracies["original"]:.4f}]')
-        print(f'F1 Score[{f1:.4f}]')
+        print(f'Training Weighted loss [{avg_losses["weighted"]:.4f}]')
+        print(f'Training Frequency loss[{avg_losses["freq"]:.4f}]')
+        print(f'Training Spatial loss[{avg_losses["spatial"]:.4f}]')
+        print(f'Training Original loss[{avg_losses["original"]:.4f}]')
+        print('Training ACC@1:')
+        print(f'Training Frequency ACC[{accuracies["freq"]:.4f}]')
+        print(f'Training Spatial ACC[{accuracies["spatial"]:.4f}]')
+        print(f'Training Original ACC[{accuracies["original"]:.4f}]')
         print("----------------------------------------------")
+        print(f'Validation Loss [{epoch_loss:.4f}]')
+        print(f'Validation ACC [{current_acc:.4f}]')
+        print(f'Validation F1 Score [{f1:.4f}]')
+        print(f'Best ACC so far [{highest_acc:.4f}]')
+        print(f'Best F1 Score so far [{best_f1_score:.4f}]')
+        print("==============================================")
     
     pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics_jointly.csv", 
                                  index=False)
