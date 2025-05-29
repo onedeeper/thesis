@@ -130,13 +130,13 @@ def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_
     )
 
 
-def create_graph_loaders(participants: list, encoder: LabelEncoder, batch_size: int,
+def create_graph_loaders(data_split: str, participants: list, encoder: LabelEncoder, batch_size: int,
                          original_only : bool = False):
     """Create and cache graph loaders for different permutation types."""
     loaders = {}
     
     loader_path = Config.project_root / 'eeglearn' / 'models' /\
-          'original_graph_loader.pt'
+          f'{data_split}_original_graph_loader.pt'
     if not loader_path.exists() or Config.optuna:
         loaders['original'] = get_graphs_original(participants, encoder, batch_size)
         torch.save(loaders['original'], loader_path)
@@ -149,7 +149,7 @@ def create_graph_loaders(participants: list, encoder: LabelEncoder, batch_size: 
     perm_types = ['spatial', 'frequency']
     for perm_type in perm_types:
         loader_path = Config.project_root / 'eeglearn' / 'models' / \
-            f'{perm_type}_graph_loader.pt'
+            f'{data_split}_{perm_type}_graph_loader.pt'
         
         if not loader_path.exists() or Config.optuna:
             data_files = [fname for participant in participants
@@ -311,7 +311,7 @@ def update_log(epoch: int, acc: float, lr: float, batch_size: int, metrics_dir: 
         f.write(log)
 
 
-def validate_model(net, validate_data: list, label_encoder: LabelEncoder, 
+def validate_model(net, validation_loader: list, label_encoder: LabelEncoder, 
                    highest_acc: float, best_f1_score: float, epoch: int, 
                    batch_size: int, lr: float, model_weights_dir: Path, 
                    metrics_dir: Path, testing_on_sample_data: bool = None):
@@ -337,8 +337,6 @@ def validate_model(net, validate_data: list, label_encoder: LabelEncoder,
         testing_on_sample_data = Config.testing_on_sample_data
         
     criterion = nn.CrossEntropyLoss().to(Config.device)
-    gloader = get_graphs_original(validate_data, label_encoder, batch_size, 
-                                  testing=testing_on_sample_data)
     
     net.testmode = True
     net.eval()
@@ -349,7 +347,7 @@ def validate_model(net, validate_data: list, label_encoder: LabelEncoder,
     all_preds = []
     all_labels = []
     
-    for _, data in enumerate(gloader):
+    for _, data in enumerate(validation_loader):
         data = data.to(Config.device)
         current_batch_size = data.y.size(0)
         total_samples += current_batch_size

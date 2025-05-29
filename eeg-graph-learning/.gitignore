@@ -60,8 +60,5 @@ create_directory_structure.py
 
 # Ruff cache
 .ruff_cache/
-
 # Model graph loaders
-eeglearn/models/original_graph_loader.pt
-eeglearn/models/spatial_graph_loader.pt
-eeglearn/models/frequency_graph_loader.pt
+eeglearn/models/*.pt

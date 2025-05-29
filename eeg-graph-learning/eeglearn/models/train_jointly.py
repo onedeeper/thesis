@@ -93,8 +93,21 @@ def train() -> float:
                                                      n_classes)
     
     print("🔄  Building graphs.")
-    loaders = create_graph_loaders(train_participants, encoder, batch_size)
+    loaders = create_graph_loaders(participants=train_participants, 
+                                   encoder=encoder, 
+                                   batch_size=batch_size,
+                                   data_split="train")
     
+    validation_loader = create_graph_loaders(participants=validation_participants, 
+                                   encoder=encoder, 
+                                   batch_size=batch_size,
+                                   data_split="validation",
+                                   original_only=True)
+    test_loader  = create_graph_loaders(participants=test_participants, 
+                                   encoder=encoder, 
+                                   batch_size=batch_size,
+                                   data_split="test",
+                                   original_only=True)
     metrics = {
         'epoch': [], 'weighted_loss': [], 'freq_loss': [], 'spatial_loss': [], 
         'original_loss': [], 'freq_acc': [], 'spatial_acc': [], 'original_acc': [], 
@@ -167,7 +180,7 @@ def train() -> float:
             epoch_losses['original'] += loss_original.item()
         
         highest_acc, current_acc, epoch_loss, f1 = validate_model(
-            net, validation_participants, encoder, highest_acc, best_f1_score,
+            net, validation_loader, encoder, highest_acc, best_f1_score,
             epoch, batch_size, lr, model_weights_dir, metrics_dir,
             testing_on_sample_data
         )
