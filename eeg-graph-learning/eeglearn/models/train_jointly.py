@@ -141,7 +141,7 @@ def train() -> float:
     ).to(device)
     
     criterion_original = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(device)
-    if Config.use_sampler:
+    if Config.use_sampler_for_data_loading:
         criterion_original = nn.CrossEntropyLoss().to(device)
 
     criterion_permuted = nn.CrossEntropyLoss().to(device)

@@ -32,9 +32,10 @@ class Config:
     drop_rate = 0.25 
     stop_at = 10
 
-    # Dat selection
-    use_sampler = True
+    # Data selection
+    use_sampler_for_data_loading = True
     p_train = 0.4
+    sample_proportion_of_data = 1.0
 
     # Model architecture parameters
     gcn_out_size = 32

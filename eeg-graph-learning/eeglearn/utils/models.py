@@ -60,6 +60,14 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
     for participant in valid_participants:
         assert labels[participant] in Config.main_classes, \
             f"Invalid label {labels[participant]} for participant {participant}"
+    n_samples = int(len(valid_participants) * Config.sample_proportion_of_data)
+    # Sample a proportion of valid participants if specified
+    if Config.sample_proportion_of_data < 1.0:
+        valid_participants = np.random.choice(valid_participants, 
+                                            size=n_samples, 
+                                            replace=False)
+        valid_labels = [labels[p] for p in valid_participants]
+    print(f"⚠️  Using {n_samples} out of {len(valid_participants)} total participants")
 
     # First split: train vs test+valid
     train, test_valid, train_labels, test_valid_labels = train_test_split(
@@ -160,7 +168,8 @@ def create_graph_loaders(data_split: str, participants: list, encoder: LabelEnco
                                     data_split=data_split)
     
     for graph_type, graphs in graph_lists.items():
-        if data_split == "train" and graph_type == "original" and Config.use_sampler:
+        if data_split == "train" and graph_type == "original" and \
+                            Config.use_sampler_for_data_loading:
             print("⚠️  Using balanced sampler")
             sampler = BalancedGraphSampler(graphs)
             loader = DataLoader(graphs,
