@@ -18,7 +18,7 @@ class Config:
     """
 
     # Development settings
-    testing_on_sample_data = True
+    testing_on_sample_data = False
     
     # Reproducibility settings
     RANDOM_SEED = 42
