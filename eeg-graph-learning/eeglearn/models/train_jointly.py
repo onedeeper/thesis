@@ -96,18 +96,35 @@ def train() -> float:
     loaders = create_graph_loaders(participants=train_participants, 
                                    encoder=encoder, 
                                    batch_size=batch_size,
-                                   data_split="train")
+                                   data_split="train",
+                                   drop_last= True)
     
     validation_loader = create_graph_loaders(participants=validation_participants, 
                                    encoder=encoder, 
                                    batch_size=batch_size,
                                    data_split="validation",
-                                   original_only=True)
+                                   perm_types=[None],
+                                   drop_last = not Config.testing_on_sample_data)
     test_loader  = create_graph_loaders(participants=test_participants, 
                                    encoder=encoder, 
                                    batch_size=batch_size,
                                    data_split="test",
-                                   original_only=True)
+                                   perm_types=[None],
+                                   drop_last=drop_last)
+     
+    print("\n📊 Graph Loader Information:")
+    print(f"  • Training loaders:")
+    for loader_type, loader in loaders.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    
+    print(f"\n  • Validation loader:")
+    for loader_type, loader in validation_loader.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    
+    print(f"\n  • Test loader:")
+    for loader_type, loader in test_loader.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    print()
     metrics = {
         'epoch': [], 'weighted_loss': [], 'freq_loss': [], 'spatial_loss': [], 
         'original_loss': [], 'freq_acc': [], 'spatial_acc': [], 'original_acc': [], 
@@ -142,7 +159,7 @@ def train() -> float:
     highest_acc = 0.0
     best_f1_score = 0.0
     
-    for epoch in range(epochs):
+    for epoch in range(1):
         loader = zip(loaders['frequency'], loaders['spatial'], 
                      cycle(loaders['original']))
         
@@ -151,7 +168,6 @@ def train() -> float:
         
         for ind, (fdata, sdata, gdata) in enumerate(loader):
             fdata, sdata, gdata = fdata.to(device), sdata.to(device), gdata.to(device)
-            
             freq_out, spatial_out, original_out = net(fdata, sdata, gdata)
             y_freq, y_spatial, y_original = fdata.y, sdata.y, gdata.y
             

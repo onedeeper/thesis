@@ -1,11 +1,7 @@
 """
-Model utilities for the eeglearn package.
+Model utilities for EEG graph learning.
 
-This module provides reusable utility functions for model training, data handling,
-and validation across different training scripts.
-
-Created on: March 2025
-Author: Udesh Habaraduwa
+Provides functions for data splitting, graph creation, model training and validation.
 """
 
 import os
@@ -21,22 +17,20 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import f1_score
 
+from torch_geometric.loader import DataLoader
 from eeglearn.config import Config
 from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
 from eeglearn.features.graphs import Graphs
 
 
 def split_data(ignore_replication_nans: bool = False) -> dict:
-    """Split participants into train, validation, and test sets using stratified 
-    sampling.
-
+    """Split participants into train/val/test sets using stratified sampling.
+    
     Args:
-        ignore_replication_nans: Whether to exclude participants with NaN labels 
-                                 or in replication status.
-
+        ignore_replication_nans: Exclude participants with NaN labels or in replication
+        
     Returns:
-        Dictionary with keys 'train', 'valid', 'test' containing lists of
-          participant IDs.
+        Dict with 'train', 'valid', 'test' lists of participant IDs
     """
     labels = get_labels_dict()
     participant_files = os.listdir(Config.cleaned_data_path)
@@ -91,18 +85,18 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
     return {"train": train, "test": test, "valid": valid}
 
 
-def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_size: 
-                        int, testing: bool = False):
-    """Load energy objects for participants and convert them into graphs with labels.
-
+def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_size: int, 
+                       drop_last: bool = False):
+    """Load energy objects and convert to labeled graphs.
+    
     Args:
-        files_to_load: List of participant files to load.
-        label_encoder: Label encoder for psychological labels.
-        batch_size: Batch size for data loading.
-        testing: Whether the graphs are for testing (affects drop_last setting).
-
+        files_to_load: Participant files to load
+        label_encoder: Label encoder for psychological labels
+        batch_size: Batch size for data loading
+        drop_last: Whether to drop last incomplete batch
+        
     Returns:
-        PyTorch geometric graph data loader.
+        PyTorch geometric graph data loader
     """
     epoched_path = Config.energy_path / "energy_epoched"
     energy_files = os.listdir(epoched_path)
@@ -119,7 +113,7 @@ def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_
         distance="ellipsoid", 
         cleaned_data_path=Config.cleaned_data_path,
         n_workers=Config.num_workers,
-        drop_last=not testing,
+        drop_last=drop_last,
         batch_size=batch_size
     )
     
@@ -130,56 +124,109 @@ def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_
     )
 
 
-def create_graph_loaders(data_split: str, participants: list, encoder: LabelEncoder, batch_size: int,
-                         original_only : bool = False):
-    """Create and cache graph loaders for different permutation types."""
+def create_graph_loaders(data_split: str, participants: list, encoder: LabelEncoder, 
+                        batch_size: int,
+                        perm_types: list[str | None] = [None, "spatial", "frequency"], 
+                        drop_last: bool = Config.drop_last):
+    """Create DataLoaders for graphs with different permutation types.
+    
+    Args:
+        data_split: Split identifier ('train', 'test', 'valid')
+        participants: List of participant IDs
+        encoder: Label encoder for psychological labels
+        batch_size: Batch size for DataLoader
+        perm_types: List of permutation types (None=original, spatial, frequency)
+        drop_last: Whether to drop last incomplete batch
+        
+    Returns:
+        Dict mapping graph types to PyTorch DataLoaders
+    """
     loaders = {}
     
-    loader_path = Config.project_root / 'eeglearn' / 'models' /\
-          f'{data_split}_original_graph_loader.pt'
-    if not loader_path.exists() or Config.optuna:
-        loaders['original'] = get_graphs_original(participants, encoder, batch_size)
-        torch.save(loaders['original'], loader_path)
-    else:
-        loaders['original'] = torch.load(loader_path)
+    graph_lists = create_graph_list(participants=participants, 
+                                    encoder=encoder, 
+                                    perm_types=perm_types, 
+                                    data_split=data_split)
     
-    if original_only:
-        return loaders
-    
-    perm_types = ['spatial', 'frequency']
-    for perm_type in perm_types:
-        loader_path = Config.project_root / 'eeglearn' / 'models' / \
-            f'{data_split}_{perm_type}_graph_loader.pt'
-        
-        if not loader_path.exists() or Config.optuna:
-            data_files = [fname for participant in participants
-                         for fname in os.listdir(Config.energy_path/\
-                                                 f"{perm_type}_perms")
-                         if participant in fname]
-            
-            graphs = Graphs(
-                perm_type=perm_type,
-                energy_path=Config.energy_path,
-                distance="ellipsoid",
-                cleaned_data_path=Config.cleaned_data_path,
-                batch_size=batch_size,
-                n_neighbors=3,
-                shuffle=True,
-                drop_last=Config.drop_last,
-                n_workers=Config.num_workers
-            )
-            
-            loaders[perm_type] = graphs.get_graphs(files_to_load=data_files, 
-                                                   skip_bads=Config.skip_bads)
-            torch.save(loaders[perm_type], loader_path)
-        else:
-            loaders[perm_type] = torch.load(loader_path)
-    
+    for graph_type, graphs in graph_lists.items():
+        loader = DataLoader(dataset=graphs,
+                            batch_size=batch_size,
+                            shuffle=True,
+                            num_workers=Config.num_workers,
+                            drop_last=drop_last)
+        loaders[graph_type] = loader
     return loaders
 
 
+def create_graph_list(participants: list, encoder: LabelEncoder, 
+                     data_split, perm_types: list[str | None] = 
+                     [None, "spatial", "frequency"]):
+    """Create graph lists for different permutation types.
+    
+    Args:
+        participants: List of participant IDs
+        encoder: Label encoder for psychological labels
+        data_split: Split identifier
+        perm_types: List of permutation types (None=original)
+        
+    Returns:
+        Dict mapping graph types to lists of graph objects
+    """
+    graph_lists = {}
+    
+    for perm_type in perm_types:
+        key = 'original' if perm_type is None else perm_type
+        cache_path = Config.project_root / 'eeglearn' / 'models' / \
+            f'{data_split}_{key}_graph_list.pt'
+        
+        if not cache_path.exists() or Config.optuna:
+            print(f"⚠️  Creating new graph list for {key} type {data_split}")
+            if perm_type is None:
+                epoched_path = Config.energy_path / "energy_epoched"
+                energy_files = os.listdir(epoched_path)
+                energy_file_ids = {get_details_from_file_name(file)[0]: file 
+                                  for file in energy_files}
+                
+                data_files = [energy_file_ids[file] 
+                              for file in participants 
+                              if file in energy_file_ids]
+                
+                energy_path = epoched_path
+            else:
+                data_files = [fname for participant in participants
+                             for fname in os.listdir(Config.energy_path/\
+                                                     f"{perm_type}_perms")
+                             if participant in fname]
+                energy_path = Config.energy_path
+            
+            graphs = Graphs(
+                perm_type=perm_type,
+                energy_path=energy_path,
+                distance="ellipsoid",
+                cleaned_data_path=Config.cleaned_data_path,
+                batch_size=1,  
+                n_neighbors=3,
+                shuffle=False,  
+                drop_last=False, 
+                n_workers=Config.num_workers
+            )
+            
+            graph_lists[key] = graphs.get_graphs(
+                files_to_load=data_files,
+                label_encoder=encoder if perm_type is None else None,
+                skip_bads=Config.skip_bads,
+                return_data_loader=False
+            )
+            torch.save(graph_lists[key], cache_path)
+        else:
+            print(f"⚠️  Loading cached graph list for {key} type {data_split}")
+            graph_lists[key] = torch.load(cache_path)
+    
+    return graph_lists
+
+
 def print_training_params():
-    """Pretty print training parameters."""
+    """Print training configuration parameters."""
     params = {
         'Batch Size': Config.batch_size,
         'Epochs': Config.epochs,
@@ -200,11 +247,11 @@ def print_training_params():
 
 
 def setup_directories(model_weights_dir: Path, metrics_dir: Path):
-    """Create necessary directories and log files.
+    """Create directories and log files for model training.
     
     Args:
-        model_weights_dir: Directory to save model weights
-        metrics_dir: Directory to save training metrics
+        model_weights_dir: Directory for model weights
+        metrics_dir: Directory for training metrics
     """
     required_paths = [Config.cleaned_data_path, Config.energy_path, Config.data_path]
     path_descriptions = ["'data/cleaned'", "'data/energy'", "'data'"]
@@ -347,7 +394,7 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
     all_preds = []
     all_labels = []
     
-    for _, data in enumerate(validation_loader):
+    for _, data in enumerate(validation_loader['original']):
         data = data.to(Config.device)
         current_batch_size = data.y.size(0)
         total_samples += current_batch_size

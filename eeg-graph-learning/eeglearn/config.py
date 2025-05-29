@@ -18,7 +18,7 @@ class Config:
     """
 
     # Development settings
-    testing_on_sample_data = False
+    testing_on_sample_data = True
     
     # Reproducibility settings
     RANDOM_SEED = 42
@@ -26,7 +26,7 @@ class Config:
 
     # Training hyperparameters
     epochs = 100
-    batch_size = 256 
+    batch_size = 32 
     lr = 0.001  # original : 0.01
     weight_decay = 8e-5
     drop_rate = 0.25 
