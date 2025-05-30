@@ -29,7 +29,10 @@ preprocessing_log.txt
 # Data directories
 /data/*
 !/data/.gitkeep
+!/data/df_participants.pkl
+!/data/df_selected_stat_features.pkl
 setup_
+
 # Test data
 .coverage*
 tests/test_data/*

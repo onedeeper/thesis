@@ -23,7 +23,7 @@ from torch_geometric.loader import DataLoader
 from eeglearn.config import Config
 from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
 from eeglearn.features.graphs import Graphs
-
+import pickle
 
 def split_data(ignore_replication_nans: bool = False) -> dict:
     """Split participants into train/val/test sets using stratified sampling.
@@ -36,7 +36,22 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
     """
     labels = get_labels_dict()
     participant_files = os.listdir(Config.cleaned_data_path)
-    
+
+    if Config.use_tuur_smolder_data:
+
+        df_participants = pd.read_pickle(Config.data_path / 'df_participants.pkl')
+        sample_df = pd.read_pickle(r'df_selected_stat_features.pkl')
+        sample_ids = sample_df['ID'].unique() 
+        df_sample = df_participants[df_participants['participants_ID'].isin(sample_ids)] 
+        df_sample = df_sample[df_sample['sessID'] == 1]
+        le = LabelEncoder()
+        le.fit(df_sample['diagnosis'])
+        df_sample['labels'] = le.transform(df_sample['diagnosis'])
+        # 
+        print(df_sample.shape)
+        print(df_sample['diagnosis'].value_counts())
+
+
     if ignore_replication_nans:
         print("⚠️  Ignoring participants with Nan labels or in replication")
         valid_participants = []
@@ -143,10 +158,12 @@ def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_
     )
 
 
-def create_graph_loaders(data_split: str, participants: list, encoder: LabelEncoder, 
+def create_graph_loaders(data_split: str, encoder: LabelEncoder, 
                         batch_size: int,
                         perm_types: list[str | None] = [None, "spatial", "frequency"], 
-                        drop_last: bool = Config.drop_last):
+                        drop_last: bool = Config.drop_last,
+                        graph_lists: dict[str,list]|None = None,
+                        participants: list|None = None):
     """Create DataLoaders for graphs with different permutation types.
     
     Args:
@@ -162,10 +179,11 @@ def create_graph_loaders(data_split: str, participants: list, encoder: LabelEnco
     """
     loaders = {}
     
-    graph_lists = create_graph_list(participants=participants, 
-                                    encoder=encoder, 
-                                    perm_types=perm_types, 
-                                    data_split=data_split)
+    if graph_lists is None:
+        graph_lists = create_graph_list(participants=participants, 
+                                        encoder=encoder, 
+                                        perm_types=perm_types, 
+                                        data_split=data_split)
     
     for graph_type, graphs in graph_lists.items():
         if data_split == "train" and graph_type == "original" and \

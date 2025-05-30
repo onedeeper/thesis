@@ -25,7 +25,7 @@ class Config:
     DETERMINISTIC = True
 
     # Training hyperparameters
-    epochs = 100
+    epochs = 1
     batch_size = 32 
     lr = 0.001  # original : 0.01
     weight_decay = 8e-5
@@ -36,6 +36,7 @@ class Config:
     use_sampler_for_data_loading = True
     p_train = 0.6
     sample_proportion_of_data = 1.0
+    use_tuur_smolder_data = False
 
     # Model architecture parameters
     gcn_out_size = 32

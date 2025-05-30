@@ -8,7 +8,7 @@ from sklearn.metrics import f1_score, confusion_matrix
 from eeglearn.config import Config
 from eeglearn.models.model import JointlyTrainModel
 from eeglearn.utils.models import setup_label_encoder
-
+from eeglearn.utils.models import create_graph_loaders
 def evaluate():
     """Load a trained model and evaluate it on the test set."""
     device = Config.device
@@ -31,7 +31,7 @@ def evaluate():
     ).to(device)
 
     # Load model weights
-    model_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/jointly/5_class/0.538_0.504_checkpoint.pkl"
+    model_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/jointly/Acc_0.219_f1_0.385_checkpoint.pkl"
     checkpoint = torch.load(model_path, map_location=device)
     
     # Try to load state dict
@@ -46,9 +46,14 @@ def evaluate():
     model.eval()
 
     # Load test data
-    test_loader_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/jointly/5_class/train_original_graph_loader.pt"
-    test_loader = torch.load(test_loader_path)
-    print(f"Loaded test data from {test_loader_path}")
+    test_graphs_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/eeglearn/models/test_original_graph_list.pt"
+    test_graphs = torch.load(test_graphs_path)
+    test_loader = create_graph_loaders(data_split="test",
+                                       batch_size=Config.batch_size,
+                                       graph_lists={"original" : test_graphs},
+                                       encoder=encoder,
+                                       perm_types=[None])
+    print(f"Loaded test data from {test_graphs_path}")
 
     all_preds = []
     all_labels = []
@@ -56,7 +61,7 @@ def evaluate():
     criterion = nn.CrossEntropyLoss().to(device) 
 
     with torch.no_grad():
-        for data in test_loader:
+        for data in test_loader['original']:
             #print(data.y)
             labels = encoder.inverse_transform(data.y)
             label_counts = {}
