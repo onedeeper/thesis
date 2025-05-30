@@ -20,6 +20,7 @@ import pandas as pd
 from scipy.spatial.distance import cdist
 import torch
 from eeglearn.preprocess.preprocessing import Preproccesing
+from eeglearn.config import Config
 def get_details_from_file_name(file_path: str) -> tuple[str, str]:
     """Extract the participant specific information from a string.
     
@@ -198,3 +199,52 @@ def load_preprocessed_data(folder_path : Path , file_name : str) -> Preproccesin
         return None, None, None
     assert isinstance(data, Preproccesing), "data is not a Preproccesing object"
     return data
+
+def get_bad_channels(cleaned_data_path) -> dict[str, list[str]]:
+        """Retrieve the bad channels from preprocessed data.
+        
+        First checks if a cached bad channels file exists. If it does, loads and returns it.
+        Otherwise, creates the bad channels dictionary by processing the preprocessed files,
+        saves it to disk, and returns it.
+        
+        Args:
+        ----
+            None.
+        Returns:
+        ----
+            bad_channels : dict[str,list[str]] : A dictionary keyed by file_id, with
+                                            list of strings indicating which channels
+                                            are bad in the file.
+        """
+        bad_channels_path = Path(Config.data_path) / "bad_channels.pt"
+        
+        # Return cached version if it exists
+        if bad_channels_path.exists():
+            print("⚠️ Loading cached bad channels from disk...")
+            return torch.load(bad_channels_path)
+            
+        print("⚠️ No cached bad channels found. Computing from scratch...")
+        # Otherwise create the bad channels dictionary
+        participant_list : list[str] = os.listdir(cleaned_data_path)
+        folders_and_files : list[str, str] 
+        folders_and_files, _ = \
+            get_cleaned_data_paths(participant_list=participant_list,
+                                   cleaned_path=cleaned_data_path)
+        assert len(folders_and_files) > 0, "At least one cleaned file should exist."
+        
+        bad_channels : dict[str, list[str]] = {}
+        for file in folders_and_files:
+            folder_path : str = file[0]
+            preprocessed_file_name : str = file[1]
+            prep_data = load_preprocessed_data(folder_path=folder_path,
+                                   file_name=preprocessed_file_name)
+            assert isinstance(prep_data, Preproccesing),"Should be a Preprocessing obj"
+            bads = prep_data.bad_channels_after_interpolation['bad_all']
+            # some bad channels are returned as np.str_ class
+            bad_channels[preprocessed_file_name] = [str(item) for item in bads]
+            
+        print("💾 Caching bad channels to disk...")
+        # Cache the bad channels dictionary
+        torch.save(bad_channels, bad_channels_path)
+        
+        return bad_channels

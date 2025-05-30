@@ -22,6 +22,8 @@ from AutoWeight import AutomaticWeightedLoss
 from eeglearn.models.model import SelfSupervisedTrain
 from eeglearn.features.graphs import Graphs
 import pandas as pd
+from ignite.engine import Engine, Events
+from ignite.handlers import EarlyStopping
 
 batch_size : int = Config.batch_size
 epochs : int = Config.epochs
@@ -30,8 +32,8 @@ weight_decay : float = Config.weight_decay
 device : str = Config.device
 cleaned_data_path : Path = Config.cleaned_data_path
 energy_path : Path = Config.energy_path
-model_weights_dir : Path = Config.model_weights_dir
-metrics_dir  : Path = Config.metrics_dir
+model_weights_dir : Path = Config.model_weights_dir / 'self_supervised'
+metrics_dir  : Path = Config.metrics_dir / 'self_supervised'
 
 # architectural parameters
 drop_rate : float = Config.drop_rate
@@ -68,11 +70,15 @@ def train() -> None:
     """
     print(f"⚠️ Saving weights to {model_weights_dir}")
     if not os.path.exists(model_weights_dir):
-        model_weights_dir.mkdir(exist_ok=True)
+        model_weights_dir.mkdir(exist_ok=True, parents=True)
 
     print(f"⚠️ Saving metrics to {metrics_dir}")
     if not os.path.exists(metrics_dir):
-        metrics_dir.mkdir(exist_ok=True)
+        metrics_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Add stop_at from Config
+    stop_at: int = Config.stop_at
+
     awl = AutomaticWeightedLoss(2)
     net = SelfSupervisedTrain(
         inchannel=5, 
@@ -99,6 +105,15 @@ def train() -> None:
                                                            cooldown = 0,
                                                            min_lr = 0,
                                                            eps = 1e-8)
+    
+    trainer = Engine(lambda engine, batch: batch) # Dummy engine for early stopping
+    early_stopping = EarlyStopping(
+        patience=stop_at,
+        score_function=lambda engine: -engine.state.metrics['val_loss'], # Using weighted loss as proxy
+        trainer=trainer
+    )
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
+
     split : dict[str,list[str]] = split_data()
     train_participants = split['train']
     validation_participants = split['valid']
@@ -147,7 +162,12 @@ def train() -> None:
     spatial_graph_loader = spatial_graphs.get_graphs(files_to_load=train_spatial_data)
     frequency_graph_loader = frequency_graphs.get_graphs(files_to_load=train_freq_data)
 
+    print(f"⚠️  Training for epochs: {epochs}")
+    
+    best_loss = float('inf')
+
     for epoch in range(epochs):
+        net.train() # Set model to training mode
         loader = zip(frequency_graph_loader, spatial_graph_loader)
         epoch_weighted_loss = 0.0
         epoch_loss_freq = 0.0
@@ -184,10 +204,6 @@ def train() -> None:
         scheduler.step(epoch_weighted_loss)
         denominator = (ind+1)*batch_size
 
-        if epoch%5==0:
-            file_name = f"pretrain_epoch_{epoch}"
-            torch.save(net.state_dict(), model_weights_dir / file_name)
-
         #epoch metrics
         epoch_avg_weighted_loss = epoch_weighted_loss/(ind+1)
         epoch_avg_freq_loss = epoch_loss_freq/(ind+1)
@@ -195,6 +211,19 @@ def train() -> None:
         freq_acc = correct_pred_freq/denominator
         spatial_acc = correct_pred_spatial/denominator
         
+        # Save weights only if performance improves
+        if epoch_avg_weighted_loss < best_loss:
+            best_loss = epoch_avg_weighted_loss
+            file_name = f"best_model_epoch_{epoch}"
+            torch.save(net.state_dict(), model_weights_dir / file_name)
+            print(f"🔥 New best model saved at epoch {epoch}")
+        
+        trainer.state.metrics = {'val_loss': epoch_avg_weighted_loss} # Update engine state for early stopping
+        trainer.fire_event(Events.EPOCH_COMPLETED)
+
+        if trainer.should_terminate:
+            print(f"🟢  Early stopping triggered at epoch {epoch}")
+            break
     
         # Save metrics
         metrics['epoch'].append(epoch)
@@ -209,8 +238,8 @@ def train() -> None:
         print(f'Frequency loss[{epoch_avg_freq_loss:.4f}]')
         print(f'Spatial loss[{epoch_avg_spatial_loss:.4f}]')
         print('ACC@1:')
-        print(f'fequency ACC[{correct_pred_freq/denominator:.4f}]')
-        print(f'spatial ACC[{correct_pred_spatial/denominator:.4f}]')
+        print(f'Frequency ACC[{freq_acc:.4f}]')
+        print(f'Spatial ACC[{spatial_acc:.4f}]')
         print("----------------------------------------------")
 
     pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics.csv", index=False)

@@ -34,7 +34,7 @@ class Config:
 
     # Data selection
     use_sampler_for_data_loading = True
-    p_train = 0.4
+    p_train = 0.6
     sample_proportion_of_data = 1.0
 
     # Model architecture parameters
@@ -62,7 +62,7 @@ class Config:
     main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
     use_stratify = True
     if testing_on_sample_data:
-        use_stratify = True
+        use_stratify = False
         main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
         
 

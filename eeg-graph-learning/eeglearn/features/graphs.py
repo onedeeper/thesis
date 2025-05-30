@@ -61,7 +61,7 @@ import torch
 from eeglearn.config import Config
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.utils import get_details_from_file_name, get_cleaned_data_paths,\
-                            load_preprocessed_data
+                            load_preprocessed_data, get_bad_channels
 from operator import itemgetter
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
@@ -209,7 +209,7 @@ class Graphs():
 
         # Get bad channels dict once for all files
         files_with_bad_chs : dict[tuple[str,str,str], list] = {}
-        for file, bads in self.get_bad_channels().items():
+        for file, bads in get_bad_channels(self.cleaned_data_path).items():
             if len(bads) != 0:
                 participant_details = get_details_from_file_name(file)
                 files_with_bad_chs[participant_details] = bads
@@ -325,36 +325,6 @@ class Graphs():
                                    y = pseudo_labels[i]))
         return graphs
                 
-    def get_bad_channels(self) -> None :
-        """Retreive the bad channels from preprocessed data.
-        
-         Args:
-        ----
-            None.
-        Returns:
-        ----
-            bad_channels : dict[str,list[str]] : A dictionary keyed by file_id, with
-                                            list of strings indicating which channels
-                                            are bad in the file.
-        """
-        participant_list : list[str] = os.listdir(self.cleaned_data_path)
-        folders_and_files : list[str, str] 
-        folders_and_files, _ = \
-            get_cleaned_data_paths(participant_list=participant_list,
-                                   cleaned_path=self.cleaned_data_path)
-        assert len(folders_and_files) > 0, "Atleast one cleaned file should exist."
-        
-        bad_channels : dict[str, list [str]] = {}
-        for file in folders_and_files:
-            folder_path : str = file[0]
-            preprocessed_file_name : str = file[1]
-            prep_data = load_preprocessed_data(folder_path=folder_path,
-                                   file_name=preprocessed_file_name)
-            assert isinstance(prep_data, Preproccesing),"Should be a Preprocessing obj"
-            bads= prep_data.bad_channels_after_interpolation['bad_all']
-            # some bad channels are returned as np.str_ class
-            bad_channels[preprocessed_file_name] = [str(item) for item in bads]
-        return bad_channels
 
     def get_distance(self) -> np.ndarray:
         """Calculates the node distance.
