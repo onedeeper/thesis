@@ -209,7 +209,7 @@ def create_graph_list(participants: list, encoder: LabelEncoder,
         cache_path = Config.project_root / 'eeglearn' / 'models' / \
             f'{data_split}_{key}_graph_list.pt'
         
-        if not cache_path.exists() or Config.optuna:
+        if not cache_path.exists():
             print(f"⚠️  Creating new graph list for {key} type {data_split}")
             if perm_type is None:
                 epoched_path = Config.energy_path / "energy_epoched"

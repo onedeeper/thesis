@@ -47,7 +47,7 @@ class Config:
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
     drop_last = True
-    skip_bads = False
+    skip_bads = True
 
     # Path configurations
     optuna :bool = False
