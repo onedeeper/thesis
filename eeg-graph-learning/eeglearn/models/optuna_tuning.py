@@ -74,6 +74,8 @@ def objective(trial):
     Config.epochs = 30  # Use existing epochs attribute instead of non-existent max_epochs
 
     Config.optuna = True
+    Config.p_train = 0.6
+    Config.sample_proportion_of_data = 0.2
 
     # Model architecture parameters - using correct attribute names
     Config.gcn_out_size = trial.suggest_categorical("gcn_out_size", [16, 32, 64, 128])
