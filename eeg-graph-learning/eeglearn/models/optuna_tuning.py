@@ -86,6 +86,7 @@ def objective(trial):
     # Training parameters
     Config.lr = trial.suggest_float("lr", 1e-4, 5e-2, log=True)   
     Config.weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
+    Config.batch_size = trial.suggest_categorical("batch_size", [128, 256])
     
     trainer = importlib.import_module("eeglearn.models.train_jointly")
     val_metric = trainer.train()   
