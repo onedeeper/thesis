@@ -76,9 +76,8 @@ class VanillaGraphModel(nn.Module):
 
             x3 = F.relu(self.conv1(x3, e3))
             x3 = x3.view(self.batch, -1)
-            x3 = self.HC(x3)
-            x3 = F.softmax(x3, dim=1)
-            return x3
+            logits = self.HC(x3)
+            return logits
 
 class JointlyTrainModel(nn.Module):
     """Joint training model that combines frequency, spatial, and original graph data.
@@ -162,17 +161,12 @@ class JointlyTrainModel(nn.Module):
             x3 = x3.view(self.batch, -1)
             
 
-            x1 = self.HF(x1)
-            x2 = self.HS(x2)
-            x3 = self.HC(x3)
-            
+            logits_x1 = self.HF(x1)
+            logits_x2 = self.HS(x2)
+            logits_x3 = self.HC(x3)
+                        
 
-            x1 = F.softmax(x1, dim=1)
-            x2 = F.softmax(x2, dim=1)
-            x3 = F.softmax(x3, dim=1)
-            
-
-            return x1, x2, x3
+            return logits_x1, logits_x2, logits_x3
         else:
             x3, e3 = args[0].x, args[0].edge_index  # original graph data
 
@@ -250,13 +244,11 @@ class SelfSupervisedTrain(nn.Module):
         x1 = x1.view(self.batch, -1)
         x2 = x2.view(self.batch, -1)
 
-        x1 = self.HF(x1)
-        x2 = self.HS(x2)
+        logits_x1 = self.HF(x1)
+        logits_x2 = self.HS(x2)
 
-        x1 = F.softmax(x1, dim=1)
-        x2 = F.softmax(x2, dim=1)
 
-        return x1, x2
+        return logits_x1, logits_x2
 
 class SelfSupervisedTest(nn.Module):
     """Test model for downstream classification using learned representations.

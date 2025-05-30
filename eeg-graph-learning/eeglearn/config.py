@@ -25,7 +25,7 @@ class Config:
     DETERMINISTIC = True
 
     # Training hyperparameters
-    epochs = 1
+    epochs = 30
     batch_size = 32 
     lr = 0.001  # original : 0.01
     weight_decay = 8e-5

@@ -426,7 +426,7 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
         testing_on_sample_data: Whether using sample data for testing
         
     Returns:
-        Tuple of (highest_acc, current_acc, epoch_loss, f1_score)
+        Tuple of (highest_acc, current_acc, epoch_loss, weighted_f1, macro_f1)
     """
     if testing_on_sample_data is None:
         testing_on_sample_data = Config.testing_on_sample_data
@@ -442,55 +442,58 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
     all_preds = []
     all_labels = []
     
-    for _, data in enumerate(validation_loader['original']):
-        data = data.to(Config.device)
-        current_batch_size = data.y.size(0)
-        total_samples += current_batch_size
+    with torch.no_grad():
+        for _, data in enumerate(validation_loader['original']):
+            data = data.to(Config.device)
+            current_batch_size = data.y.size(0)
+            total_samples += current_batch_size
 
-        if testing_on_sample_data and (current_batch_size < batch_size):
-            data_list = data.to_data_list()
-            needed = batch_size - current_batch_size
-            additional_samples = [data_list[i % current_batch_size] for i in 
-                                  range(needed)]
-            data_list.extend(additional_samples)
-            data = Batch.from_data_list(data_list)
-            total_samples = total_samples - current_batch_size + batch_size
-        
-        out = net(data)
-        y = data.y
-        pre = torch.argmax(out, dim=1)
+            if testing_on_sample_data and (current_batch_size < batch_size):
+                data_list = data.to_data_list()
+                needed = batch_size - current_batch_size
+                additional_samples = [data_list[i % current_batch_size] for i in 
+                                    range(needed)]
+                data_list.extend(additional_samples)
+                data = Batch.from_data_list(data_list)
+                total_samples = total_samples - current_batch_size + batch_size
+            
+            validation_logits = net(data)
+            y = data.y
+            pre = torch.argmax(validation_logits, dim=1)
 
-        if testing_on_sample_data and (current_batch_size < batch_size):
-            all_preds.extend(pre[:current_batch_size].cpu().numpy())
-            all_labels.extend(y[:current_batch_size].cpu().numpy())
-        else:
-            all_preds.extend(pre.cpu().numpy())
-            all_labels.extend(y.cpu().numpy())
-        
-        correct_pred += torch.sum(pre == y).item()
-        loss = criterion(out, y)
-        epoch_loss += loss.item()
+            if testing_on_sample_data and (current_batch_size < batch_size):
+                all_preds.extend(pre[:current_batch_size].cpu().numpy())
+                all_labels.extend(y[:current_batch_size].cpu().numpy())
+            else:
+                all_preds.extend(pre.cpu().numpy())
+                all_labels.extend(y.cpu().numpy())
+            
+            correct_pred += torch.sum(pre == y).item()
+            loss = criterion(validation_logits, y)
+            epoch_loss += loss.item()
 
     ACC = correct_pred / total_samples
-    f1 = f1_score(all_labels, all_preds, average='weighted')
+    weighted_f1 = f1_score(all_labels, all_preds, average='weighted')
+    macro_f1 = f1_score(all_labels, all_preds, average='macro')
     
     if ACC > highest_acc:
         update_log(epoch, ACC, lr, batch_size, metrics_dir)
         highest_acc = ACC
         
-    if f1 > best_f1_score:
+    if weighted_f1 > best_f1_score:
         checkpoint = {
             'epoch': epoch,
             'model': net.state_dict(),
             'ACC': ACC,
-            'F1': f1
+            'weighted_F1': weighted_f1,
+            'macro_F1': macro_f1
         }
         torch.save(checkpoint, model_weights_dir /\
-                    f"Acc_{ACC:.3f}_f1_{f1:.3f}_checkpoint.pkl")
+                    f"Acc_{ACC:.3f}_weighted_f1_{weighted_f1:.3f}_macro_f1_{macro_f1:.3f}_checkpoint.pkl")
 
     net.train()
     net.testmode = False
-    return highest_acc, ACC, epoch_loss, f1
+    return highest_acc, ACC, epoch_loss, weighted_f1, macro_f1
 
 
 

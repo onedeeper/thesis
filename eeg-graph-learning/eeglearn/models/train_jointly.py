@@ -128,7 +128,8 @@ def train() -> float:
     metrics = {
         'epoch': [], 'weighted_loss': [], 'freq_loss': [], 'spatial_loss': [], 
         'original_loss': [], 'freq_acc': [], 'spatial_acc': [], 'original_acc': [], 
-        'f1_score': []
+        'f1_score_weighted': [], 'f1_score_macro': [], 'validation_loss': [], 
+        'validation_acc': [], 'validation_f1_weighted': [], 'validation_f1_macro': []
     }
     
     print(f"⚠️  Training for epochs: {epochs}")
@@ -153,76 +154,83 @@ def train() -> float:
     
     trainer = Engine(lambda engine, batch: batch)
     early_stopping = EarlyStopping(
-        patience=stop_at,
-        score_function=lambda engine: -engine.state.metrics['val_loss'],
-        trainer=trainer
-    )
+    patience=stop_at,
+    score_function=lambda eng: eng.state.metrics['val_macro_f1'],
+    trainer=trainer
+)
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
     
-    highest_acc = 0.0
-    best_f1_score = 0.0
+    validation_highest_acc = 0.0
+    best_validation_f1_score_macro = 0.0
+    best_validation_f1_score_weighted = 0.0
     
     for epoch in range(epochs):
         loader = zip(train_loaders['frequency'], train_loaders['spatial'], 
                      cycle(train_loaders['original']))
         
-        epoch_losses = {'weighted': 0.0, 'freq': 0.0, 'spatial': 0.0, 'original': 0.0}
+        training_epoch_losses = {'weighted': 0.0, 'freq': 0.0, 'spatial': 0.0, 
+                                 'original': 0.0}
         correct_predictions = {'freq': 0, 'spatial': 0, 'original': 0}
         
         for ind, (fdata, sdata, gdata) in enumerate(loader):
-            unique_labels, counts = torch.unique(gdata.y, return_counts=True)
 
             fdata, sdata, gdata = fdata.to(device), sdata.to(device), gdata.to(device)
-            freq_out, spatial_out, original_out = net(fdata, sdata, gdata)
+            freq_logits, spatial_logits, original_logits = net(fdata, sdata, gdata)
             y_freq, y_spatial, y_original = fdata.y, sdata.y, gdata.y
             
             predictions = {
-                'freq': torch.argmax(freq_out, dim=1),
-                'spatial': torch.argmax(spatial_out, dim=1),
-                'original': torch.argmax(original_out, dim=1)
+                'freq': torch.argmax(freq_logits, dim=1),
+                'spatial': torch.argmax(spatial_logits, dim=1),
+                'original': torch.argmax(original_logits, dim=1)
             }
             
             for key, pred in predictions.items():
                 target = locals()[f'y_{key}']
                 correct_predictions[key] += torch.sum(pred == target).item()
             
-            loss_freq = criterion_permuted(freq_out, y_freq)
-            loss_spatial = criterion_permuted(spatial_out, y_spatial)
-            loss_original = criterion_original(original_out, y_original)
-            loss = awl(loss_freq, loss_spatial, loss_original)
+            training_loss_freq = criterion_permuted(freq_logits, y_freq)
+            training_loss_spatial = criterion_permuted(spatial_logits, y_spatial)
+            training_loss_original = criterion_original(original_logits, y_original)
+            training_combined_loss = awl(training_loss_freq, training_loss_spatial, 
+                                         training_loss_original)
             
             optimizer.zero_grad()
-            loss.backward()
+            training_combined_loss.backward()
             optimizer.step()
             
-            epoch_losses['weighted'] += loss.item()
-            epoch_losses['freq'] += loss_freq.item()
-            epoch_losses['spatial'] += loss_spatial.item()
-            epoch_losses['original'] += loss_original.item()
+            training_epoch_losses['weighted'] += training_combined_loss.item()
+            training_epoch_losses['freq'] += training_loss_freq.item()
+            training_epoch_losses['spatial'] += training_loss_spatial.item()
+            training_epoch_losses['original'] += training_loss_original.item()
             
             
         
-        highest_acc, current_acc, epoch_loss, f1 = validate_model(
-            net, validation_loader, encoder, highest_acc, best_f1_score,
+        validation_highest_acc, validation_current_acc, validation_epoch_loss, \
+            validation_f1_weighted, validation_f1_macro = validate_model(
+            net, validation_loader, encoder, validation_highest_acc, 
+            best_validation_f1_score_macro,
             epoch, batch_size, lr, model_weights_dir, metrics_dir,
             testing_on_sample_data
         )
         
-        if f1 > best_f1_score:
-            best_f1_score = f1
+        if validation_f1_macro > best_validation_f1_score_macro:
+            best_validation_f1_score_macro = validation_f1_macro
+            
+        if validation_f1_weighted > best_validation_f1_score_weighted:
+            best_validation_f1_score_weighted = validation_f1_weighted
         
-        trainer.state.metrics = {'val_loss': epoch_loss}
+        trainer.state.metrics = {'val_macro_f1': validation_f1_macro}
         trainer.fire_event(Events.EPOCH_COMPLETED)
         
         if trainer.should_terminate:
             print(f"🟢  Early stopping triggered at epoch {epoch}")
             break
         
-        write_epoch_log(epoch, batch_size, lr, current_acc, metrics_dir)
-        scheduler.step(epoch_losses['weighted'])
-        
+        write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)
+        scheduler.step(training_epoch_losses['weighted'])
+    
         denominator = (ind + 1) * batch_size
-        avg_losses = {k: v / (ind + 1) for k, v in epoch_losses.items()}
+        avg_losses = {k: v / (ind + 1) for k, v in training_epoch_losses.items()}
         accuracies = {k: v / denominator for k, v in correct_predictions.items()}
         metrics['epoch'].append(epoch)
         for loss_type, loss_val in avg_losses.items():
@@ -231,13 +239,16 @@ def train() -> float:
             else:
                 metrics['weighted_loss'].append(loss_val)
         
+        metrics['validation_loss'].append(validation_epoch_loss)
+        metrics['validation_acc'].append(validation_current_acc)
+        metrics['validation_f1_weighted'].append(validation_f1_weighted)
+        metrics['validation_f1_macro'].append(validation_f1_macro)
+        
         for acc_type, acc_val in accuracies.items():
             metrics[f'{acc_type}_acc'].append(acc_val)
-        metrics['f1_score'].append(f1)
+        metrics['f1_score_weighted'].append(validation_f1_weighted)
+        metrics['f1_score_macro'].append(validation_f1_macro)
         
-        if epoch % 5 == 0:
-            print(f'\n## highest_acc {highest_acc:.4f} curr_acc {current_acc:.4f} ##')
-            print(f'batch {batch_size}, lr {lr}\n')
         
         print(f'Epoch [{epoch}/{epochs}]')
         print(f'Training Weighted loss [{avg_losses["weighted"]:.4f}]')
@@ -249,16 +260,18 @@ def train() -> float:
         print(f'Training Spatial ACC[{accuracies["spatial"]:.4f}]')
         print(f'Training Original ACC[{accuracies["original"]:.4f}]')
         print("----------------------------------------------")
-        print(f'Validation Loss [{epoch_loss:.4f}]')
-        print(f'Validation ACC [{current_acc:.4f}]')
-        print(f'Validation F1 Score [{f1:.4f}]')
-        print(f'Best ACC so far [{highest_acc:.4f}]')
-        print(f'Best F1 Score so far [{best_f1_score:.4f}]')
+        print(f'Validation Loss [{validation_epoch_loss:.4f}]')
+        print(f'Validation ACC [{validation_current_acc:.4f}]')
+        print(f'Validation Weighted F1 Score [{validation_f1_weighted:.4f}]')
+        print(f'Validation Macro F1 Score [{validation_f1_macro:.4f}]')
+        print(f'Best Validation ACC [{validation_highest_acc:.4f}]')
+        print(f'Best Validation Weighted F1 Score [{best_validation_f1_score_weighted:.4f}]')
+        print(f'Best Validation Macro F1 Score [{best_validation_f1_score_macro:.4f}]')
         print("==============================================")
     
     pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics_jointly.csv", 
                                  index=False)
-    return best_f1_score
+    return best_validation_f1_score_macro
 
 
 if __name__ == "__main__":
