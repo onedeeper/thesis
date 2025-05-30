@@ -65,7 +65,9 @@ from eeglearn.utils.utils import get_details_from_file_name, get_cleaned_data_pa
 from operator import itemgetter
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
+import multiprocessing
 from multiprocessing import cpu_count
+from tqdm import tqdm
 
 from microstructpy.geometry import Ellipsoid
 from pygeodesy.ellipsoidalVincenty import Cartesian
@@ -203,19 +205,49 @@ class Graphs():
             https://ieeexplore.ieee.org/abstract/document/9765326
             Reference code: https://github.com/CHEN-XDU/GMSS
         """
-
         assert isinstance(files_to_load, list), "Expecting a list of strings."
+
+        # Get bad channels dict once for all files
+        files_with_bad_chs : dict[tuple[str,str,str], list] = {}
+        for file, bads in self.get_bad_channels().items():
+            if len(bads) != 0:
+                participant_details = get_details_from_file_name(file)
+                files_with_bad_chs[participant_details] = bads
+
+        # Process files in parallel
+        max_processes = multiprocessing.cpu_count() - 1
+        processes = min(len(files_to_load), max_processes)
+
+        with multiprocessing.Pool(processes) as pool:
+            graphs_lists = list(tqdm(
+                pool.starmap(
+                    self.get_graph,
+                    [(file, files_with_bad_chs, skip_bads, label_encoder, False) 
+                     for file in files_to_load]
+                ),
+                total=len(files_to_load),
+                desc="Processing graph files"
+            ))
+
+        # Combine all graphs
+        graphs = [graph for graphs_list in graphs_lists for graph in graphs_list]
+
+        if return_data_loader:
+            return DataLoader(dataset = graphs,
+                            batch_size = self.batch_size,
+                            shuffle = self.shuffle,
+                            num_workers = self.n_workers,
+                            drop_last = self.drop_last)
+        return graphs
+    
+    def get_graph(self, file : str, files_with_bad_chs: dict, skip_bads : bool = True,
+                   label_encoder : LabelEncoder = None,
+                   return_data_loader : bool = True):
+                   
         perm_folder : str = "frequency_perms"
         if self.perm_type == "spatial":
             perm_folder = "spatial_perms"
 
-        files_with_bad_chs : dict[tuple[str,str,str]
-                                  ,list] = {}
-        for file, bads in self.get_bad_channels().items():
-            if len(bads) != 0:
-                participant_details = get_details_from_file_name(file)
-                files_with_bad_chs[participant_details] = bads 
-        
         n_epochs : int  
         n_perms_per_epoch : int 
         n_channels : int
@@ -227,79 +259,72 @@ class Graphs():
         row, col, edge_weight = self.base_adjacency
         eps : int  = 1e-10
         noise_floor_db_scalar : float = 10 * np.log10(eps)
-        for file in files_to_load:
-            participant_details = get_details_from_file_name(file)
-            if self.perm_type is None:
-                permutation_data = torch.load(Path(self.energy_path) / file)
-            else:
-                permutation_data = torch.load(Path(self.energy_path) / perm_folder /\
-                                              file)
-            examples : torch.Tensor = permutation_data[0]
-            if self.perm_type is None:
-                n_epochs, n_channels, n_bands = examples.shape
-                n_perms_per_epoch = 1
-                psych_label = permutation_data[4]
-                to_numeric = label_encoder.transform([psych_label])
-                pseudo_labels : torch.Tensor = torch.full((n_epochs,),
-                                                          to_numeric.item()).\
-                                                          reshape((n_epochs,1))
-            else:
-                n_epochs, n_perms_per_epoch, n_channels, n_bands = examples.shape
-                permutation_data = torch.load(Path(self.energy_path) /\
-                                              perm_folder / file)
-                pseudo_labels : torch.Tensor = torch.Tensor(permutation_data[1]).long()
-           
-            
-            assert pseudo_labels.shape == (n_epochs, n_perms_per_epoch),\
-                "Expected as many pseudo labels as epochs and permutations."
-            if self.perm_type is not(None):
-                 examples = examples.reshape(n_epochs * n_perms_per_epoch, n_channels, 
-                                         n_bands)
-                 pseudo_labels = pseudo_labels.reshape(n_epochs * n_perms_per_epoch)
-            examples = torch.unbind(examples, dim =0)
-            pseudo_labels = torch.unbind(pseudo_labels,dim = 0)
 
-            if skip_bads:
-                bads = files_with_bad_chs.get(participant_details,None)
-                if bads:
-                    bad_idxs = torch.Tensor([self.ch_names_to_idxs[bad] for bad in bads])\
-                        .long()
-                    where_bads_in_row : torch.Tensor = torch.isin(row,
-                                                                torch.Tensor(bad_idxs))
-                    where_bad_row_idxs : torch.Tensor = torch.nonzero(where_bads_in_row).\
-                                                        squeeze()
-                    where_bads_in_col : torch.Tensor = torch.isin(col,
-                                                                torch.Tensor(bad_idxs))
-                    
-                    where_bad_col_idxs : torch.Tensor = torch.nonzero(where_bads_in_col).\
-                                                        squeeze()
+        participant_details = get_details_from_file_name(file)
+        if self.perm_type is None:
+            permutation_data = torch.load(Path(self.energy_path) / file)
+        else:
+            permutation_data = torch.load(Path(self.energy_path) / perm_folder /\
+                                            file)
+        examples : torch.Tensor = permutation_data[0]
+        if self.perm_type is None:
+            n_epochs, n_channels, n_bands = examples.shape
+            n_perms_per_epoch = 1
+            psych_label = permutation_data[4]
+            to_numeric = label_encoder.transform([psych_label])
+            pseudo_labels : torch.Tensor = torch.full((n_epochs,),
+                                                        to_numeric.item()).\
+                                                        reshape((n_epochs,1))
+        else:
+            n_epochs, n_perms_per_epoch, n_channels, n_bands = examples.shape
+            permutation_data = torch.load(Path(self.energy_path) /\
+                                            perm_folder / file)
+            pseudo_labels : torch.Tensor = torch.Tensor(permutation_data[1]).long()
+        
+        
+        assert pseudo_labels.shape == (n_epochs, n_perms_per_epoch),\
+            "Expected as many pseudo labels as epochs and permutations."
+        if self.perm_type is not(None):
+                examples = examples.reshape(n_epochs * n_perms_per_epoch, n_channels, 
+                                        n_bands)
+                pseudo_labels = pseudo_labels.reshape(n_epochs * n_perms_per_epoch)
+        examples = torch.unbind(examples, dim =0)
+        pseudo_labels = torch.unbind(pseudo_labels,dim = 0)
 
-                    mask = torch.zeros(row.shape[0], dtype=torch.bool)
-                    mask[where_bad_row_idxs] = True
-                    mask[where_bad_col_idxs] = True
-                    row = row[~mask].long()
-                    col = col[~mask].long()
-                    edge_weight = edge_weight[~mask]
-
-            for i, example in enumerate(examples) :
-                example_db = 10 * torch.log10(torch.clamp(example, 
-                                                          min=1e-10))
-                if torch.any(example_db <= noise_floor_db_scalar):
-                    continue 
-                edge_index = torch.vstack((row,col))
-                graphs.append(Data(x= example,
-                                   edge_index =  edge_index,
-                                   edge_attr = edge_weight,
-                                   y = pseudo_labels[i]))
+        if skip_bads:
+            bads = files_with_bad_chs.get(participant_details,None)
+            if bads:
+                bad_idxs = torch.Tensor([self.ch_names_to_idxs[bad] for bad in bads])\
+                    .long()
+                where_bads_in_row : torch.Tensor = torch.isin(row,
+                                                            torch.Tensor(bad_idxs))
+                where_bad_row_idxs : torch.Tensor = torch.nonzero(where_bads_in_row).\
+                                                    squeeze()
+                where_bads_in_col : torch.Tensor = torch.isin(col,
+                                                            torch.Tensor(bad_idxs))
                 
-        if return_data_loader:
-            return DataLoader(dataset = graphs,
-                            batch_size = self.batch_size,
-                            shuffle = self.shuffle,
-                            num_workers = self.n_workers,
-                            drop_last = self.drop_last)
-        return graphs
+                where_bad_col_idxs : torch.Tensor = torch.nonzero(where_bads_in_col).\
+                                                    squeeze()
 
+                mask = torch.zeros(row.shape[0], dtype=torch.bool)
+                mask[where_bad_row_idxs] = True
+                mask[where_bad_col_idxs] = True
+                row = row[~mask].long()
+                col = col[~mask].long()
+                edge_weight = edge_weight[~mask]
+
+        for i, example in enumerate(examples) :
+            example_db = 10 * torch.log10(torch.clamp(example, 
+                                                        min=1e-10))
+            if torch.any(example_db <= noise_floor_db_scalar):
+                continue 
+            edge_index = torch.vstack((row,col))
+            graphs.append(Data(x= example,
+                                edge_index =  edge_index,
+                                edge_attr = edge_weight,
+                                   y = pseudo_labels[i]))
+        return graphs
+                
     def get_bad_channels(self) -> None :
         """Retreive the bad channels from preprocessed data.
         

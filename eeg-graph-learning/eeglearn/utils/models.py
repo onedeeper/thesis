@@ -460,15 +460,15 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
         update_log(epoch, ACC, lr, batch_size, metrics_dir)
         highest_acc = ACC
         
-        if f1 > best_f1_score:
-            checkpoint = {
-                'epoch': epoch,
-                'model': net.state_dict(),
-                'ACC': ACC,
-                'F1': f1
-            }
-            torch.save(checkpoint, model_weights_dir /\
-                       f"Acc_{ACC:.3f}_f1_{f1:.3f}_checkpoint.pkl")
+    if f1 > best_f1_score:
+        checkpoint = {
+            'epoch': epoch,
+            'model': net.state_dict(),
+            'ACC': ACC,
+            'F1': f1
+        }
+        torch.save(checkpoint, model_weights_dir /\
+                    f"Acc_{ACC:.3f}_f1_{f1:.3f}_checkpoint.pkl")
 
     net.train()
     net.testmode = False
