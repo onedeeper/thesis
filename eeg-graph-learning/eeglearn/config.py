@@ -19,13 +19,14 @@ class Config:
 
     # Development settings
     testing_on_sample_data = True
-    
+    experiment_name = "self"
+    optuna :bool = True
     # Reproducibility settings
     RANDOM_SEED = 42
     DETERMINISTIC = True
 
     # Training hyperparameters
-    epochs = 30
+    epochs = 1
     batch_size = 32 
     lr = 0.001  # original : 0.01
     weight_decay = 8e-5
@@ -51,7 +52,6 @@ class Config:
     skip_bads = True
 
     # Path configurations
-    optuna :bool = False
     project_root : Path = Path(__file__).resolve().parent.parent
     data_path : Path = project_root / 'data'
     cleaned_data_path : Path = data_path / 'cleaned'

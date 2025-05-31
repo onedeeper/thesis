@@ -32,7 +32,8 @@ from eeglearn.features.graphs import Graphs
 from eeglearn.utils.models import (
     split_data, get_graphs_original, print_training_params,
     setup_directories, setup_label_encoder, calculate_class_weights,
-    write_epoch_log, update_log, validate_model, create_graph_loaders
+    write_epoch_log, update_log, validate_model, create_graph_loaders,
+    get_experiment_filename
 )
 
 testing_on_sample_data = Config.testing_on_sample_data
@@ -183,8 +184,8 @@ def train() -> float:
         print(f'F1 Score[{f1:.4f}]')
         print("----------------------------------------------")
     
-    pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics_vanilla.csv", 
-                                 index=False)
+    metrics_filename = get_experiment_filename("training_metrics_vanilla", "csv")
+    pd.DataFrame(metrics).to_csv(metrics_dir / metrics_filename, index=False)
     return best_f1_score
 
 

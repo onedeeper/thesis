@@ -33,7 +33,7 @@ from eeglearn.features.graphs import Graphs
 from eeglearn.utils.models import (
     split_data, get_graphs_original, create_graph_loaders, print_training_params,
     setup_directories, setup_label_encoder, calculate_class_weights,
-    write_epoch_log, update_log, validate_model
+    write_epoch_log, update_log, validate_model, get_experiment_filename
 )
 
 testing_on_sample_data = Config.testing_on_sample_data
@@ -172,12 +172,14 @@ def train() -> float:
                                  'original': 0.0}
         correct_predictions = {'freq': 0, 'spatial': 0, 'original': 0}
         
+        total_samples = 0
         for ind, (fdata, sdata, gdata) in enumerate(loader):
 
             fdata, sdata, gdata = fdata.to(device), sdata.to(device), gdata.to(device)
             freq_logits, spatial_logits, original_logits = net(fdata, sdata, gdata)
             y_freq, y_spatial, y_original = fdata.y, sdata.y, gdata.y
             
+            total_samples += gdata.y[0].item()
             predictions = {
                 'freq': torch.argmax(freq_logits, dim=1),
                 'spatial': torch.argmax(spatial_logits, dim=1),
@@ -229,7 +231,7 @@ def train() -> float:
         write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)
         scheduler.step(training_epoch_losses['weighted'])
     
-        denominator = (ind + 1) * batch_size
+        denominator = (ind + 1) * total_samples
         avg_losses = {k: v / (ind + 1) for k, v in training_epoch_losses.items()}
         accuracies = {k: v / denominator for k, v in correct_predictions.items()}
         metrics['epoch'].append(epoch)
@@ -269,8 +271,8 @@ def train() -> float:
         print(f'Best Validation Macro F1 Score [{best_validation_f1_score_macro:.4f}]')
         print("==============================================")
     
-    pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics_jointly.csv", 
-                                 index=False)
+    metrics_filename = get_experiment_filename("training_metrics_jointly", "csv")
+    pd.DataFrame(metrics).to_csv(metrics_dir / metrics_filename, index=False)
     return best_validation_f1_score_macro
 
 

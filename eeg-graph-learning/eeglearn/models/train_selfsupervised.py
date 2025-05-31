@@ -16,11 +16,12 @@ from pathlib import Path
 import torch
 from torch import nn
 from eeglearn.config import Config
+from eeglearn.models.model import SelfSupervisedTrain
+from eeglearn.features.graphs import Graphs
+from eeglearn.utils.models import get_experiment_filename
 
 from sklearn.model_selection import train_test_split
 from AutoWeight import AutomaticWeightedLoss
-from eeglearn.models.model import SelfSupervisedTrain
-from eeglearn.features.graphs import Graphs
 import pandas as pd
 from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping
@@ -214,8 +215,8 @@ def train() -> None:
         # Save weights only if performance improves
         if epoch_avg_weighted_loss < best_loss:
             best_loss = epoch_avg_weighted_loss
-            file_name = f"best_model_epoch_{epoch}"
-            torch.save(net.state_dict(), model_weights_dir / file_name)
+            model_filename = get_experiment_filename(f"best_model_epoch_{epoch}", "pt")
+            torch.save(net.state_dict(), model_weights_dir / model_filename)
             print(f"🔥 New best model saved at epoch {epoch}")
         
         trainer.state.metrics = {'val_loss': epoch_avg_weighted_loss} # Update engine state for early stopping
@@ -242,6 +243,7 @@ def train() -> None:
         print(f'Spatial ACC[{spatial_acc:.4f}]')
         print("----------------------------------------------")
 
-    pd.DataFrame(metrics).to_csv(metrics_dir / "training_metrics.csv", index=False)
+    metrics_filename = get_experiment_filename("training_metrics", "csv")
+    pd.DataFrame(metrics).to_csv(metrics_dir / metrics_filename, index=False)
 if __name__ == "__main__":
     train()

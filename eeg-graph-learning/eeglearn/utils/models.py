@@ -25,6 +25,30 @@ from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
 from eeglearn.features.graphs import Graphs
 import pickle
 
+def get_experiment_filename(base_filename: str, extension: str = None) -> str:
+    """Create filename with experiment name prefix if experiment_name is set.
+    
+    Args:
+        base_filename: Base filename without extension
+        extension: File extension (optional, will be inferred if not provided)
+        
+    Returns:
+        Filename with experiment name prefix if set, otherwise original filename
+
+    WRITTEN BY AI
+    REVIEWED AND VERIFIED BY AUTHOR.
+    """
+    if Config.experiment_name:
+        if extension:
+            return f"{Config.experiment_name}_{base_filename}.{extension}"
+        else:
+            return f"{Config.experiment_name}_{base_filename}"
+    else:
+        if extension:
+            return f"{base_filename}.{extension}"
+        else:
+            return base_filename
+
 def split_data(ignore_replication_nans: bool = False) -> dict:
     """Split participants into train/val/test sets using stratified sampling.
     
@@ -224,8 +248,8 @@ def create_graph_list(participants: list, encoder: LabelEncoder,
     
     for perm_type in perm_types:
         key = 'original' if perm_type is None else perm_type
-        cache_path = Config.project_root / 'eeglearn' / 'models' / \
-            f'{data_split}_{key}_graph_list.pt'
+        cache_filename = get_experiment_filename(f'{data_split}_{key}_graph_list', 'pt')
+        cache_path = Config.project_root / 'eeglearn' / 'models' / cache_filename
         
         if not cache_path.exists():
             print(f"⚠️  Creating new graph list for {key} type {data_split}")
@@ -313,9 +337,12 @@ def setup_directories(model_weights_dir: Path, metrics_dir: Path):
     
     print(f"⚠️  Training with data loader drop_last: {Config.drop_last}")
     
+    epoch_log_filename = get_experiment_filename("epoch_log", "txt")
+    update_log_filename = get_experiment_filename("update_log", "txt")
+    
     log_files = [
-        (metrics_dir / "epoch_log.txt", "batch_size\tepoch\tlr\tdrop_rate\tacc\n"),
-        (metrics_dir / "update_log.txt", "epoch\tlr\tbatch_size\tacc\n")
+        (metrics_dir / epoch_log_filename, "batch_size\tepoch\tlr\tdrop_rate\tacc\n"),
+        (metrics_dir / update_log_filename, "epoch\tlr\tbatch_size\tacc\n")
     ]
     
     for log_file, header in log_files:
@@ -387,7 +414,8 @@ def write_epoch_log(epoch: int, batchsize: int, lr: float, current_acc: float,
     """
     drop_rate = Config.drop_rate
     log = f'{batchsize}\t{epoch}\t{lr}\t{drop_rate}\t{current_acc:.4f}\n'
-    with open(metrics_dir / "epoch_log.txt", 'a') as f:
+    epoch_log_filename = get_experiment_filename("epoch_log", "txt")
+    with open(metrics_dir / epoch_log_filename, 'a') as f:
         f.write(log)
 
 
@@ -402,7 +430,8 @@ def update_log(epoch: int, acc: float, lr: float, batch_size: int, metrics_dir: 
         metrics_dir: Directory to save metrics
     """
     log = f'{epoch}\t{lr}\t{batch_size}\t{acc:.4f}\n'
-    with open(metrics_dir / "update_log.txt", 'a') as f:
+    update_log_filename = get_experiment_filename("update_log", "txt")
+    with open(metrics_dir / update_log_filename, 'a') as f:
         f.write(log)
 
 
@@ -488,8 +517,8 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
             'weighted_F1': weighted_f1,
             'macro_F1': macro_f1
         }
-        torch.save(checkpoint, model_weights_dir /\
-                    f"Acc_{ACC:.3f}_weighted_f1_{weighted_f1:.3f}_macro_f1_{macro_f1:.3f}_checkpoint.pkl")
+        checkpoint_filename = get_experiment_filename(f"Acc_{ACC:.3f}_weighted_f1_{weighted_f1:.3f}_macro_f1_{macro_f1:.3f}_checkpoint", "pkl")
+        torch.save(checkpoint, model_weights_dir / checkpoint_filename)
 
     net.train()
     net.testmode = False
