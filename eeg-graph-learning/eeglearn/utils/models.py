@@ -350,7 +350,6 @@ def setup_label_encoder(ignore_replication_nans: bool = True):
     """
     all_psych_labels = get_labels_dict()
     all_unique_labels = list(set(all_psych_labels.values()))
-    
     if ignore_replication_nans:
         selected_labels = sorted([
             label for label in all_unique_labels 

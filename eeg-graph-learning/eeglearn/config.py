@@ -18,7 +18,7 @@ class Config:
     """
 
     # Development settings
-    experiment_name = "all_data_split"
+    experiment_name = "test"
     optuna :bool = False
     load_data_split_from  = ""
     # Reproducibility settings
@@ -36,9 +36,9 @@ class Config:
     # Data selection
     testing_on_sample_data = True
     use_sampler_for_data_loading = True
-    p_train = 0.8
+    p_train = 0.6
     sample_proportion_of_data = 1.0
-    use_tuur_smolder_data = True
+    use_tuur_smolder_data = False
     drop_last = True
     skip_bads = True
     main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]

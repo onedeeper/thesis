@@ -61,7 +61,7 @@ import torch
 from eeglearn.config import Config
 from eeglearn.preprocess.preprocessing import Preproccesing
 from eeglearn.utils.utils import get_details_from_file_name, get_cleaned_data_paths,\
-                            load_preprocessed_data, get_bad_channels
+                            load_preprocessed_data, get_bad_channels, get_labels_dict
 from operator import itemgetter
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
@@ -177,7 +177,7 @@ class Graphs():
         assert self.distances.shape == (n_channels, n_channels),\
             "Distance matrix not as expected. Should be num_channels x num_channels."
         self.base_adjacency = self.get_adjacency()
-
+        self.participant_labels = get_labels_dict()
     def get_graphs(self, files_to_load : list[str], skip_bads : bool = True,
                    label_encoder : LabelEncoder = None,
                    return_data_loader : bool = True):
@@ -270,7 +270,7 @@ class Graphs():
         if self.perm_type is None:
             n_epochs, n_channels, n_bands = examples.shape
             n_perms_per_epoch = 1
-            psych_label = permutation_data[4]
+            psych_label = self.participant_labels[permutation_data[2]]
             to_numeric = label_encoder.transform([psych_label])
             pseudo_labels : torch.Tensor = torch.full((n_epochs,),
                                                         to_numeric.item()).\

@@ -68,7 +68,6 @@ def get_labels_dict() -> dict[str, str]:
             participant_labels.append(indications[participant])
         else:
             participant_labels.append(formal_status[participant])
-
     return dict(zip(participant_ids, participant_labels))
 
 def get_cleaned_data_paths(participant_list : list[str], cleaned_path : str) ->\
