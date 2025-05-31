@@ -18,7 +18,6 @@ class Config:
     """
 
     # Development settings
-    testing_on_sample_data = False
     experiment_name = "all_data_split"
     optuna :bool = False
     load_data_split_from  = ""
@@ -35,7 +34,7 @@ class Config:
     stop_at = 10
 
     # Data selection
-    testing_on_sample_data = False
+    testing_on_sample_data = True
     use_sampler_for_data_loading = True
     p_train = 0.8
     sample_proportion_of_data = 1.0
