@@ -58,7 +58,17 @@ def get_labels_dict() -> dict[str, str]:
         / 'data' / 'TDBRAIN_participants_V2.xlsx'
     labels_df = pd.read_excel(labels_file)
     participant_ids = labels_df['participants_ID']
-    participant_labels = labels_df['indication'].astype(str)
+    indications = dict(zip(labels_df['participants_ID'].to_list(),
+                           labels_df['indication'].to_list()))
+    formal_status = dict(zip(labels_df['participants_ID'].to_list(),
+                            labels_df['formal_status'].to_list()))
+    participant_labels = []
+    for participant in participant_ids:
+        if formal_status[participant] == "UNKNOWN":
+            participant_labels.append(indications[participant])
+        else:
+            participant_labels.append(formal_status[participant])
+
     return dict(zip(participant_ids, participant_labels))
 
 def get_cleaned_data_paths(participant_list : list[str], cleaned_path : str) ->\

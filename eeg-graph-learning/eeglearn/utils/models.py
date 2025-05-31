@@ -96,15 +96,13 @@ def split_data() -> dict:
             print(f"⚠️  Using {n_samples} out of {len(valid_participants)} total valid participants")
             valid_participants = valid_participants_sample
 
-        # First split: train vs test+valid
-        train, test_valid, train_labels, test_valid_labels = train_test_split(
-            valid_participants, valid_labels, 
-            test_size=1 - Config.p_train, 
-            random_state=Config.RANDOM_SEED,
-            stratify=valid_labels if Config.use_stratify else None
-        )
+    train, test_valid, train_labels, test_valid_labels = train_test_split(
+        valid_participants, valid_labels, 
+        test_size=1 - Config.p_train, 
+        random_state=Config.RANDOM_SEED,
+        stratify=valid_labels if Config.use_stratify else None
+    )
 
-    # Second split: test vs valid
     test, valid, test_labels, valid_labels = train_test_split(
         test_valid, test_valid_labels,
         test_size=0.5,  # Split remaining data equally

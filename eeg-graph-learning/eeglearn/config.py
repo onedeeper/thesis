@@ -35,10 +35,11 @@ class Config:
     stop_at = 10
 
     # Data selection
+    testing_on_sample_data = False
     use_sampler_for_data_loading = True
     p_train = 0.8
     sample_proportion_of_data = 1.0
-    use_tuur_smolder_data = False
+    use_tuur_smolder_data = True
     drop_last = True
     skip_bads = True
     main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
