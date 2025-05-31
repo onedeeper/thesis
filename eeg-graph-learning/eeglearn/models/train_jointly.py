@@ -77,6 +77,7 @@ def train() -> float:
     all_psych_labels = get_labels_dict()
     
     if Config.load_data_split_from != "":
+        print(f"⚠️  Data split loaded from {Config.load_data_split_from}")
         split = torch.load(Config.load_data_split_from)
     else:
         split = split_data()
