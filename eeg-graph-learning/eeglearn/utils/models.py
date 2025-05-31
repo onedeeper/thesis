@@ -140,7 +140,10 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
                        for c in Config.main_classes}
         print(f"{split_name} set class counts:", class_counts)
 
-    return {"train": train, "valid": valid, "test": test}
+    split = {"train": train, "valid": valid, "test": test}
+    split_save_path = get_experiment_filename("train_test_valid_split")
+    torch.save(split, Config.data_path / f"{split_save_path}.pt" )
+    return split
 
 
 def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_size: int, 
