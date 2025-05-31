@@ -76,7 +76,10 @@ def train() -> float:
         setup_label_encoder(ignore_replication_nans=ignore_replication_nans)
     all_psych_labels = get_labels_dict()
     
-    split = split_data(ignore_replication_nans=ignore_replication_nans)
+    if Config.load_data_split_from != "":
+        split = torch.load(Config.load_data_split_from)
+    else:
+        split = split_data(ignore_replication_nans=ignore_replication_nans)
     train_participants = split['train']
     validation_participants = split['valid']
     test_participants = split['test']

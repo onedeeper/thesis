@@ -21,6 +21,7 @@ class Config:
     testing_on_sample_data = True
     experiment_name = "self"
     optuna :bool = True
+    load_data_split_from  = ""
     # Reproducibility settings
     RANDOM_SEED = 42
     DETERMINISTIC = True
