@@ -39,7 +39,14 @@ class Config:
     p_train = 0.6
     sample_proportion_of_data = 1.0
     use_tuur_smolder_data = False
-
+    drop_last = True
+    skip_bads = True
+    main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
+    use_stratify = True
+    if testing_on_sample_data:
+        use_stratify = False
+        main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
+    
     # Model architecture parameters
     gcn_out_size = 32
     linear_size = 512
@@ -49,8 +56,7 @@ class Config:
     num_workers = 4
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
-    drop_last = True
-    skip_bads = True
+    
 
     # Path configurations
     project_root : Path = Path(__file__).resolve().parent.parent
@@ -58,15 +64,7 @@ class Config:
     cleaned_data_path : Path = data_path / 'cleaned'
     energy_path : Path = data_path / 'energy'
     model_weights_dir : Path = data_path / 'weights'
-    metrics_dir : Path = data_path / 'metrics'
-    
-    # Classification settings
-    main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
-    use_stratify = True
-    if testing_on_sample_data:
-        use_stratify = False
-        main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
-        
+    metrics_dir : Path = data_path / 'metrics'    
 
     # classes from :
     # https://www.frontiersin.org/journals/aging-neuroscience/articles/10.3389/fnagi.2022.1019869/full#supplementary-material
