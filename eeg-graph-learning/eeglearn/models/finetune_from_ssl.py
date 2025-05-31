@@ -92,7 +92,7 @@ def train_classification():
     
     # Setup data
     encoder, n_classes = setup_label_encoder(ignore_replication_nans=True)
-    split = split_data(ignore_replication_nans=True)
+    split = split_data()
     
     train_loader = create_graph_loaders(
         participants=split['train'], encoder=encoder, batch_size=batch_size,

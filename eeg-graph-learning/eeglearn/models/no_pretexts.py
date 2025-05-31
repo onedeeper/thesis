@@ -76,7 +76,7 @@ def train() -> float:
         setup_label_encoder(ignore_replication_nans=ignore_replication_nans)
     all_psych_labels = get_labels_dict()
     
-    split = split_data(ignore_replication_nans=ignore_replication_nans)
+    split = split_data()
     train_participants = split['train']
     validation_participants = split['valid']
     test_participants = split['test']

@@ -49,7 +49,7 @@ def get_experiment_filename(base_filename: str, extension: str = None) -> str:
         else:
             return base_filename
 
-def split_data(ignore_replication_nans: bool = False) -> dict:
+def split_data() -> dict:
     """Split participants into train/val/test sets using stratified sampling.
     
     Args:
@@ -60,7 +60,6 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
     """
     labels = get_labels_dict()
     participant_files = os.listdir(Config.cleaned_data_path)
-
     if Config.use_tuur_smolder_data:
 
         df_participants = pd.read_pickle(Config.data_path / 'df_participants.pkl')
@@ -74,47 +73,36 @@ def split_data(ignore_replication_nans: bool = False) -> dict:
         # 
         print(df_sample.shape)
         print(df_sample['diagnosis'].value_counts())
-
-
-    if ignore_replication_nans:
+    else:
         print("⚠️  Ignoring participants with Nan labels or in replication")
         valid_participants = []
         valid_labels = []
-        
-        for participant in participant_files:
-            try:
-                label = labels[participant]
-                if label in {'nan', 'NaN', np.nan, 'REPLICATION'} \
-                    or label not in Config.main_classes:
-                    continue
-                valid_participants.append(participant)
-                valid_labels.append(label)
-            except KeyError:
-                continue
-    else:
-        valid_participants = participant_files
-        valid_labels = [labels[p] for p in valid_participants]
-    
-    # Verify all participants have valid labels
-    for participant in valid_participants:
-        assert labels[participant] in Config.main_classes, \
-            f"Invalid label {labels[participant]} for participant {participant}"
-    n_samples = int(len(valid_participants) * Config.sample_proportion_of_data)
-    # Sample a proportion of valid participants if specified
-    if Config.sample_proportion_of_data < 1.0:
-        valid_participants = np.random.choice(valid_participants, 
-                                            size=n_samples, 
-                                            replace=False)
-        valid_labels = [labels[p] for p in valid_participants]
-    print(f"⚠️  Using {n_samples} out of {len(valid_participants)} total participants")
+        for p in participant_files:
+            if labels.get(p, False) and (labels[p] in Config.main_classes):
+                valid_participants.append(p)
+                valid_labels.append(labels[p])
 
-    # First split: train vs test+valid
-    train, test_valid, train_labels, test_valid_labels = train_test_split(
-        valid_participants, valid_labels, 
-        test_size=1 - Config.p_train, 
-        random_state=Config.RANDOM_SEED,
-        stratify=valid_labels if Config.use_stratify else None
-    )
+        for participant in valid_participants:
+            assert labels[participant] in Config.main_classes, \
+                f"Invalid label {labels[participant]} for participant {participant}"
+        (f"⚠️ {len(valid_participants)} total valid participants")
+    
+        if Config.sample_proportion_of_data < 1.0:
+            n_samples = int(len(valid_participants) * Config.sample_proportion_of_data)
+            valid_participants_sample = np.random.choice(valid_participants, 
+                                                size=n_samples, 
+                                                replace=False)
+            valid_labels = [labels[p] for p in valid_participants_sample]
+            print(f"⚠️  Using {n_samples} out of {len(valid_participants)} total valid participants")
+            valid_participants = valid_participants_sample
+
+        # First split: train vs test+valid
+        train, test_valid, train_labels, test_valid_labels = train_test_split(
+            valid_participants, valid_labels, 
+            test_size=1 - Config.p_train, 
+            random_state=Config.RANDOM_SEED,
+            stratify=valid_labels if Config.use_stratify else None
+        )
 
     # Second split: test vs valid
     test, valid, test_labels, valid_labels = train_test_split(
