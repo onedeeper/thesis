@@ -18,9 +18,9 @@ class Config:
     """
 
     # Development settings
-    testing_on_sample_data = True
-    experiment_name = "self"
-    optuna :bool = True
+    testing_on_sample_data = False
+    experiment_name = "all_data_split"
+    optuna :bool = False
     load_data_split_from  = ""
     # Reproducibility settings
     RANDOM_SEED = 42
@@ -36,7 +36,7 @@ class Config:
 
     # Data selection
     use_sampler_for_data_loading = True
-    p_train = 0.6
+    p_train = 0.8
     sample_proportion_of_data = 1.0
     use_tuur_smolder_data = False
     drop_last = True
@@ -53,7 +53,7 @@ class Config:
     K = 2  # Order of Chebyshev polynomials
 
     # Hardware and processing settings
-    num_workers = 4
+    num_workers = 6
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
     

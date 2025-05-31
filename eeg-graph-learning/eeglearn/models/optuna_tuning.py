@@ -39,9 +39,12 @@ import torch
 import os
 from pathlib import Path
 from eeglearn.config import Config
+from datetime import datetime
 
 # Make sure torch / cudnn behaves the same
 Config.set_global_seed(verbose=False)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+pid = os.getpid()
 
 def objective(trial):
     """Objective function for Optuna hyperparameter optimization.
@@ -70,13 +73,31 @@ def objective(trial):
     # Remove the non-existent method call and unused data_frac parameter
     # TODO: Implement participant subset functionality if needed for multi-fidelity optimization
     
-    # Cap epochs for faster hyperparameter search
-    Config.epochs = 30  # Use existing epochs attribute instead of non-existent max_epochs
-
+    # Development settings
+    Config.testing_on_sample_data = False
+    Config.experiment_name = f"optuna_{timestamp}_pid{pid}"
     Config.optuna = True
-    Config.p_train = 0.6
-    Config.sample_proportion_of_data = 0.2
+    Config.load_data_split_from = "all_data_split_train_test_valid_split.pt"
 
+    # Reproducibility settings
+    Config.RANDOM_SEED = 42
+    Config.DETERMINISTIC = True
+
+    # Training hyperparameters
+    Config.epochs = 15  # Cap epochs for faster hyperparameter search
+    Config.stop_at = 5
+
+    # Data selection
+    Config.use_sampler_for_data_loading = True
+    Config.p_train = 0.8
+    Config.sample_proportion_of_data = 1.0
+    Config.use_tuur_smolder_data = False
+    Config.drop_last = True
+    Config.skip_bads = True
+    Config.main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
+    Config.use_stratify = True
+
+    
     # Model architecture parameters - using correct attribute names
     Config.gcn_out_size = trial.suggest_categorical("gcn_out_size", [16, 32, 64, 128])
     Config.linear_size = trial.suggest_categorical("linear_size", [256, 512, 1024])
@@ -94,6 +115,7 @@ def objective(trial):
 
 
 if __name__ == "__main__":
+    results_filename = f"optuna_results_{timestamp}_pid{pid}.csv"
     # Create pruner to terminate unpromising trials early
     pruner = optuna.pruners.MedianPruner(n_warmup_steps=3)
     
@@ -115,5 +137,5 @@ if __name__ == "__main__":
     )
 
     df = study.trials_dataframe(attrs=wanted, multi_index=True)
-    df.to_csv("optuna_results_full.csv", index=False)
-    print("Results saved to 'optuna_results.csv'")
+    df.to_csv(results_filename, index=False)
+    print(f"Results saved to '{results_filename}'") 
