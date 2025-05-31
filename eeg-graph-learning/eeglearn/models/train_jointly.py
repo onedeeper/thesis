@@ -72,13 +72,20 @@ def train() -> float:
     print_training_params()
     setup_directories(model_weights_dir, metrics_dir)
     
+    # Check and print device information
+    if torch.cuda.is_available():
+        print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        print("⚠️ Using CPU for training")
+    print(f"📱 Device: {device}")
+    
     encoder, n_classes = \
         setup_label_encoder(ignore_replication_nans=ignore_replication_nans)
     all_psych_labels = get_labels_dict()
     
     if Config.load_data_split_from != "":
-        print(f"⚠️  Data split loaded from {Config.load_data_split_from}")
-        split = torch.load(Config.load_data_split_from)
+        print(f"⚠️  Data split loaded from {data_path / Config.load_data_split_from}")
+        split = torch.load(data_path /  Config.load_data_split_from)
     else:
         split = split_data()
     train_participants = split['train']

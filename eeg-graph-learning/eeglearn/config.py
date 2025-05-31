@@ -18,7 +18,7 @@ class Config:
     """
 
     # Development settings
-    experiment_name = "test"
+    experiment_name = "all_data_split"
     optuna :bool = False
     load_data_split_from  = ""
     # Reproducibility settings
@@ -34,9 +34,9 @@ class Config:
     stop_at = 10
 
     # Data selection
-    testing_on_sample_data = True
+    testing_on_sample_data = False
     use_sampler_for_data_loading = True
-    p_train = 0.6
+    p_train = 0.8
     sample_proportion_of_data = 1.0
     use_tuur_smolder_data = False
     drop_last = True
@@ -46,7 +46,6 @@ class Config:
     if testing_on_sample_data:
         use_stratify = False
         main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
-    
     # Model architecture parameters
     gcn_out_size = 32
     linear_size = 512

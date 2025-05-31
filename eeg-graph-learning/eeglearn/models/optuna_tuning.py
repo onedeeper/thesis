@@ -74,10 +74,9 @@ def objective(trial):
     # TODO: Implement participant subset functionality if needed for multi-fidelity optimization
     
     # Development settings
-    Config.testing_on_sample_data = False
-    Config.experiment_name = f"optuna_{timestamp}_pid{pid}"
+    Config.experiment_name = f"optuna_non_turr_all_data{timestamp}_pid{pid}"
     Config.optuna = True
-    Config.load_data_split_from = "all_data_split_train_test_valid_split.pt"
+    Config.load_data_split_from = "all_data_split_0.8.train_test_valid_split.pt"
 
     # Reproducibility settings
     Config.RANDOM_SEED = 42
@@ -96,7 +95,7 @@ def objective(trial):
     Config.skip_bads = True
     Config.main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
     Config.use_stratify = True
-
+    Config.testing_on_sample_data = False
     
     # Model architecture parameters - using correct attribute names
     Config.gcn_out_size = trial.suggest_categorical("gcn_out_size", [16, 32, 64, 128])

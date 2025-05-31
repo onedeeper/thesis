@@ -127,7 +127,7 @@ def split_data() -> dict:
         print(f"{split_name} set class counts:", class_counts)
 
     split = {"train": train, "valid": valid, "test": test}
-    split_save_path = get_experiment_filename("train_test_valid_split")
+    split_save_path = get_experiment_filename(f"{Config.p_train}.train_test_valid_split")
     torch.save(split, Config.data_path / f"{split_save_path}.pt" )
     return split
 

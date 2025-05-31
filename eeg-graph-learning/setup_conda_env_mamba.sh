@@ -37,7 +37,7 @@ else
 fi
 
 
-ENV_NAME="eeg-graph-learning"
+ENV_NAME="eeg-graph-learning-2"
 LOCKED_YAML="environment.lock.yml"
 FALLBACK_YAML="environment.yml"
 
