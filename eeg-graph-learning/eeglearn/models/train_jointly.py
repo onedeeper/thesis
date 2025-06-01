@@ -190,7 +190,7 @@ def train() -> float:
             freq_logits, spatial_logits, original_logits = net(fdata, sdata, gdata)
             y_freq, y_spatial, y_original = fdata.y, sdata.y, gdata.y
             
-            total_samples += gdata.y[0].item()
+            total_samples += len(gdata.y)
             predictions = {
                 'freq': torch.argmax(freq_logits, dim=1),
                 'spatial': torch.argmax(spatial_logits, dim=1),
@@ -242,9 +242,8 @@ def train() -> float:
         write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)
         scheduler.step(training_epoch_losses['weighted'])
     
-        denominator = (ind + 1) * total_samples
         avg_losses = {k: v / (ind + 1) for k, v in training_epoch_losses.items()}
-        accuracies = {k: v / denominator for k, v in correct_predictions.items()}
+        accuracies = {k: v / total_samples for k, v in correct_predictions.items()}
         metrics['epoch'].append(epoch)
         for loss_type, loss_val in avg_losses.items():
             if loss_type != 'weighted':
