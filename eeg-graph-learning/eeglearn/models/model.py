@@ -68,7 +68,6 @@ class VanillaGraphModel(nn.Module):
             x3 = F.relu(self.conv1(x3, e3))
             x3 = x3.view(self.batch, -1)
             x3 = self.HC(x3)
-            x3 = F.softmax(x3, dim=1)
             
             return x3
         else:
@@ -173,7 +172,6 @@ class JointlyTrainModel(nn.Module):
             x3 = F.relu(self.conv1(x3, e3))
             x3 = x3.view(self.batch, -1)
             x3 = self.HC(x3)
-            x3 = F.softmax(x3, dim=1)
             return x3
 
 class SelfSupervisedTrain(nn.Module):
