@@ -61,18 +61,30 @@ def split_data() -> dict:
     labels = get_labels_dict()
     participant_files = os.listdir(Config.cleaned_data_path)
     if Config.use_tuur_smolder_data:
-
+        print("⚠️  Loading under sampled data set.")
         df_participants = pd.read_pickle(Config.data_path / 'df_participants.pkl')
-        sample_df = pd.read_pickle(r'df_selected_stat_features.pkl')
+        sample_df = pd.read_pickle(Config.data_path / 'df_selected_stat_features.pkl')
         sample_ids = sample_df['ID'].unique() 
         df_sample = df_participants[df_participants['participants_ID'].isin(sample_ids)] 
         df_sample = df_sample[df_sample['sessID'] == 1]
+
+        invalid_diagnoses = set(df_sample['diagnosis']) - set(Config.main_classes)
+        assert not invalid_diagnoses, f"Invalid diagnoses found: {invalid_diagnoses}"
+        
         le = LabelEncoder()
         le.fit(df_sample['diagnosis'])
         df_sample['labels'] = le.transform(df_sample['diagnosis'])
-        # 
-        print(df_sample.shape)
         print(df_sample['diagnosis'].value_counts())
+        valid_participants = df_sample['participants_ID'].to_list()
+        valid_labels = df_sample['diagnosis'].to_list()
+
+        for participant in valid_participants:
+            try: 
+                assert labels[participant] in Config.main_classes, \
+                    f"Invalid label {labels[participant]} for participant {participant}"
+            except:
+                print( participant, labels[participant])
+        print(f"⚠️ {len(valid_participants)} total valid participants")
     else:
         print("⚠️  Ignoring participants with Nan labels or in replication")
         valid_participants = []
@@ -85,7 +97,7 @@ def split_data() -> dict:
         for participant in valid_participants:
             assert labels[participant] in Config.main_classes, \
                 f"Invalid label {labels[participant]} for participant {participant}"
-        (f"⚠️ {len(valid_participants)} total valid participants")
+        print(f"⚠️ {len(valid_participants)} total valid participants")
     
         if Config.sample_proportion_of_data < 1.0:
             n_samples = int(len(valid_participants) * Config.sample_proportion_of_data)
@@ -119,7 +131,6 @@ def split_data() -> dict:
             assert split_classes == set(Config.main_classes), \
                 f"Not all classes present in {split_name.lower()} set"
 
-    # Print class distribution statistics
     print("\nClass distribution:")
     for split_name, split_data in splits:
         class_counts = {c: sum(1 for p in split_data if labels[p] == c) 
@@ -127,7 +138,7 @@ def split_data() -> dict:
         print(f"{split_name} set class counts:", class_counts)
 
     split = {"train": train, "valid": valid, "test": test}
-    split_save_path = get_experiment_filename(f"{Config.p_train}.train_test_valid_split")
+    split_save_path = get_experiment_filename("train_test_valid_split")
     torch.save(split, Config.data_path / f"{split_save_path}.pt" )
     return split
 
