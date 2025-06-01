@@ -131,7 +131,6 @@ def train() -> float:
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
     
     highest_acc = 0.0
-    best_f1_score = 0.0
     best_validation_f1_score_macro = 0.0
     best_validation_f1_score_weighted = 0.0
     
@@ -173,7 +172,8 @@ def train() -> float:
             drop_last=not Config.testing_on_sample_data)
 
         highest_acc, current_val_acc, val_epoch_loss, val_f1_weighted, val_f1_macro = validate_model(
-            net, validation_participants_loader, encoder, highest_acc, best_f1_score,
+            net, validation_participants_loader, encoder, highest_acc, 
+            best_validation_f1_score_macro,
             epoch, batch_size, lr, model_weights_dir, metrics_dir,
             testing_on_sample_data
         )
@@ -183,7 +183,6 @@ def train() -> float:
         
         if val_f1_weighted > best_validation_f1_score_weighted:
             best_validation_f1_score_weighted = val_f1_weighted
-            best_f1_score = val_f1_weighted
 
         trainer.state.metrics = {'val_macro_f1': val_f1_macro}
         trainer.fire_event(Events.EPOCH_COMPLETED)

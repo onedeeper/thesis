@@ -435,7 +435,7 @@ def update_log(epoch: int, acc: float, lr: float, batch_size: int, metrics_dir: 
 
 
 def validate_model(net, validation_loader: list, label_encoder: LabelEncoder, 
-                   highest_acc: float, best_f1_score: float, epoch: int, 
+                   highest_acc: float, best_macro_f1: float, epoch: int, 
                    batch_size: int, lr: float, model_weights_dir: Path, 
                    metrics_dir: Path, testing_on_sample_data: bool = None):
     """Evaluate model performance on validation data.
@@ -508,7 +508,7 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
         update_log(epoch, ACC, lr, batch_size, metrics_dir)
         highest_acc = ACC
         
-    if weighted_f1 > best_f1_score:
+    if macro_f1 > best_macro_f1:
         checkpoint = {
             'epoch': epoch,
             'model': net.state_dict(),
