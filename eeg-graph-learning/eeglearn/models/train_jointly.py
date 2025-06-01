@@ -137,10 +137,11 @@ def train() -> float:
         print(f"    - {loader_type}: {len(loader)} batches")
     print()
     metrics = {
-        'epoch': [], 'weighted_loss': [], 'freq_loss': [], 'spatial_loss': [], 
-        'original_loss': [], 'freq_acc': [], 'spatial_acc': [], 'original_acc': [], 
-        'f1_score_weighted': [], 'f1_score_macro': [], 'validation_loss': [], 
-        'validation_acc': [], 'validation_f1_weighted': [], 'validation_f1_macro': []
+        'epoch': [], 'train_weighted_loss': [], 'train_freq_loss': [], 'train_spatial_loss': [], 
+        'train_original_loss': [], 'train_freq_acc': [], 'train_spatial_acc': [], 
+        'train_original_acc': [], 'train_original_f1_weighted': [], 'train_original_f1_macro': [],
+        'validation_loss': [], 'validation_acc': [], 
+        'validation_f1_weighted': [], 'validation_f1_macro': []
     }
     
     print(f"⚠️  Training for epochs: {epochs}")
@@ -182,6 +183,8 @@ def train() -> float:
         training_epoch_losses = {'weighted': 0.0, 'freq': 0.0, 'spatial': 0.0, 
                                  'original': 0.0}
         correct_predictions = {'freq': 0, 'spatial': 0, 'original': 0}
+        all_train_original_preds = []
+        all_train_original_labels = []
         
         total_samples = 0
         for ind, (fdata, sdata, gdata) in enumerate(loader):
@@ -196,6 +199,9 @@ def train() -> float:
                 'spatial': torch.argmax(spatial_logits, dim=1),
                 'original': torch.argmax(original_logits, dim=1)
             }
+            
+            all_train_original_preds.extend(predictions['original'].cpu().numpy())
+            all_train_original_labels.extend(y_original.cpu().numpy())
             
             for key, pred in predictions.items():
                 target = locals()[f'y_{key}']
@@ -215,7 +221,6 @@ def train() -> float:
             training_epoch_losses['freq'] += training_loss_freq.item()
             training_epoch_losses['spatial'] += training_loss_spatial.item()
             training_epoch_losses['original'] += training_loss_original.item()
-            
             
         
         validation_highest_acc, validation_current_acc, validation_epoch_loss, \
@@ -239,6 +244,10 @@ def train() -> float:
             print(f"🟢  Early stopping triggered at epoch {epoch}")
             break
         
+        # Calculate F1 scores for training original task
+        train_f1_original_weighted = f1_score(all_train_original_labels, all_train_original_preds, average='weighted', zero_division=0)
+        train_f1_original_macro = f1_score(all_train_original_labels, all_train_original_preds, average='macro', zero_division=0)
+
         write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)
         scheduler.step(training_epoch_losses['weighted'])
     
@@ -247,9 +256,9 @@ def train() -> float:
         metrics['epoch'].append(epoch)
         for loss_type, loss_val in avg_losses.items():
             if loss_type != 'weighted':
-                metrics[f'{loss_type}_loss'].append(loss_val)
+                metrics[f'train_{loss_type}_loss'].append(loss_val)
             else:
-                metrics['weighted_loss'].append(loss_val)
+                metrics['train_weighted_loss'].append(loss_val)
         
         metrics['validation_loss'].append(validation_epoch_loss)
         metrics['validation_acc'].append(validation_current_acc)
@@ -257,9 +266,9 @@ def train() -> float:
         metrics['validation_f1_macro'].append(validation_f1_macro)
         
         for acc_type, acc_val in accuracies.items():
-            metrics[f'{acc_type}_acc'].append(acc_val)
-        metrics['f1_score_weighted'].append(validation_f1_weighted)
-        metrics['f1_score_macro'].append(validation_f1_macro)
+            metrics[f'train_{acc_type}_acc'].append(acc_val)
+        metrics['train_original_f1_weighted'].append(train_f1_original_weighted)
+        metrics['train_original_f1_macro'].append(train_f1_original_macro)
         
         
         print(f'Epoch [{epoch}/{epochs}]')
@@ -271,6 +280,8 @@ def train() -> float:
         print(f'Training Frequency ACC[{accuracies["freq"]:.4f}]')
         print(f'Training Spatial ACC[{accuracies["spatial"]:.4f}]')
         print(f'Training Original ACC[{accuracies["original"]:.4f}]')
+        print(f'Training Original F1 Weighted [{train_f1_original_weighted:.4f}]')
+        print(f'Training Original F1 Macro [{train_f1_original_macro:.4f}]')
         print("----------------------------------------------")
         print(f'Validation Loss [{validation_epoch_loss:.4f}]')
         print(f'Validation ACC [{validation_current_acc:.4f}]')
