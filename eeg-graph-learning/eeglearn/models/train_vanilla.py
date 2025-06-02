@@ -206,8 +206,7 @@ def train() -> float:
             
             epoch_loss += loss.item()
 
-        validation_highest_acc, validation_current_acc, validation_epoch_loss,
-        validation_f1_weighted, validation_f1_macro = validate_model(
+        validation_highest_acc, validation_current_acc, validation_epoch_loss, validation_f1_weighted, validation_f1_macro = validate_model(
             net, validation_loader, encoder, validation_highest_acc, 
             best_validation_f1_score_macro,
             epoch, batch_size, lr, model_weights_dir, metrics_dir,
