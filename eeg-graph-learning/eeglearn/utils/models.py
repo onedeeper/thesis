@@ -22,6 +22,7 @@ from sklearn.metrics import f1_score
 from torch_geometric.loader import DataLoader
 from eeglearn.config import Config
 from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
+from eeglearn.models.AutoWeight import AutomaticWeightedLoss
 from eeglearn.features.graphs import Graphs
 import pickle
 
@@ -563,3 +564,87 @@ class BalancedGraphSampler(Sampler):
 
     def __len__(self):
         return self.num_nodes
+    
+def validate_self_supervised_model(net, validation_loaders: dict, epoch: int, 
+                                   batch_size: int, lr: float, model_weights_dir: Path, 
+                                   metrics_dir: Path, best_val_loss: float):
+    """Evaluate self-supervised model performance on validation data.
+    
+    Args:
+        net: Neural network model
+        validation_loaders: Dict with 'frequency' and 'spatial' validation loaders
+        epoch: Current epoch number
+        batch_size: Batch size for validation
+        lr: Learning rate used
+        model_weights_dir: Directory to save model weights
+        metrics_dir: Directory to save metrics
+        best_val_loss: Current best validation loss
+        
+    Returns:
+        Tuple of (best_val_loss, current_val_loss, val_freq_acc, val_spatial_acc, 
+                  val_freq_loss, val_spatial_loss, val_weighted_loss)
+    """
+    device = Config.device
+    criterion = nn.CrossEntropyLoss().to(device)
+    awl = AutomaticWeightedLoss(2)
+    
+    net.eval()
+    
+    val_epoch_weighted_loss = 0.0
+    val_epoch_loss_freq = 0.0
+    val_epoch_loss_spatial = 0.0
+    val_correct_pred_freq = 0
+    val_correct_pred_spatial = 0
+    total_val_samples = 0
+    
+    with torch.no_grad():
+        val_loader = zip(validation_loaders['frequency'], validation_loaders['spatial'])
+        
+        for ind, (freq_data, spatial_data) in enumerate(val_loader):
+            print(f"Batch size - Frequency: {freq_data.y.size(0)}, Spatial: {spatial_data.y.size(0)}")
+            freq_data, spatial_data = freq_data.to(device), spatial_data.to(device)
+            freq_logits, spatial_logits = net(freq_data, spatial_data)
+            
+            y_freq, y_spatial = freq_data.y, spatial_data.y
+            _, pred_freq = torch.max(freq_logits, dim=1)
+            _, pred_spatial = torch.max(spatial_logits, dim=1)
+            
+            val_correct_pred_freq += torch.sum(pred_freq == y_freq).item()
+            val_correct_pred_spatial += torch.sum(pred_spatial == y_spatial).item()
+            
+            val_loss_frequency = criterion(freq_logits, y_freq)
+            val_loss_spatial = criterion(spatial_logits, y_spatial)
+            val_weighted_loss = awl(val_loss_frequency, val_loss_spatial)
+            
+            val_epoch_weighted_loss += val_weighted_loss.item()
+            val_epoch_loss_freq += val_loss_frequency.item()
+            val_epoch_loss_spatial += val_loss_spatial.item()
+            
+            total_val_samples += y_freq.size(0)
+    
+    # Calculate averages
+    val_avg_weighted_loss = val_epoch_weighted_loss / (ind + 1)
+    val_avg_freq_loss = val_epoch_loss_freq / (ind + 1)
+    val_avg_spatial_loss = val_epoch_loss_spatial / (ind + 1)
+    val_freq_acc = val_correct_pred_freq / total_val_samples
+    val_spatial_acc = val_correct_pred_spatial / total_val_samples
+    
+    # Save best model based on validation loss
+    if val_avg_weighted_loss < best_val_loss:
+        best_val_loss = val_avg_weighted_loss
+        checkpoint = {
+            'epoch': epoch,
+            'model': net.state_dict(),
+            'val_weighted_loss': val_avg_weighted_loss,
+            'val_freq_loss': val_avg_freq_loss,
+            'val_spatial_loss': val_avg_spatial_loss,
+            'val_freq_acc': val_freq_acc,
+            'val_spatial_acc': val_spatial_acc
+        }
+        checkpoint_filename = get_experiment_filename(f"best_model_val_loss_{val_avg_weighted_loss:.4f}_epoch_{epoch}", "pt")
+        torch.save(checkpoint, model_weights_dir / checkpoint_filename)
+        print(f"🔥 New best model saved at epoch {epoch} with validation loss {val_avg_weighted_loss:.4f}")
+    
+    net.train()
+    return (best_val_loss, val_avg_weighted_loss, val_freq_acc, val_spatial_acc, 
+            val_avg_freq_loss, val_avg_spatial_loss, val_avg_weighted_loss)

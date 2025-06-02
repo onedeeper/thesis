@@ -6,80 +6,152 @@ This module handles data splitting, model training, and metrics tracking for
 both frequency and spatial graph representations.
 
 Functions:
-    split_data: Split participants into train/test/validation sets
     train: Train the self-supervised model and save metrics
 """
 
 import os
 from pathlib import Path
+from itertools import cycle
 
+import numpy as np
+import pandas as pd
 import torch
 from torch import nn
-from eeglearn.config import Config
-from eeglearn.models.model import SelfSupervisedTrain
-from eeglearn.features.graphs import Graphs
-from eeglearn.utils.models import get_experiment_filename
-
+from torch_geometric.data import Batch
 from sklearn.model_selection import train_test_split
-from AutoWeight import AutomaticWeightedLoss
-import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import f1_score
+
 from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping
+from AutoWeight import AutomaticWeightedLoss
 
-batch_size : int = Config.batch_size
-epochs : int = Config.epochs
-lr : float = Config.lr
-weight_decay : float = Config.weight_decay
-device : str = Config.device
-cleaned_data_path : Path = Config.cleaned_data_path
-energy_path : Path = Config.energy_path
-model_weights_dir : Path = Config.model_weights_dir / 'self_supervised'
-metrics_dir  : Path = Config.metrics_dir / 'self_supervised'
+from eeglearn.config import Config
+from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
+from eeglearn.models.model import SelfSupervisedTrain
+from eeglearn.features.graphs import Graphs
+from eeglearn.utils.models import (
+    split_data, create_graph_loaders, print_training_params,
+    setup_directories, setup_label_encoder, calculate_class_weights,
+    write_epoch_log, update_log, get_experiment_filename, validate_self_supervised_model
+)
 
-# architectural parameters
-drop_rate : float = Config.drop_rate
-linear_size : int = Config.linear_size
-gcn_out_size : int = Config.gcn_out_size
-K : int = Config.K
+testing_on_sample_data = Config.testing_on_sample_data
+device = Config.device
+num_workers = Config.num_workers
+drop_last = Config.drop_last
+skip_bads = Config.skip_bads
+project_root = Config.project_root
+data_path = Config.data_path
+cleaned_data_path = Config.cleaned_data_path
+energy_path = Config.energy_path
+model_weights_dir = Config.model_weights_dir / 'self_supervised'
+metrics_dir = Config.metrics_dir / 'self_supervised'
+ignore_replication_nans = True
+random_seed = Config.RANDOM_SEED
+main_classes = Config.main_classes
+optuna = Config.optuna
 
-def split_data() -> None:
-    """Split participants into train, validation, and test sets.
 
-    Returns:
-        dict: Dictionary with keys 'train', 'valid', 'test' containing
-             lists of participant IDs for each set
-    """
-
-    all_participants = cleaned_data_path
-    N = os.listdir(all_participants)
-    train, test_valid = train_test_split(N, test_size=0.2, random_state=42)
-    test, valid = train_test_split(test_valid, test_size=0.5, random_state=42)
-
-    data_dict = {
-        "train" : train,
-        "test" : test,
-        "valid" : valid
-    }
-
-    return data_dict
-
-def train() -> None:
+def train() -> float:
     """Train the self-supervised model on frequency and spatial graphs.
     
-    Loads data, trains the model with both frequency and spatial losses,
-    tracks performance metrics, and saves model weights at specified epochs.
+    Returns:
+        float: Best validation loss achieved during training
     """
-    print(f"⚠️ Saving weights to {model_weights_dir}")
-    if not os.path.exists(model_weights_dir):
-        model_weights_dir.mkdir(exist_ok=True, parents=True)
-
-    print(f"⚠️ Saving metrics to {metrics_dir}")
-    if not os.path.exists(metrics_dir):
-        metrics_dir.mkdir(exist_ok=True, parents=True)
+    batch_size = Config.batch_size
+    epochs = Config.epochs
+    lr = Config.lr
+    weight_decay = Config.weight_decay
+    drop_rate = Config.drop_rate
+    gcn_out_size = Config.gcn_out_size
+    linear_size = Config.linear_size
+    K = Config.K
+    stop_at = Config.stop_at
     
-    # Add stop_at from Config
-    stop_at: int = Config.stop_at
+    print_training_params()
+    setup_directories(model_weights_dir, metrics_dir)
+    
+    # Check and print device information
+    if torch.cuda.is_available():
+        print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        print("⚠️ Using CPU for training")
+    print(f"📱 Device: {device}")
 
+    # Note: For self-supervised pretext tasks, we don't need label encoder or class weights
+    # But we use the same data split as other training approaches
+    if Config.load_data_split_from != "":
+        print(f"⚠️  Data split loaded from {data_path / Config.load_data_split_from}")
+        split = torch.load(data_path / Config.load_data_split_from)
+    else:
+        split = split_data()
+    
+    train_participants = split['train']
+    validation_participants = split['valid']
+    test_participants = split['test']
+    
+    print("⚠️  Participants split:")
+    for split_name, participants in [("train", train_participants), 
+                                     ("valid", validation_participants),
+                                     ("test", test_participants)]:
+        print(f"n {split_name}: {len(participants)}")
+
+    print("🔄  Building graphs.")
+    # Create training loaders for frequency and spatial permutations
+    train_loaders = create_graph_loaders(
+        participants=train_participants,
+        encoder=None,  # No encoder needed for pretext tasks
+        batch_size=batch_size,
+        data_split="train",
+        perm_types=["frequency", "spatial"],
+        drop_last=True
+    )
+    
+    # Create validation loaders
+    validation_loaders = create_graph_loaders(
+        participants=validation_participants,
+        encoder=None,  # No encoder needed for pretext tasks
+        batch_size=batch_size,
+        data_split="validation", 
+        perm_types=["frequency", "spatial"],
+        drop_last= testing_on_sample_data
+    )
+
+    # Create validation loaders
+    test_loaders = create_graph_loaders(
+        participants=test_participants,
+        encoder=None,  # No encoder needed for pretext tasks
+        batch_size=batch_size,
+        data_split="test", 
+        perm_types=["frequency", "spatial"],
+        drop_last= testing_on_sample_data
+    )
+    
+    print("\n📊 Graph Loader Information:")
+    print(f"  • Training loaders:")
+    for loader_type, loader in train_loaders.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    
+    print(f"\n  • Validation loaders:")
+    for loader_type, loader in validation_loaders.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    print()
+
+    print(f"\n  • Test loaders:")
+    for loader_type, loader in test_loaders.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    print()
+    # Initialize metrics dictionary to match train_jointly structure
+    metrics = {
+        'epoch': [], 'train_weighted_loss': [], 'train_freq_loss': [], 'train_spatial_loss': [],
+        'train_freq_acc': [], 'train_spatial_acc': [],
+        'validation_weighted_loss': [], 'validation_freq_loss': [], 'validation_spatial_loss': [],
+        'validation_freq_acc': [], 'validation_spatial_acc': []
+    }
+
+    print(f"⚠️  Training for epochs: {epochs}")
+    
     awl = AutomaticWeightedLoss(2)
     net = SelfSupervisedTrain(
         inchannel=5, 
@@ -91,159 +163,129 @@ def train() -> None:
         HF=120, 
         HS=128
     ).to(device)
-    print(net)
-    # check the device
-    print(f"⚠️ Training on device : {device}")
-    criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(net.parameters(), lr = lr,
-                                 weight_decay  = weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-                                                           mode = "min",
-                                                           factor = 0.1,
-                                                           patience= 5,
-                                                           threshold = 0.0001,
-                                                           threshold_mode = 'rel',
-                                                           cooldown = 0,
-                                                           min_lr = 0,
-                                                           eps = 1e-8)
     
-    trainer = Engine(lambda engine, batch: batch) # Dummy engine for early stopping
+    print(net)
+    print(f"⚠️ Training on device : {device}")
+    
+    criterion = nn.CrossEntropyLoss().to(device)
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,
+        threshold_mode='rel', cooldown=1, min_lr=0, eps=1e-8
+    )
+    
+    # Setup early stopping based on validation loss
+    trainer = Engine(lambda engine, batch: batch)
     early_stopping = EarlyStopping(
         patience=stop_at,
-        score_function=lambda engine: -engine.state.metrics['val_loss'], # Using weighted loss as proxy
+        score_function=lambda engine: -engine.state.metrics['val_loss'],  # Negative because we want to minimize
         trainer=trainer
     )
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
-
-    split : dict[str,list[str]] = split_data()
-    train_participants = split['train']
-    validation_participants = split['valid']
-    test_participants = split['test']
-    print("⚠️ Participants split..")
-    print(f"n train : {len(train_participants)}")
-    print(f"n valid : {len(validation_participants)}")
-    print(f"n test : {len(test_participants)}")
-
-    train_freq_data = [data for participant in train_participants
-                       for data in os.listdir(energy_path / "frequency_perms")
-                       if participant in data] 
     
-    train_spatial_data = [data for participant in train_participants
-                       for data in os.listdir(energy_path / "spatial_perms")
-                       if participant in data]
-    
-    spatial_graphs = Graphs(perm_type = "spatial",
-                                energy_path= energy_path,
-                                distance="ellipsoid",
-                                cleaned_data_path=cleaned_data_path,
-                                batch_size=batch_size,
-                                n_neighbors=3,
-                                shuffle=True,
-                                drop_last=True,
-                                n_workers=7)
-    
-    frequency_graphs = Graphs(perm_type = "frequency",
-                            energy_path= energy_path,
-                            distance="ellipsoid",
-                            cleaned_data_path=cleaned_data_path,
-                            batch_size=batch_size,
-                            n_neighbors=3,
-                            shuffle=True,
-                            drop_last=True,
-                            n_workers=7)
-    
-    metrics : dict[str,list] = {
-        'epoch' : [],
-        'weighted_loss' : [],
-        'freq_loss' : [],
-        'spatial_loss' : [],
-        'freq_acc' : [],
-        'spatial_acc' : []
-    }
-    spatial_graph_loader = spatial_graphs.get_graphs(files_to_load=train_spatial_data)
-    frequency_graph_loader = frequency_graphs.get_graphs(files_to_load=train_freq_data)
-
-    print(f"⚠️  Training for epochs: {epochs}")
-    
-    best_loss = float('inf')
+    best_val_loss = float('inf')
 
     for epoch in range(epochs):
-        net.train() # Set model to training mode
-        loader = zip(frequency_graph_loader, spatial_graph_loader)
-        epoch_weighted_loss = 0.0
-        epoch_loss_freq = 0.0
-        epoch_loss_spatial = 0.0
-        correct_pred_freq = 0
-        correct_pred_spatial = 0
+        net.train()
+        
+        # Training loop
+        train_loader = zip(train_loaders['frequency'], train_loaders['spatial'])
+        train_epoch_weighted_loss = 0.0
+        train_epoch_loss_freq = 0.0
+        train_epoch_loss_spatial = 0.0
+        train_correct_pred_freq = 0
+        train_correct_pred_spatial = 0
+        total_train_samples = 0
 
-        for ind, batch in enumerate(loader):
-            freq_data, spatial_data = batch
-            #print(f"batch shape : {freq_data}")
+        for ind, (freq_data, spatial_data) in enumerate(train_loader):
             freq_data, spatial_data = freq_data.to(device), spatial_data.to(device)
-            freq, spatial, = net(freq_data,spatial_data)
+            freq_logits, spatial_logits = net(freq_data, spatial_data)
 
             y_freq, y_spatial = freq_data.y, spatial_data.y
-            _, pred_freq = torch.max(freq, dim = 1)
-            _, pred_spatial = torch.max(spatial, dim = 1)
+            _, pred_freq = torch.max(freq_logits, dim=1)
+            _, pred_spatial = torch.max(spatial_logits, dim=1)
 
-            correct_pred_freq += sum([1 for a,b in zip(pred_freq,y_freq) if a == b])
-            correct_pred_spatial += sum([1 for a,b in zip(pred_spatial,y_spatial)\
-                                         if a == b])
+            train_correct_pred_freq += torch.sum(pred_freq == y_freq).item()
+            train_correct_pred_spatial += torch.sum(pred_spatial == y_spatial).item()
 
-            loss_frequency = criterion(freq, y_freq)
-            loss_spatial = criterion(spatial, y_spatial)
-
-            weighted_loss = awl(loss_frequency,loss_spatial)
+            train_loss_frequency = criterion(freq_logits, y_freq)
+            train_loss_spatial = criterion(spatial_logits, y_spatial)
+            train_weighted_loss = awl(train_loss_frequency, train_loss_spatial)
 
             optimizer.zero_grad()
-            weighted_loss.backward()
+            train_weighted_loss.backward()
             optimizer.step()
-            epoch_weighted_loss += float(weighted_loss.item())
-            epoch_loss_freq += float(loss_frequency.item())
-            epoch_loss_spatial += float(loss_spatial.item())
+            
+            train_epoch_weighted_loss += train_weighted_loss.item()
+            train_epoch_loss_freq += train_loss_frequency.item()
+            train_epoch_loss_spatial += train_loss_spatial.item()
+            total_train_samples += y_freq.size(0)
 
-        scheduler.step(epoch_weighted_loss)
-        denominator = (ind+1)*batch_size
+        # Calculate training averages
+        train_avg_weighted_loss = train_epoch_weighted_loss / (ind + 1)
+        train_avg_freq_loss = train_epoch_loss_freq / (ind + 1)
+        train_avg_spatial_loss = train_epoch_loss_spatial / (ind + 1)
+        train_freq_acc = train_correct_pred_freq / total_train_samples
+        train_spatial_acc = train_correct_pred_spatial / total_train_samples
 
-        #epoch metrics
-        epoch_avg_weighted_loss = epoch_weighted_loss/(ind+1)
-        epoch_avg_freq_loss = epoch_loss_freq/(ind+1)
-        epoch_avg_spatial_loss = epoch_loss_spatial/(ind+1)
-        freq_acc = correct_pred_freq/denominator
-        spatial_acc = correct_pred_spatial/denominator
+        # Validation step
+        (best_val_loss, val_weighted_loss, val_freq_acc, val_spatial_acc, 
+         val_freq_loss, val_spatial_loss, _) = validate_self_supervised_model(
+            net, validation_loaders, epoch, batch_size, lr, 
+            model_weights_dir, metrics_dir, best_val_loss
+        )
+
+        # Update scheduler with validation loss
+        scheduler.step(val_weighted_loss)
         
-        # Save weights only if performance improves
-        if epoch_avg_weighted_loss < best_loss:
-            best_loss = epoch_avg_weighted_loss
-            model_filename = get_experiment_filename(f"best_model_epoch_{epoch}", "pt")
-            torch.save(net.state_dict(), model_weights_dir / model_filename)
-            print(f"🔥 New best model saved at epoch {epoch}")
-        
-        trainer.state.metrics = {'val_loss': epoch_avg_weighted_loss} # Update engine state for early stopping
+        # Update early stopping engine
+        trainer.state.metrics = {'val_loss': val_weighted_loss}
         trainer.fire_event(Events.EPOCH_COMPLETED)
-
+        
         if trainer.should_terminate:
             print(f"🟢  Early stopping triggered at epoch {epoch}")
             break
-    
+
+        # Log epoch information  
+        write_epoch_log(epoch, batch_size, lr, val_freq_acc, metrics_dir)
+
         # Save metrics
         metrics['epoch'].append(epoch)
-        metrics['weighted_loss'].append(epoch_avg_weighted_loss)
-        metrics['freq_loss'].append(epoch_avg_freq_loss)
-        metrics['spatial_loss'].append(epoch_avg_spatial_loss)
-        metrics['freq_acc'].append(freq_acc)
-        metrics['spatial_acc'].append(spatial_acc)
+        metrics['train_weighted_loss'].append(train_avg_weighted_loss)
+        metrics['train_freq_loss'].append(train_avg_freq_loss)
+        metrics['train_spatial_loss'].append(train_avg_spatial_loss)
+        metrics['train_freq_acc'].append(train_freq_acc)
+        metrics['train_spatial_acc'].append(train_spatial_acc)
+        metrics['validation_weighted_loss'].append(val_weighted_loss)
+        metrics['validation_freq_loss'].append(val_freq_loss)
+        metrics['validation_spatial_loss'].append(val_spatial_loss)
+        metrics['validation_freq_acc'].append(val_freq_acc)
+        metrics['validation_spatial_acc'].append(val_spatial_acc)
 
-        print(f'Epoch [{epoch}/{epochs}] \n')
-        print(f'Weighted loss [{epoch_avg_weighted_loss:.4f}]  ')
-        print(f'Frequency loss[{epoch_avg_freq_loss:.4f}]')
-        print(f'Spatial loss[{epoch_avg_spatial_loss:.4f}]')
-        print('ACC@1:')
-        print(f'Frequency ACC[{freq_acc:.4f}]')
-        print(f'Spatial ACC[{spatial_acc:.4f}]')
+        # Print epoch results
+        print(f'Epoch [{epoch}/{epochs}]')
+        print(f'Training Weighted loss [{train_avg_weighted_loss:.4f}]')
+        print(f'Training Frequency loss[{train_avg_freq_loss:.4f}]')
+        print(f'Training Spatial loss[{train_avg_spatial_loss:.4f}]')
+        print('Training ACC@1:')
+        print(f'Training Frequency ACC[{train_freq_acc:.4f}]')
+        print(f'Training Spatial ACC[{train_spatial_acc:.4f}]')
         print("----------------------------------------------")
+        print(f'Validation Weighted loss [{val_weighted_loss:.4f}]')
+        print(f'Validation Frequency loss[{val_freq_loss:.4f}]')
+        print(f'Validation Spatial loss[{val_spatial_loss:.4f}]')
+        print('Validation ACC@1:')
+        print(f'Validation Frequency ACC[{val_freq_acc:.4f}]')
+        print(f'Validation Spatial ACC[{val_spatial_acc:.4f}]')
+        print(f'Best Validation Loss [{best_val_loss:.4f}]')
+        print("==============================================")
 
-    metrics_filename = get_experiment_filename("training_metrics", "csv")
+    # Save metrics
+    metrics_filename = get_experiment_filename("training_metrics_self_supervised", "csv")
     pd.DataFrame(metrics).to_csv(metrics_dir / metrics_filename, index=False)
+    
+    return best_val_loss
+
+
 if __name__ == "__main__":
     train()
