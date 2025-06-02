@@ -601,7 +601,6 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
         val_loader = zip(validation_loaders['frequency'], validation_loaders['spatial'])
         
         for ind, (freq_data, spatial_data) in enumerate(val_loader):
-            print(f"Batch size - Frequency: {freq_data.y.size(0)}, Spatial: {spatial_data.y.size(0)}")
             freq_data, spatial_data = freq_data.to(device), spatial_data.to(device)
             freq_logits, spatial_logits = net(freq_data, spatial_data)
             

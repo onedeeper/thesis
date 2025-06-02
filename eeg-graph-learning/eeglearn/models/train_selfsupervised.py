@@ -105,7 +105,7 @@ def train() -> float:
         batch_size=batch_size,
         data_split="train",
         perm_types=["frequency", "spatial"],
-        drop_last=True
+        drop_last=drop_last
     )
     
     # Create validation loaders
@@ -115,7 +115,7 @@ def train() -> float:
         batch_size=batch_size,
         data_split="validation", 
         perm_types=["frequency", "spatial"],
-        drop_last= testing_on_sample_data
+        drop_last= drop_last
     )
 
     # Create validation loaders
@@ -125,7 +125,7 @@ def train() -> float:
         batch_size=batch_size,
         data_split="test", 
         perm_types=["frequency", "spatial"],
-        drop_last= testing_on_sample_data
+        drop_last= drop_last
     )
     
     print("\n📊 Graph Loader Information:")
