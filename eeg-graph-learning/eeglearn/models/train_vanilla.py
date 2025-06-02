@@ -72,11 +72,23 @@ def train() -> float:
     print_training_params()
     setup_directories(model_weights_dir, metrics_dir)
     
+    # Check and print device information
+    if torch.cuda.is_available():
+        print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        print("⚠️ Using CPU for training")
+    print(f"📱 Device: {device}")
+
     encoder, n_classes = \
         setup_label_encoder(ignore_replication_nans=ignore_replication_nans)
     all_psych_labels = get_labels_dict()
     
-    split = split_data()
+    if Config.load_data_split_from != "":
+        print(f"⚠️  Data split loaded from {data_path / Config.load_data_split_from}")
+        split = torch.load(data_path /  Config.load_data_split_from)
+    else:
+        split = split_data()
+        
     train_participants = split['train']
     validation_participants = split['valid']
     test_participants = split['test']
@@ -99,6 +111,37 @@ def train() -> float:
                                    data_split="train",
                                    perm_types=[None],
                                    drop_last=True)
+
+    validation_loader = create_graph_loaders(
+            participants=validation_participants,
+            encoder=encoder,
+            batch_size=batch_size,
+            data_split="validation",
+            perm_types=[None],
+            drop_last=not Config.testing_on_sample_data)
+
+    test_loader  = create_graph_loaders(participants=test_participants, 
+                                   encoder=encoder, 
+                                   batch_size=batch_size,
+                                   data_split="test",
+                                   perm_types=[None],
+                                   drop_last=drop_last)
+                            
+
+    print("\n📊 Graph Loader Information:")
+    print(f"\n  • Training loaders:")
+    for loader_type, loader in train_loader.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    
+    print(f"\n  • Validation loader:")
+    for loader_type, loader in validation_loader.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    
+    print(f"\n  • Test loader:")
+    for loader_type, loader in test_loader.items():
+        print(f"    - {loader_type}: {len(loader)} batches")
+    print()
+
     metrics = {
         'epoch': [], 
         'train_loss': [], 'train_acc': [], 
@@ -130,7 +173,7 @@ def train() -> float:
     )
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
     
-    highest_acc = 0.0
+    validation_highest_acc = 0.0
     best_validation_f1_score_macro = 0.0
     best_validation_f1_score_weighted = 0.0
     
@@ -162,37 +205,30 @@ def train() -> float:
             optimizer.step()
             
             epoch_loss += loss.item()
-        
-        validation_participants_loader = create_graph_loaders(
-            participants=validation_participants,
-            encoder=encoder,
-            batch_size=batch_size,
-            data_split="validation",
-            perm_types=[None],
-            drop_last=not Config.testing_on_sample_data)
 
-        highest_acc, current_val_acc, val_epoch_loss, val_f1_weighted, val_f1_macro = validate_model(
-            net, validation_participants_loader, encoder, highest_acc, 
+        validation_highest_acc, validation_current_acc, validation_epoch_loss,
+         validation_f1_weighted, validation_f1_macro = validate_model(
+            net, validation_loader, encoder, validation_highest_acc, 
             best_validation_f1_score_macro,
             epoch, batch_size, lr, model_weights_dir, metrics_dir,
             testing_on_sample_data
         )
         
-        if val_f1_macro > best_validation_f1_score_macro:
-            best_validation_f1_score_macro = val_f1_macro
+        if validation_f1_macro > best_validation_f1_score_macro:
+            best_validation_f1_score_macro = validation_f1_macro
         
-        if val_f1_weighted > best_validation_f1_score_weighted:
-            best_validation_f1_score_weighted = val_f1_weighted
+        if validation_f1_weighted > best_validation_f1_score_weighted:
+            best_validation_f1_score_weighted = validation_f1_weighted
 
-        trainer.state.metrics = {'val_macro_f1': val_f1_macro}
+        trainer.state.metrics = {'val_macro_f1': validation_f1_macro}
         trainer.fire_event(Events.EPOCH_COMPLETED)
         
         if trainer.should_terminate:
             print(f"🟢  Early stopping triggered at epoch {epoch}")
             break
         
-        write_epoch_log(epoch, batch_size, lr, current_val_acc, metrics_dir)
-        scheduler.step(val_epoch_loss)
+        write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)
+        scheduler.step(validation_epoch_loss)
         
         avg_train_loss = epoch_loss / (ind + 1)
         train_accuracy = correct_predictions / total_train_samples
@@ -206,10 +242,10 @@ def train() -> float:
         metrics['train_f1_weighted'].append(train_f1_weighted)
         metrics['train_f1_macro'].append(train_f1_macro)
         
-        metrics['validation_loss'].append(val_epoch_loss)
-        metrics['validation_acc'].append(current_val_acc)
-        metrics['validation_f1_weighted'].append(val_f1_weighted)
-        metrics['validation_f1_macro'].append(val_f1_macro)
+        metrics['validation_loss'].append(validation_epoch_loss)
+        metrics['validation_acc'].append(validation_current_acc)
+        metrics['validation_f1_weighted'].append(validation_f1_weighted)
+        metrics['validation_f1_macro'].append(validation_f1_macro)
         
         if epoch % 1 == 0:
             print(f'\n## Epoch [{epoch}/{epochs}] ##')
@@ -218,11 +254,11 @@ def train() -> float:
             print(f'Training F1 Weighted: {train_f1_weighted:.4f}')
             print(f'Training F1 Macro: {train_f1_macro:.4f}')
             print("----------------------------------------------")
-            print(f'Validation Loss: {val_epoch_loss:.4f}')
-            print(f'Validation ACC: {current_val_acc:.4f}')
-            print(f'Validation F1 Weighted: {val_f1_weighted:.4f}')
-            print(f'Validation F1 Macro: {val_f1_macro:.4f}')
-            print(f'Best Validation ACC: {highest_acc:.4f}')
+            print(f'Validation Loss: {validation_epoch_loss:.4f}')
+            print(f'Validation ACC: {validation_current_acc:.4f}')
+            print(f'Validation F1 Weighted: {validation_f1_weighted:.4f}')
+            print(f'Validation F1 Macro: {validation_f1_macro:.4f}')
+            print(f'Best Validation ACC: {validation_highest_acc:.4f}')
             print(f'Best Validation F1 Weighted: {best_validation_f1_score_weighted:.4f}')
             print(f'Best Validation F1 Macro: {best_validation_f1_score_macro:.4f}')
             print("==============================================")

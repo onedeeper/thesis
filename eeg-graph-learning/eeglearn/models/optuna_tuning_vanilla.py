@@ -74,7 +74,7 @@ def objective(trial):
     # TODO: Implement participant subset functionality if needed for multi-fidelity optimization
     
     # Development settings
-    Config.experiment_name = f"optuna_all_data{timestamp}_pid{pid}"
+    Config.experiment_name = f"optuna_all_data_vanilla_{timestamp}_pid{pid}"
     Config.optuna = True
     Config.load_data_split_from = "all_data_split_0.8.train_test_valid_split.pt"
 
@@ -108,7 +108,7 @@ def objective(trial):
     Config.weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
     Config.batch_size = trial.suggest_categorical("batch_size", [128, 256])
     
-    trainer = importlib.import_module("eeglearn.models.train_jointly")
+    trainer = importlib.import_module("eeglearn.models.train_vanilla")
     val_metric = trainer.train()   
     return val_metric
 

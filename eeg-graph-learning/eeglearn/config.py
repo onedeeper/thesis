@@ -18,24 +18,24 @@ class Config:
     """
 
     # Development settings
-    experiment_name = "all_data_split"
+    experiment_name = "all_data_class_weighting_vanilla"
     optuna :bool = False
-    load_data_split_from  = ""
+    load_data_split_from  = "all_data_split_0.8.train_test_valid_split.pt"
     # Reproducibility settings
     RANDOM_SEED = 42
     DETERMINISTIC = True
 
     # Training hyperparameters
-    epochs = 1
-    batch_size = 32 
-    lr = 0.001  # original : 0.01
-    weight_decay = 8e-5
-    drop_rate = 0.25 
+    epochs = 100
+    batch_size = 128
+    lr = 0.008346111817953888
+    weight_decay = 3.9063290667352555e-06
+    drop_rate = 0.10027792571799715
     stop_at = 10
 
     # Data selection
     testing_on_sample_data = False
-    use_sampler_for_data_loading = True
+    use_sampler_for_data_loading = False
     p_train = 0.8
     sample_proportion_of_data = 1.0
     use_tuur_smolder_data = False
@@ -48,11 +48,11 @@ class Config:
         main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
     # Model architecture parameters
     gcn_out_size = 32
-    linear_size = 512
-    K = 2  # Order of Chebyshev polynomials
+    linear_size = 256
+    K = 3
 
     # Hardware and processing settings
-    num_workers = 6
+    num_workers = 8
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
     
