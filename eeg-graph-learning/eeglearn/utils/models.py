@@ -583,6 +583,9 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
     Returns:
         Tuple of (best_val_loss, current_val_loss, val_freq_acc, val_spatial_acc, 
                   val_freq_loss, val_spatial_loss, val_weighted_loss)
+    
+    WRITTEN BY AI 
+    INSPECTED AND VERIFIED BY AUTHOR
     """
     device = Config.device
     criterion = nn.CrossEntropyLoss().to(device)
