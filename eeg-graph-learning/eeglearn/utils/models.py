@@ -211,22 +211,12 @@ def create_graph_loaders(data_split: str, encoder: LabelEncoder,
                                         data_split=data_split)
     
     for graph_type, graphs in graph_lists.items():
-        if data_split == "train" and graph_type == "original" and \
-                            Config.use_sampler_for_data_loading:
-            print("⚠️  Using balanced sampler")
-            sampler = BalancedGraphSampler(graphs)
-            loader = DataLoader(graphs,
-                                    batch_size=batch_size,      
-                                    sampler=sampler,        
-                                    num_workers=Config.num_workers,
-                                    drop_last=drop_last)
-        else:
-            loader = DataLoader(dataset=graphs,
-                                batch_size=batch_size,
-                                shuffle=True,
-                                num_workers=Config.num_workers,
-                                drop_last=drop_last,
-                                )
+        loader = DataLoader(dataset=graphs,
+                            batch_size=batch_size,
+                            shuffle=True,
+                            num_workers=Config.num_workers,
+                            drop_last=drop_last,
+                            )
         loaders[graph_type] = loader
     return loaders
 

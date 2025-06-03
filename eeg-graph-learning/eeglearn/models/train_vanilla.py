@@ -159,6 +159,8 @@ def train() -> float:
     ).to(device)
     
     criterion = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(device)
+    if not Config.use_class_weighting:
+        criterion = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,

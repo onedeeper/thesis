@@ -35,7 +35,7 @@ class Config:
 
     # Data selection
     testing_on_sample_data = True
-    use_sampler_for_data_loading = False
+    use_class_weighting = False
     p_train = 0.4
     sample_proportion_of_data = 1.0
     use_tuur_smolder_data = False

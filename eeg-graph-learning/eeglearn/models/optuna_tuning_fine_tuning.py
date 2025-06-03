@@ -60,7 +60,7 @@ def objective(trial):
     Config.stop_at = 5
 
     # Data selection
-    Config.use_sampler_for_data_loading = False
+    Config.use_class_weighting = False
     Config.p_train = 0.5
     Config.sample_proportion_of_data = 1.0
     Config.use_tuur_smolder_data = False
