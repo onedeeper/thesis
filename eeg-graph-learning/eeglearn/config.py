@@ -18,15 +18,15 @@ class Config:
     """
 
     # Development settings
-    experiment_name = "all_data_class_weighting_vanilla"
+    experiment_name = "test_self_supervised_2222"
     optuna :bool = False
-    load_data_split_from  = "all_data_split_0.8.train_test_valid_split.pt"
+    load_data_split_from  = "all_data_split_train_test_valid_split.pt"
     # Reproducibility settings
     RANDOM_SEED = 42
     DETERMINISTIC = True
 
     # Training hyperparameters
-    epochs = 100
+    epochs = 1
     batch_size = 128
     lr = 0.008346111817953888
     weight_decay = 3.9063290667352555e-06
@@ -34,9 +34,9 @@ class Config:
     stop_at = 10
 
     # Data selection
-    testing_on_sample_data = False
+    testing_on_sample_data = True
     use_sampler_for_data_loading = False
-    p_train = 0.8
+    p_train = 0.4
     sample_proportion_of_data = 1.0
     use_tuur_smolder_data = False
     drop_last = True
@@ -46,12 +46,19 @@ class Config:
     if testing_on_sample_data:
         use_stratify = False
         main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
+
     # Model architecture parameters
     gcn_out_size = 32
     linear_size = 256
     K = 3
-
-    # Hardware and processing settings
+    
+    # for fine tuning.
+    pretrained_weights_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/self_supervised/test_self_supervised_2222_best_model_val_loss_7.2698_epoch_0.pt"
+    pretrained_gcn_out_size = 32  # Example: Must match your actual SSL model
+    pretrained_k = 3              # Example: Must match your actual SSL model
+    pretrained_linear_size = 256  # Example: Must match your actual SSL model's HF/HS linear_size
+    pretrained_drop_rate = 0.10027792571799715    # Example: Must match your actual SSL model's HF/HS drop_rate
+    
     num_workers = 8
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
                            if torch.backends.mps.is_available() else 'cpu')
