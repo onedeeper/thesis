@@ -18,7 +18,7 @@ class Config:
     """
 
     # Development settings
-    experiment_name = "tuur_vanilla"
+    experiment_name = "tuur_finetuned"
     optuna :bool = False
     load_data_split_from  = "turr_all_data_train_test_valid_split.pt"
     # Reproducibility settings
@@ -27,10 +27,10 @@ class Config:
 
     # Training hyperparameters
     epochs = 100
-    batch_size = 128
-    lr = 0.0029199817361526665
-    weight_decay = 3.455510901178435e-05
-    drop_rate = 0.15154331681957503
+    batch_size = 256
+    lr = 0.0016898579982266685
+    weight_decay = 0.0005931173538055033
+    drop_rate = 0.1360323026782416
     stop_at = 10
 
     # Data selection
@@ -49,15 +49,15 @@ class Config:
 
     # Model architecture parameters
     gcn_out_size = 64
-    linear_size =  1024
+    linear_size =  512
     K = 1
     
     # for fine tuning.
-    pretrained_weights_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/self_supervised/test_self_supervised_2222_best_model_val_loss_7.2698_epoch_0.pt"
-    pretrained_gcn_out_size = 32  # Example: Must match your actual SSL model
-    pretrained_k = 3              # Example: Must match your actual SSL model
-    pretrained_linear_size = 256  # Example: Must match your actual SSL model's HF/HS linear_size
-    pretrained_drop_rate = 0.10027792571799715    # Example: Must match your actual SSL model's HF/HS drop_rate
+    pretrained_weights_path = "/mnt/disk2/thesis/eeg-graph-learning/data/weights/self_supervised/tuur_data/tuur_data_self_supervised_best_model_val_loss_1.6647_epoch_25.pt"
+    pretrained_gcn_out_size = 64  # Example: Must match your actual SSL model
+    pretrained_k = 1              # Example: Must match your actual SSL model
+    pretrained_linear_size = 512  # Example: Must match your actual SSL model's HF/HS linear_size
+    pretrained_drop_rate = 0.20306923446428116    # Example: Must match your actual SSL model's HF/HS drop_rate
     
     num_workers = 8
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\

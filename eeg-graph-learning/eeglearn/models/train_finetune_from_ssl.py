@@ -113,14 +113,14 @@ def train_classification():
     # Config
 
     device = Config.device
-    batch_size = Config.batch_size
+    batch_size = Config.batch_size # <-- fine tuned
     epochs = Config.epochs
     stop_at = Config.stop_at
-    
-    lr = Config.lr 
-    weight_decay = Config.weight_decay
-    hc_drop_rate = Config.drop_rate        
-    hc_linear_size = Config.linear_size 
+     
+    lr = Config.lr  # <-- fine tuned
+    weight_decay = Config.weight_decay # <-- fine tuned
+    hc_drop_rate = Config.drop_rate    # <-- fine tuned    
+    hc_linear_size = Config.linear_size # <-- fine tuned
     pretrained_weights_path = Config.pretrained_weights_path
     model_weights_dir = Config.model_weights_dir / "fine_tune"
     model_metrics_dir = Config.metrics_dir / "fine_tune"
@@ -219,6 +219,8 @@ def train_classification():
 
     # Training setup
     criterion = nn.CrossEntropyLoss(weight =rescaled_class_weights).to(device)
+    if not Config.use_class_weighting:
+        criterion = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,
