@@ -47,23 +47,23 @@ def objective(trial):
         float: Validation macro F1 score to maximize
     """
     # Development settings
-    Config.experiment_name = f"test_optuna_finetune_{timestamp}_pid{pid}"
+    Config.experiment_name = f"tuur_optuna_finetune_{timestamp}_pid{pid}"
     Config.optuna = True
-    Config.load_data_split_from = "all_data_split_train_test_valid_split.pt"
+    Config.load_data_split_from = "turr_all_data_train_test_valid_split.pt"
 
     # Reproducibility settings
     Config.RANDOM_SEED = 42
     Config.DETERMINISTIC = True
 
     # Training hyperparameters
-    Config.epochs = 1  # Cap epochs for faster hyperparameter search
+    Config.epochs = 15  # Cap epochs for faster hyperparameter search
     Config.stop_at = 5
 
     # Data selection
     Config.use_class_weighting = False
-    Config.p_train = 0.5
+    Config.p_train = 0.8
     Config.sample_proportion_of_data = 1.0
-    Config.use_tuur_smolder_data = False
+    Config.use_tuur_smolder_data = True
     Config.drop_last = True
     Config.skip_bads = True
     Config.main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
@@ -71,6 +71,7 @@ def objective(trial):
     Config.testing_on_sample_data = True
     
     # Fixed architecture parameters for the pre-trained SSL model parts (GCN, HF, HS)
+    Config.pretrained_weights_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/self_supervised/test_self_supervised_2222_best_model_val_loss_7.2698_epoch_0.pt"
     Config.pretrained_gcn_out_size = 32  # Example: Must match your actual SSL model
     Config.pretrained_k = 3              # Example: Must match your actual SSL model
     Config.pretrained_linear_size = 256  # Example: Must match your actual SSL model's HF/HS linear_size
