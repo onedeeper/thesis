@@ -18,27 +18,27 @@ class Config:
     """
 
     # Development settings
-    experiment_name = "test_self_supervised_2222"
+    experiment_name = "tuur_vanilla"
     optuna :bool = False
-    load_data_split_from  = "all_data_split_train_test_valid_split.pt"
+    load_data_split_from  = "turr_all_data_train_test_valid_split.pt"
     # Reproducibility settings
     RANDOM_SEED = 42
     DETERMINISTIC = True
 
     # Training hyperparameters
-    epochs = 1
+    epochs = 100
     batch_size = 128
-    lr = 0.008346111817953888
-    weight_decay = 3.9063290667352555e-06
-    drop_rate = 0.10027792571799715
+    lr = 0.0029199817361526665
+    weight_decay = 3.455510901178435e-05
+    drop_rate = 0.15154331681957503
     stop_at = 10
 
     # Data selection
-    testing_on_sample_data = True
+    testing_on_sample_data = False
     use_class_weighting = False
-    p_train = 0.4
+    p_train = 0.8
     sample_proportion_of_data = 1.0
-    use_tuur_smolder_data = False
+    use_tuur_smolder_data = True
     drop_last = True
     skip_bads = True
     main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
@@ -48,9 +48,9 @@ class Config:
         main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
 
     # Model architecture parameters
-    gcn_out_size = 32
-    linear_size = 256
-    K = 3
+    gcn_out_size = 64
+    linear_size =  1024
+    K = 1
     
     # for fine tuning.
     pretrained_weights_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/self_supervised/test_self_supervised_2222_best_model_val_loss_7.2698_epoch_0.pt"

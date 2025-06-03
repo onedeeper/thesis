@@ -71,10 +71,10 @@ def objective(trial):
     Config.testing_on_sample_data = True
     
     # Fixed architecture parameters for the pre-trained SSL model parts (GCN, HF, HS)
-    Config.PRETRAINED_GCN_OUT_SIZE = 32  # Example: Must match your actual SSL model
-    Config.PRETRAINED_K = 3              # Example: Must match your actual SSL model
-    Config.PRETRAINED_LINEAR_SIZE = 256  # Example: Must match your actual SSL model's HF/HS linear_size
-    Config.PRETRAINED_DROP_RATE = 0.10027792571799715    # Example: Must match your actual SSL model's HF/HS drop_rate
+    Config.pretrained_gcn_out_size = 32  # Example: Must match your actual SSL model
+    Config.pretrained_k = 3              # Example: Must match your actual SSL model
+    Config.pretrained_linear_size = 256  # Example: Must match your actual SSL model's HF/HS linear_size
+    Config.pretrained_drop_rate = 0.10027792571799715    # Example: Must match your actual SSL model's HF/HS drop_rate
     
     # Tunable parameters for classification head (HC)
     Config.linear_size = trial.suggest_categorical("hc_linear_size", [256, 512, 1024]) # Renamed for clarity

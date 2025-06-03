@@ -74,9 +74,9 @@ def objective(trial):
     # TODO: Implement participant subset functionality if needed for multi-fidelity optimization
     
     # Development settings
-    Config.experiment_name = f"optuna_all_data{timestamp}_pid{pid}"
+    Config.experiment_name = f"optuna_jointly_tuur_data{timestamp}_pid{pid}"
     Config.optuna = True
-    Config.load_data_split_from = "all_data_split_0.8.train_test_valid_split.pt"
+    Config.load_data_split_from = "turr_all_data_train_test_valid_split.pt"
 
     # Reproducibility settings
     Config.RANDOM_SEED = 42
@@ -90,7 +90,7 @@ def objective(trial):
     Config.use_class_weighting = False
     Config.p_train = 0.8
     Config.sample_proportion_of_data = 1.0
-    Config.use_tuur_smolder_data = False
+    Config.use_tuur_smolder_data = True
     Config.drop_last = True
     Config.skip_bads = True
     Config.main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
@@ -114,7 +114,7 @@ def objective(trial):
 
 
 if __name__ == "__main__":
-    results_filename = f"optuna_results_{timestamp}_pid{pid}.csv"
+    results_filename = f"optuna_tuur_jointly_results_{timestamp}_pid{pid}.csv"
     # Create pruner to terminate unpromising trials early
     pruner = optuna.pruners.MedianPruner(n_warmup_steps=3)
     
