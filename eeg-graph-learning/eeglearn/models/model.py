@@ -90,6 +90,8 @@ class JointlyTrainModel(nn.Module):
         drop_rate (float): Dropout rate
         testmode (bool, optional): If True, 
                             only processes original graph data. Defaults to False
+        linear_size_hc (int, optional): Size of linear layers for HC head
+        drop_rate_hc (float, optional): Dropout rate for HC head
         **kwargs: Additional parameters including:
             - HF (int): Output size for frequency head
             - HS (int): Output size for spatial head
@@ -101,11 +103,15 @@ class JointlyTrainModel(nn.Module):
     """
     def __init__(self, inchannel, gcn_out_size, batch, K, linear_size, drop_rate,
                  testmode=False, 
+                 linear_size_hc=None, drop_rate_hc=None,
                  **kwargs):
         super(JointlyTrainModel, self).__init__()
         self.batch = batch
         self.testmode = testmode
         
+        _actual_linear_size_hc = linear_size_hc if linear_size_hc is not None else linear_size
+        _actual_drop_rate_hc = drop_rate_hc if drop_rate_hc is not None else drop_rate
+
         self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
 
         self.HF = nn.Sequential(
@@ -133,15 +139,15 @@ class JointlyTrainModel(nn.Module):
         )
         
         self.HC = nn.Sequential(
-            nn.Linear(gcn_out_size * 26, linear_size),
-            nn.BatchNorm1d(linear_size),
+            nn.Linear(gcn_out_size * 26, _actual_linear_size_hc),
+            nn.BatchNorm1d(_actual_linear_size_hc),
             nn.ReLU(inplace=True),
-            nn.Dropout(drop_rate),
-            nn.Linear(linear_size, linear_size // 2),
-            nn.BatchNorm1d(linear_size // 2),
+            nn.Dropout(_actual_drop_rate_hc),
+            nn.Linear(_actual_linear_size_hc, _actual_linear_size_hc // 2),
+            nn.BatchNorm1d(_actual_linear_size_hc // 2),
             nn.ReLU(inplace=True),
-            nn.Dropout(drop_rate),
-            nn.Linear(linear_size // 2, kwargs['HC'])
+            nn.Dropout(_actual_drop_rate_hc),
+            nn.Linear(_actual_linear_size_hc // 2, kwargs['HC'])
         )
 
     def forward(self, *args):
@@ -171,8 +177,8 @@ class JointlyTrainModel(nn.Module):
 
             x3 = F.relu(self.conv1(x3, e3))
             x3 = x3.view(self.batch, -1)
-            x3 = self.HC(x3)
-            return x3
+            logits_x3 = self.HC(x3)
+            return logits_x3
 
 class SelfSupervisedTrain(nn.Module):
     """Self-supervised training model for frequency and spatial graph data.
