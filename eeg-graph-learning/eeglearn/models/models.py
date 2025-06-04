@@ -285,3 +285,101 @@ class SelfSupervisedTest(nn.Module):
         out = self.classifier(out)
         out = F.softmax(out, dim=1)
         return out
+
+class EEGNet(nn.Module):
+    """EEGNet baseline model for EEG classification.
+    
+    A compact convolutional neural network designed for EEG-based brain-computer interfaces.
+    Adapted to work with variable input dimensions.
+    
+    Args:
+        n_channels (int): Number of EEG channels
+        n_timepoints (int): Number of time points in the input
+        n_classes (int): Number of output classes for classification
+        drop_rate (float, optional): Dropout rate. Defaults to 0.25
+        
+    Returns:
+        torch.Tensor: Classification output logits
+    """
+    def __init__(self, n_channels, n_timepoints, n_classes, drop_rate=0.25):
+        super(EEGNet, self).__init__()
+        self.n_channels = n_channels
+        self.n_timepoints = n_timepoints
+        self.n_classes = n_classes
+        self.drop_rate = drop_rate
+        
+        # Layer 1 - Temporal convolution
+        self.conv1 = nn.Conv2d(1, 16, (1, 64), padding=0)
+        self.batchnorm1 = nn.BatchNorm2d(16, False)
+        
+        # Layer 2 - Depthwise convolution
+        self.padding1 = nn.ZeroPad2d((16, 17, 0, 1))
+        self.conv2 = nn.Conv2d(1, 4, (2, 32))
+        self.batchnorm2 = nn.BatchNorm2d(4, False)
+        self.pooling2 = nn.MaxPool2d(2, 4)
+        
+        # Layer 3 - Separable convolution
+        self.padding2 = nn.ZeroPad2d((2, 1, 4, 3))
+        self.conv3 = nn.Conv2d(4, 4, (8, 4))
+        self.batchnorm3 = nn.BatchNorm2d(4, False)
+        self.pooling3 = nn.MaxPool2d((2, 4))
+        
+        # Calculate the flattened size after convolutions
+        self._calculate_fc_input_size()
+        
+        # Fully connected layer
+        self.fc1 = nn.Linear(self.fc_input_size, n_classes)
+        
+    def _calculate_fc_input_size(self):
+        """Calculate the input size for the fully connected layer based on conv output."""
+        # Create a dummy input to calculate the size after convolutions
+        with torch.no_grad():
+            dummy_input = torch.zeros(1, 1, self.n_channels, self.n_timepoints)
+            x = self._forward_features(dummy_input)
+            self.fc_input_size = x.view(1, -1).size(1)
+    
+    def _forward_features(self, x):
+        """Forward pass through convolutional layers only."""
+        # Layer 1
+        x = F.elu(self.conv1(x))
+        x = self.batchnorm1(x)
+        x = F.dropout(x, self.drop_rate, training=self.training)
+        x = x.permute(0, 3, 1, 2)
+        
+        # Layer 2
+        x = self.padding1(x)
+        x = F.elu(self.conv2(x))
+        x = self.batchnorm2(x)
+        x = F.dropout(x, self.drop_rate, training=self.training)
+        x = self.pooling2(x)
+        
+        # Layer 3
+        x = self.padding2(x)
+        x = F.elu(self.conv3(x))
+        x = self.batchnorm3(x)
+        x = F.dropout(x, self.drop_rate, training=self.training)
+        x = self.pooling3(x)
+        
+        return x
+
+    def forward(self, x):
+        """Forward pass through the entire network.
+        
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, n_channels, n_timepoints)
+            
+        Returns:
+            torch.Tensor: Output logits of shape (batch_size, n_classes)
+        """
+        # Add channel dimension for Conv2d (batch_size, 1, n_channels, n_timepoints)
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
+        
+        # Feature extraction
+        x = self._forward_features(x)
+        
+        # Flatten and classify
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+        
+        return x
