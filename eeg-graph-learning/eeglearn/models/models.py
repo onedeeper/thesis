@@ -286,10 +286,6 @@ class SelfSupervisedTest(nn.Module):
         out = F.softmax(out, dim=1)
         return out
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 class EEGNet(nn.Module):
     """EEGNet implementation faithful to Lawhern *et al.*, 2018 (Table 2)fileciteturn1file0.
 
