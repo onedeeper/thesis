@@ -47,12 +47,15 @@ class Config:
         use_stratify = False
         main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
 
-    # Model architecture parameters
+    # GCN / fully connected Model architecture parameters
     gcn_out_size = 64
     linear_size =  512
     K = 1
+
+    ## EEG net 
     eeg_net_n_time_steps = 59700
     n_eeg_channels = 26
+    kernel_length = 64
     
     # for fine tuning.
     pretrained_weights_path = "/mnt/disk2/thesis/eeg-graph-learning/data/weights/self_supervised/tuur_data/tuur_data_self_supervised_best_model_val_loss_1.6647_epoch_25.pt"
