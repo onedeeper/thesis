@@ -50,6 +50,11 @@ def train() -> float:
     lr = Config.lr
     stop_at = Config.stop_at
     weight_decay = Config.weight_decay
+    n_channels =Config.n_eeg_channels
+    n_timepoints=Config.eeg_net_n_time_steps
+    drop_rate= Config.drop_rate
+    kernel_length = Config.kernel_length
+
     print_training_params()
     setup_directories(model_weights_dir, metrics_dir)
     # Check and print device information
@@ -115,9 +120,11 @@ def train() -> float:
 
 
     net = EEGNet(
-        n_channels=Config.n_eeg_channels,  # Number of EEG channels
-        n_timepoints=Config.eeg_net_n_time_steps,  # Number of time points
-        n_classes=n_classes,  # Number of output classes
+        n_channels=n_channels,  
+        n_timepoints=n_timepoints,  
+        n_classes=n_classes, 
+        kernel_length=kernel_length,
+        dropout_rate=drop_rate
     ).to(device)
 
     criterion = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(device)
