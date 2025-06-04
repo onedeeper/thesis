@@ -530,6 +530,80 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
     net.testmode = False
     return highest_acc, ACC, epoch_loss, weighted_f1, macro_f1
 
+def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEncoder, 
+                   highest_acc: float, best_macro_f1: float, epoch: int, 
+                   batch_size: int, lr: float, model_weights_dir: Path, 
+                   metrics_dir: Path, testing_on_sample_data: bool = None):
+    """Evaluate model performance on validation data.
+    
+    Args:
+        net: Neural network model
+        validate_data: List of validation participant IDs
+        label_encoder: Label encoder for predictions
+        highest_acc: Current highest accuracy
+        best_f1_score: Current best F1 score
+        epoch: Current epoch number
+        batch_size: Batch size for validation
+        lr: Learning rate used
+        model_weights_dir: Directory to save model weights
+        metrics_dir: Directory to save metrics
+        testing_on_sample_data: Whether using sample data for testing
+        
+    Returns:
+        Tuple of (highest_acc, current_acc, epoch_loss, weighted_f1, macro_f1)
+    """
+    if testing_on_sample_data is None:
+        testing_on_sample_data = Config.testing_on_sample_data
+        
+    criterion = nn.CrossEntropyLoss().to(Config.device)
+    
+    net.eval()
+    
+    epoch_loss = 0.0
+    correct_pred = 0
+    total_samples = 0
+    all_preds = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for _, data in enumerate(validation_loader):
+            X = data[0].float().to(Config.device)
+            y = data[1].squeeze().long().to(Config.device)
+            validation_logits = net(X)
+            total_samples += y.shape[0]
+            predictions = torch.argmax(validation_logits, dim=1)
+            all_preds.extend(predictions.cpu().numpy())
+            all_labels.extend(y.cpu().numpy())          
+            correct_pred += torch.sum(predictions == y).item()
+            loss = criterion(validation_logits, y)
+            epoch_loss += loss.item()
+
+    ACC = correct_pred / total_samples
+    weighted_f1 = f1_score(all_labels, all_preds, average='weighted')
+    macro_f1 = f1_score(all_labels, all_preds, average='macro')
+    
+    if ACC > highest_acc:
+        update_log(epoch, ACC, lr, batch_size, metrics_dir)
+        highest_acc = ACC
+        
+    if macro_f1 > best_macro_f1:
+        checkpoint = {
+            'epoch': epoch,
+            'model': net.state_dict(),
+            'ACC': ACC,
+            'weighted_F1': weighted_f1,
+            'macro_F1': macro_f1
+        }
+        checkpoint_filename = get_experiment_filename(
+    f"Acc_{ACC:.3f}_weighted_f1_{weighted_f1:.3f}_macro_f1_{macro_f1:.3f}_checkpoint",
+            "pkl"
+        )
+        torch.save(checkpoint, model_weights_dir / checkpoint_filename)
+
+    net.train()
+    return highest_acc, ACC, epoch_loss, weighted_f1, macro_f1
+
+
 
 
 class BalancedGraphSampler(Sampler):
@@ -713,48 +787,38 @@ def get_raw_eeg_data(participants : list[str],
 
 def load_and_reshape(participant_file_info : tuple[str, str], 
                     channels_to_exlcude : list[str] | str) -> np.ndarray:
-    """Load and reshape EEG data for a single participant.
-    
-    Loads preprocessed EEG data for a participant and reshapes it into a 2D matrix
-    where each row represents a channel and each column represents a timepoint
-    across all epochs. The function handles channel exclusion and validates the
-    shape of the resulting matrix.
+    """Load and reshape EEG data into a 2D matrix for model input.
     
     Args:
         participant_file_info (tuple[str, str]): Tuple containing:
-            - participant_folder_path: Path to participant's data folder
-            - npy_file_name: Name of the .npy file containing preprocessed data
-        channels_to_exlcude (list[str] | str): List of channel names to exclude
-            or 'bads' to exclude bad channels
+            participant_folder_path (str): Path to participant's data folder
+            npy_file_name (str): Name of preprocessed .npy data file
+        channels_to_exlcude (list[str] | str): Channel names to exclude from data.
+            Can be list of channel names or 'bads' to exclude bad channels.
             
     Returns:
-        np.ndarray: 2D matrix of shape (n_channels, n_epochs * n_timepoints)
-            containing the reshaped EEG data
+        np.ndarray: 2D matrix of shape (n_channels, n_timepoints) where:
+            - n_channels: Number of EEG channels (max 26)
+            - n_timepoints: Fixed length of Config.eeg_net_n_time_steps
             
     Raises:
-        AssertionError: If participant folder doesn't exist
-        AssertionError: If number of channels exceeds 26 (TD-brain limit)
-        AssertionError: If reshaped matrix length exceeds raw data length
+        AssertionError: If participant folder does not exist
+        AssertionError: If number of channels exceeds 26 (TD-brain maximum)
+        AssertionError: If data cannot be truncated to expected timepoint length
     """
     participant_folder_path, npy_file_name = participant_file_info
     assert os.path.exists(participant_folder_path), "Participant folder not found."
     preprocessed = load_preprocessed_data(participant_folder_path,
                                           npy_file_name)
-    raw_timepoints = preprocessed.preprocessed_raw.n_times 
-    epochs_channels_timepoints_matrix = preprocessed.preprocessed_epochs.\
-                        load_data().pick_types(eeg=True, 
-                                                exclude =channels_to_exlcude)\
-                        .get_data()
-    channels_epochs_timepoints_matrix = \
-                        np.transpose(epochs_channels_timepoints_matrix, (1,0,2))   
-    n_channels, n_epochs, n_timepoints,  = channels_epochs_timepoints_matrix.shape
-    channels_timepoints_matrix = \
-        channels_epochs_timepoints_matrix\
-                                .reshape(n_channels,n_epochs * n_timepoints)
+    raw_data = preprocessed.preprocessed_raw.pick_types(eeg=True, 
+                                                      exclude=channels_to_exlcude)\
+                                          .get_data()
+    channels_timepoints_matrix = raw_data[:, :Config.eeg_net_n_time_steps]
+    
     assert channels_timepoints_matrix.shape[0] <= 26,\
-        "Expecting at most all 26 EEG channels in TD-brain. Less if some are exlcuded."
-    assert channels_timepoints_matrix.shape[1] <= raw_timepoints,\
-        "Expecting rebuilt matrix to be atmost as long as raw."
+        "Expecting at most all 26 EEG channels in TD-brain. Less if some are excluded."
+    assert channels_timepoints_matrix.shape[1] == Config.eeg_net_n_time_steps,\
+            f"EEGNet expects {Config.eeg_net_n_time_steps} timepoints"
     return channels_timepoints_matrix
 
 def create_time_series_data_dataloader(participants : list[str],
