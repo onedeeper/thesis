@@ -40,14 +40,14 @@ def objective(trial):
     Config.epochs = 30  
     Config.stop_at = 5
 
-    # Data selection (These are likely generic and can be kept)
+    # Data selection 
     Config.use_class_weighting = False
     Config.p_train = 0.8
     Config.sample_proportion_of_data = 1.0
-    Config.use_tuur_smolder_data = True # Assuming this dataset is used for EEGNet too
+    Config.use_tuur_smolder_data = True 
     Config.drop_last = True # For dataloader
     Config.skip_bads = True # For data preprocessing
-    Config.main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"] # Task-specific
+    Config.main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"] 
     Config.use_stratify = True # For data splitting
     Config.testing_on_sample_data = True # For quick tests, set to False for full runs
     
@@ -69,13 +69,13 @@ if __name__ == "__main__":
     results_filename = f"optuna_eegnet_results_{timestamp}_pid{pid}.csv"
     
     # Create pruner to terminate unpromising trials early
-    pruner = optuna.pruners.MedianPruner(n_warmup_steps=5, n_min_trials=3) # Adjusted warmup
+    pruner = optuna.pruners.MedianPruner(n_warmup_steps=5, n_min_trials=3)
     
     # Create study for maximizing validation performance
     study = optuna.create_study(direction="maximize", pruner=pruner)
     
     # Run optimization (adjust n_trials and timeout as needed)
-    study.optimize(objective, n_trials=30, timeout=60*60*24) # Increased trials for broader search
+    study.optimize(objective, n_trials=30, timeout=60*60*24) 
 
     print("Best trial:", study.best_trial.params)
     print(f"Best value: {study.best_trial.value:.4f}")
