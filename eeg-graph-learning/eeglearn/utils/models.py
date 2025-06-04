@@ -660,6 +660,7 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
 
 
 def get_raw_eeg_data(participants : list[str], 
+                     data_split_type : str, 
                      channels_to_exlcude : list[str] | str = []):
     """Extract raw EEG data from preprocessed files for a list of participants.
     
@@ -687,18 +688,27 @@ def get_raw_eeg_data(participants : list[str],
     Raises:
         AssertionError: If no participants were successfully processed
     """
-    participants_paths_and_file_names  =\
-        get_cleaned_data_paths(participants,Config.cleaned_data_path)[0]
-    
-    args_for_each_func_call = [(item, channels_to_exlcude)
-                for item in participants_paths_and_file_names]
-    
-    processes = multiprocessing.cpu_count() - 1 
-    with multiprocessing.Pool(processes) as p:
-        eeg_each_participant = list(
-            tqdm(p.starmap(load_and_reshape, args_for_each_func_call))
-        )
-    assert len(eeg_each_participant) > 0, "No participants were processed."
+    eeg_each_participant_path = Config.data_path / f"raw_eeg_{data_split_type}.pt"
+    if os.path.exists(Config.data_path / f"raw_eeg_{data_split_type}.pt" ):
+        print(
+            f"⚠️ Loading previously created EEG data from {eeg_each_participant_path}")
+        eeg_each_participant = torch.load(eeg_each_participant_path)
+    else:
+        print(
+       f"⚠️ Rebuilding raw eeg per parcicipant from epochs")
+        participants_paths_and_file_names  =\
+            get_cleaned_data_paths(participants,Config.cleaned_data_path)[0]
+        
+        args_for_each_func_call = [(item, channels_to_exlcude)
+                    for item in participants_paths_and_file_names]
+        
+        processes = multiprocessing.cpu_count() - 1 
+        with multiprocessing.Pool(processes) as p:
+            eeg_each_participant = list(
+                tqdm(p.starmap(load_and_reshape, args_for_each_func_call))
+            )
+        assert len(eeg_each_participant) > 0, "No participants were processed."
+        torch.save(eeg_each_participant, eeg_each_participant_path)
     return eeg_each_participant
 
 def load_and_reshape(participant_file_info : tuple[str, str], 
@@ -748,6 +758,7 @@ def load_and_reshape(participant_file_info : tuple[str, str],
     return channels_timepoints_matrix
 
 def create_time_series_data_dataloader(participants : list[str],
+                                 data_split_type : str , 
                                  encoder: LabelEncoder,
                                  batch_size : int ,
                                  drop_last : bool = Config.drop_last,
@@ -779,7 +790,9 @@ def create_time_series_data_dataloader(participants : list[str],
     Raises:
         AssertionError: If no participants were successfully processed
     """
-    eeg_for_each_participant = get_raw_eeg_data(participants, channels_to_exlcude)
+    eeg_for_each_participant = get_raw_eeg_data(participants = participants, 
+                                                data_split_type = data_split_type, 
+                                            channels_to_exlcude = channels_to_exlcude)
     assert len(eeg_for_each_participant) > 0, "No participants processed."
     all_labels = get_labels_dict()
     numeric_participant_labels = [encoder.transform([all_labels[participant]]) 

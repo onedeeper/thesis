@@ -77,19 +77,26 @@ def train() -> float:
                                                      all_psych_labels, 
                                                      encoder,
                                                      n_classes)
-    print("⏳ Loading data.")
-    train_loader = create_time_series_data_dataloader(participants=train_participants,
+    print("⏳ Loading data saved.")
+    if os.path.exists(data_path / "raw_train_loader.pt"):
+        train_loader = torch.load(data_path / "raw_train_loader.pt")
+    train_loader = create_time_series_data_dataloader(data_split_type="train",
+                                                      participants=train_participants,
                                                       encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
 
-    validation_loader = create_time_series_data_dataloader(
+    validation_loader = create_time_series_data_dataloader(data_split_type="validation",
                                                 participants=validation_participants,
                                                       encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
     
-    test_loader = create_time_series_data_dataloader(participants=test_participants,
+    test_loader = create_time_series_data_dataloader(data_split_type="test",
+                                                      participants=test_participants,
                                                       encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
+
+if __name__ == "__main__":
+    train()
