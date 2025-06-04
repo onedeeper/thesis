@@ -18,16 +18,16 @@ class Config:
     """
 
     # Development settings
-    experiment_name = "tuur_finetuned"
+    experiment_name = "test"
     optuna :bool = False
-    load_data_split_from  = "turr_all_data_train_test_valid_split.pt"
+    load_data_split_from  = ""
     # Reproducibility settings
     RANDOM_SEED = 42
     DETERMINISTIC = True
 
     # Training hyperparameters
     epochs = 100
-    batch_size = 256
+    batch_size = 5
     lr = 0.0016898579982266685
     weight_decay = 0.0005931173538055033
     drop_rate = 0.1360323026782416
@@ -51,6 +51,8 @@ class Config:
     gcn_out_size = 64
     linear_size =  512
     K = 1
+    eeg_net_n_time_steps = 59700
+    n_eeg_channels = 26
     
     # for fine tuning.
     pretrained_weights_path = "/mnt/disk2/thesis/eeg-graph-learning/data/weights/self_supervised/tuur_data/tuur_data_self_supervised_best_model_val_loss_1.6647_epoch_25.pt"
