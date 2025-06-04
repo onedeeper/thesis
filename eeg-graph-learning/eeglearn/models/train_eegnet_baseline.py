@@ -16,7 +16,7 @@ from ignite.handlers import EarlyStopping
 
 from eeglearn.config import Config
 from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
-from eeglearn.models.models import VanillaGraphModel
+from eeglearn.models.models import VanillaGraphModel, EEGNet
 from eeglearn.features.graphs import Graphs
 from eeglearn.utils.models import (
     split_data, get_graphs_original, print_training_params,
@@ -41,6 +41,7 @@ ignore_replication_nans = True
 random_seed = Config.RANDOM_SEED
 main_classes = Config.main_classes
 optuna = Config.optuna
+
 
 def train() -> float:
     batch_size = Config.batch_size
@@ -77,7 +78,7 @@ def train() -> float:
                                                      all_psych_labels, 
                                                      encoder,
                                                      n_classes)
-    print("⏳ Loading data saved.")
+    print("⏳ Loading preprocessed EEG time series data...")
     if os.path.exists(data_path / "raw_train_loader.pt"):
         train_loader = torch.load(data_path / "raw_train_loader.pt")
     train_loader = create_time_series_data_dataloader(data_split_type="train",
@@ -97,6 +98,29 @@ def train() -> float:
                                                       encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
+    print("\n📊 Data Loader Information:")
+    print(f"\n  • Training loader: {len(train_loader)} batches")
+    print(f"\n  • Validation loader: {len(validation_loader)} batches") 
+    print(f"\n  • Test loader: {len(test_loader)} batches")
+    print()
 
+    metrics = {
+        'epoch': [], 
+        'train_loss': [], 'train_acc': [], 
+        'train_f1_weighted': [], 'train_f1_macro': [],
+        'validation_loss': [], 'validation_acc': [], 
+        'validation_f1_weighted': [], 'validation_f1_macro': []
+    }
+
+    print(f"⚠️  Training for epochs: {epochs}")
+
+
+    net = EEGNet(
+        n_channels=26,  # Number of EEG channels
+        n_timepoints=Config.eeg_net_n_time_steps,  # Number of time points
+        n_classes=n_classes,  # Number of output classes
+    ).to(device)
+
+    print(net)
 if __name__ == "__main__":
     train()

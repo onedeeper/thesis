@@ -695,7 +695,7 @@ def get_raw_eeg_data(participants : list[str],
         eeg_each_participant = torch.load(eeg_each_participant_path)
     else:
         print(
-       f"⚠️ Rebuilding raw eeg per parcicipant from epochs")
+       f"⚠️  Rebuilding raw eeg per parcicipant from epochs")
         participants_paths_and_file_names  =\
             get_cleaned_data_paths(participants,Config.cleaned_data_path)[0]
         
