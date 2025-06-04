@@ -754,6 +754,31 @@ def create_time_series_data_dataloader(participants : list[str],
                                  channels_to_exlcude : list[str] | str = [],
                                  ignore_replication_nans : bool = True,
                                  shuffle : bool = True):
+    """Create a DataLoader for time series EEG data with corresponding labels.
+
+    This function processes raw EEG data for a list of participants and creates
+    a DataLoader that yields batches of (EEG data, label) pairs. The EEG data
+    is loaded and preprocessed, while labels are encoded numerically using the
+    provided encoder.
+
+    Args:
+        participants (list[str]): List of participant identifiers to process
+        encoder (LabelEncoder): Encoder for converting string labels to numeric values
+        batch_size (int): Number of samples per batch
+        drop_last (bool, optional): Whether to drop the last incomplete batch.
+            Defaults to Config.drop_last
+        channels_to_exlcude (list[str] | str, optional): Channels to exclude from
+            the EEG data. Defaults to empty list
+        ignore_replication_nans (bool, optional): Whether to ignore NaN values
+            in replicated data. Defaults to True
+        shuffle (bool, optional): Whether to shuffle the data. Defaults to True
+
+    Returns:
+        LoaderForTimeSeriesData: DataLoader yielding batches of (EEG data, label) pairs
+
+    Raises:
+        AssertionError: If no participants were successfully processed
+    """
     eeg_for_each_participant = get_raw_eeg_data(participants, channels_to_exlcude)
     assert len(eeg_for_each_participant) > 0, "No participants processed."
     all_labels = get_labels_dict()

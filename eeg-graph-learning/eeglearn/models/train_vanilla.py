@@ -27,7 +27,7 @@ from ignite.handlers import EarlyStopping
 
 from eeglearn.config import Config
 from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
-from eeglearn.models.model import VanillaGraphModel
+from eeglearn.models.models import VanillaGraphModel
 from eeglearn.features.graphs import Graphs
 from eeglearn.utils.models import (
     split_data, get_graphs_original, print_training_params,

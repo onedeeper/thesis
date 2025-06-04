@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import f1_score, confusion_matrix
 from eeglearn.config import Config
-from eeglearn.models.model import JointlyTrainModel
+from eeglearn.models.models import JointlyTrainModel
 from eeglearn.utils.models import setup_label_encoder
 from eeglearn.utils.models import create_graph_loaders
 def evaluate():

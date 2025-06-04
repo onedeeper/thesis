@@ -25,7 +25,7 @@ from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping
 
 from eeglearn.config import Config
-from eeglearn.models.model import JointlyTrainModel
+from eeglearn.models.models import JointlyTrainModel
 from eeglearn.utils.models import( setup_label_encoder, split_data, create_graph_loaders
                                 ,calculate_class_weights, print_training_params,
                                 setup_directories,get_labels_dict, write_epoch_log,

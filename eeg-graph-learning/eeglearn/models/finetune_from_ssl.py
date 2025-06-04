@@ -18,7 +18,7 @@ import torch.nn as nn
 from pathlib import Path
 from sklearn.metrics import f1_score
 from eeglearn.config import Config
-from eeglearn.models.model import JointlyTrainModel
+from eeglearn.models.models import JointlyTrainModel
 from eeglearn.utils.models import setup_label_encoder, split_data, create_graph_loaders
 
 

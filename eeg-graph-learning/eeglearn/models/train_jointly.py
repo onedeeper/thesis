@@ -28,7 +28,7 @@ from AutoWeight import AutomaticWeightedLoss
 
 from eeglearn.config import Config
 from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
-from eeglearn.models.model import JointlyTrainModel
+from eeglearn.models.models import JointlyTrainModel
 from eeglearn.features.graphs import Graphs
 from eeglearn.utils.models import (
     split_data, get_graphs_original, create_graph_loaders, print_training_params,
