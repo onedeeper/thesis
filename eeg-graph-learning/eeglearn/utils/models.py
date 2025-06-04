@@ -533,7 +533,7 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
 def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEncoder, 
                    highest_acc: float, best_macro_f1: float, epoch: int, 
                    batch_size: int, lr: float, model_weights_dir: Path, 
-                   metrics_dir: Path, testing_on_sample_data: bool = None):
+                   metrics_dir: Path):
     """Evaluate model performance on validation data.
     
     Args:
@@ -547,14 +547,10 @@ def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEnco
         lr: Learning rate used
         model_weights_dir: Directory to save model weights
         metrics_dir: Directory to save metrics
-        testing_on_sample_data: Whether using sample data for testing
         
     Returns:
         Tuple of (highest_acc, current_acc, epoch_loss, weighted_f1, macro_f1)
-    """
-    if testing_on_sample_data is None:
-        testing_on_sample_data = Config.testing_on_sample_data
-        
+    """ 
     criterion = nn.CrossEntropyLoss().to(Config.device)
     
     net.eval()
@@ -815,7 +811,7 @@ def load_and_reshape(participant_file_info : tuple[str, str],
                                           .get_data()
     channels_timepoints_matrix = raw_data[:, :Config.eeg_net_n_time_steps]
     
-    assert channels_timepoints_matrix.shape[0] <= 26,\
+    assert channels_timepoints_matrix.shape[0] == Config.n_eeg_channels,\
         "Expecting at most all 26 EEG channels in TD-brain. Less if some are excluded."
     assert channels_timepoints_matrix.shape[1] == Config.eeg_net_n_time_steps,\
             f"EEGNet expects {Config.eeg_net_n_time_steps} timepoints"
