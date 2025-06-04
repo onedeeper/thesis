@@ -10,6 +10,7 @@ from torch_geometric.data import Batch
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import f1_score
+import optuna
 
 from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping
@@ -44,7 +45,7 @@ main_classes = Config.main_classes
 optuna = Config.optuna
 
 
-def train() -> float:
+def train(trial: optuna.Trial = None) -> float:
     batch_size = Config.batch_size
     epochs = Config.epochs
     lr = Config.lr
@@ -202,8 +203,18 @@ def train() -> float:
         trainer.state.metrics = {'val_macro_f1': validation_f1_macro}
         trainer.fire_event(Events.EPOCH_COMPLETED)
 
+        if trial:
+            trial.report(validation_f1_macro, epoch)
+            if trial.should_prune():
+                metrics_df = pd.DataFrame(metrics)
+                if not metrics_df.empty:
+                    metrics_filename_pruned = \
+get_experiment_filename(f"training_metrics_EEGNet_pruned_trial_{trial.number}", "csv")
+                    metrics_df.to_csv(metrics_dir/metrics_filename_pruned, index=False)
+                raise optuna.TrialPruned()
+
         if trainer.should_terminate:
-            print(f"🟢  Early stopping triggered at epoch {epoch}")
+            print(f"🟢 Ignite Early stopping triggered at epoch {epoch}")
             break
 
         write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)

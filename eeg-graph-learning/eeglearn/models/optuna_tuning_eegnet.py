@@ -29,9 +29,9 @@ def objective(trial):
         float: Validation metric (e.g., macro F1 score) to maximize
     """
     # Experiment settings
-    Config.experiment_name = f"eegnet_optuna_tuning_{timestamp}_pid{pid}"
+    Config.experiment_name = f"all_data_eegnet_optuna_tuning_{timestamp}_pid{pid}"
     Config.optuna = True
-    Config.load_data_split_from = "" 
+    Config.load_data_split_from = "all_data_split_0.8.train_test_valid_split.pt" 
 
     # Reproducibility settings
     Config.RANDOM_SEED = 42
@@ -41,10 +41,10 @@ def objective(trial):
     Config.stop_at = 5
 
     # Data selection 
-    Config.use_class_weighting = False
+    Config.use_class_weighting = True
     Config.p_train = 0.8
     Config.sample_proportion_of_data = 1.0
-    Config.use_tuur_smolder_data = True 
+    Config.use_tuur_smolder_data = False 
     Config.drop_last = True # For dataloader
     Config.skip_bads = True # For data preprocessing
     Config.main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"] 
@@ -61,12 +61,12 @@ def objective(trial):
     
 
     trainer = importlib.import_module("eeglearn.models.train_eegnet_baseline")
-    val_metric = trainer.train() 
+    val_metric = trainer.train(trial=trial)
     return val_metric
 
-
+ 
 if __name__ == "__main__":
-    results_filename = f"optuna_eegnet_results_{timestamp}_pid{pid}.csv"
+    results_filename = f"all_data_optuna_eegnet_results_{timestamp}_pid{pid}.csv"
     
     # Create pruner to terminate unpromising trials early
     pruner = optuna.pruners.MedianPruner(n_warmup_steps=5, n_min_trials=3)
