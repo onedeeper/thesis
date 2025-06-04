@@ -22,7 +22,8 @@ from eeglearn.utils.models import (
     split_data, get_graphs_original, print_training_params,
     setup_directories, setup_label_encoder, calculate_class_weights,
     write_epoch_log, update_log, validate_model, create_graph_loaders,
-    get_experiment_filename, get_raw_eeg_data, create_time_series_data_dataloader
+    get_experiment_filename, get_raw_eeg_data, create_time_series_data_dataloader,
+    validate_EEGNet_model
 )
 
 
@@ -48,14 +49,14 @@ def train() -> float:
     epochs = Config.epochs
     lr = Config.lr
     stop_at = Config.stop_at
+    weight_decay = Config.weight_decay
     print_training_params()
     setup_directories(model_weights_dir, metrics_dir)
     # Check and print device information
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
     else:
-        print("⚠️ Using CPU for training")
-    print(f"📱 Device: {device}")
+        print(f"📱 Device: {device}")
     encoder, n_classes = \
         setup_label_encoder(ignore_replication_nans=ignore_replication_nans)
     all_psych_labels = get_labels_dict()
@@ -79,15 +80,13 @@ def train() -> float:
                                                      encoder,
                                                      n_classes)
     print("⏳ Loading preprocessed EEG time series data...")
-    if os.path.exists(data_path / "raw_train_loader.pt"):
-        train_loader = torch.load(data_path / "raw_train_loader.pt")
     train_loader = create_time_series_data_dataloader(data_split_type="train",
                                                       participants=train_participants,
                                                       encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
 
-    validation_loader = create_time_series_data_dataloader(data_split_type="validation",
+    validation_loader = create_time_series_data_dataloader(data_split_type="valid",
                                                 participants=validation_participants,
                                                       encoder=encoder,
                                                       batch_size=batch_size,
@@ -116,11 +115,135 @@ def train() -> float:
 
 
     net = EEGNet(
-        n_channels=26,  # Number of EEG channels
+        n_channels=Config.n_eeg_channels,  # Number of EEG channels
         n_timepoints=Config.eeg_net_n_time_steps,  # Number of time points
         n_classes=n_classes,  # Number of output classes
     ).to(device)
 
-    print(net)
+    criterion = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(device)
+    if not Config.use_class_weighting:
+        criterion = nn.CrossEntropyLoss().to(device)
+    
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,
+        threshold_mode='rel', cooldown=1, min_lr=0, eps=1e-8
+    )
+
+    trainer = Engine(lambda engine, batch: batch)
+    early_stopping = EarlyStopping(
+        patience=stop_at,
+        score_function=lambda engine: engine.state.metrics['val_macro_f1'],
+        trainer=trainer
+    )
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
+
+    validation_highest_acc = 0.0
+    best_validation_f1_score_macro = 0.0
+    best_validation_f1_score_weighted = 0.0
+
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+        correct_predictions = 0
+        all_train_preds = []
+        all_train_labels = []
+        total_train_samples = 0
+
+        net.train()
+        for ind, data in enumerate(train_loader):
+            X = data[0].float().to(device)  
+            y = data[1].squeeze().long().to(device) 
+            
+            training_logits = net(X)
+            total_train_samples += y.size(0)
+            
+            predictions = torch.argmax(training_logits, dim=1)
+            correct_predictions += torch.sum(predictions == y).item()
+            
+            all_train_preds.extend(predictions.cpu().numpy())
+            all_train_labels.extend(y.cpu().numpy())
+            
+            loss = criterion(training_logits, y)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+        # Validate model and get metrics
+        (validation_highest_acc, 
+         validation_current_acc,
+         validation_epoch_loss,
+         validation_f1_weighted, 
+         validation_f1_macro) = validate_EEGNet_model(
+            net=net,
+            validation_loader=validation_loader,
+            label_encoder=encoder,
+            highest_acc=validation_highest_acc,
+            best_macro_f1=best_validation_f1_score_macro,
+            epoch=epoch,
+            batch_size=batch_size,
+            lr=lr,
+            model_weights_dir=model_weights_dir,
+            metrics_dir=metrics_dir
+        )
+        if validation_f1_macro > best_validation_f1_score_macro:
+            best_validation_f1_score_macro = validation_f1_macro
+        
+        if validation_f1_weighted > best_validation_f1_score_weighted:
+            best_validation_f1_score_weighted = validation_f1_weighted
+
+        trainer.state.metrics = {'val_macro_f1': validation_f1_macro}
+        trainer.fire_event(Events.EPOCH_COMPLETED)
+
+        if trainer.should_terminate:
+            print(f"🟢  Early stopping triggered at epoch {epoch}")
+            break
+
+        write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)
+        scheduler.step(validation_epoch_loss)
+        
+        avg_train_loss = epoch_loss / (ind + 1)
+        train_accuracy = correct_predictions / total_train_samples
+        
+        train_f1_weighted = f1_score(all_train_labels, 
+                                     all_train_preds, 
+                                     average='weighted',
+                                     zero_division=0)
+        train_f1_macro = f1_score(all_train_labels,
+                                  all_train_preds,
+                                  average='macro',
+                                  zero_division=0)
+
+        metrics['epoch'].append(epoch)
+        metrics['train_loss'].append(avg_train_loss)
+        metrics['train_acc'].append(train_accuracy)
+        metrics['train_f1_weighted'].append(train_f1_weighted)
+        metrics['train_f1_macro'].append(train_f1_macro)
+        
+        metrics['validation_loss'].append(validation_epoch_loss)
+        metrics['validation_acc'].append(validation_current_acc)
+        metrics['validation_f1_weighted'].append(validation_f1_weighted)
+        metrics['validation_f1_macro'].append(validation_f1_macro)
+        
+        if epoch % 1 == 0:
+            print(f'\n## Epoch [{epoch}/{epochs}] ##')
+            print(f'Training Loss: {avg_train_loss:.4f}')
+            print(f'Training ACC: {train_accuracy:.4f}')
+            print(f'Training F1 Weighted: {train_f1_weighted:.4f}')
+            print(f'Training F1 Macro: {train_f1_macro:.4f}')
+            print("----------------------------------------------")
+            print(f'Validation Loss: {validation_epoch_loss:.4f}')
+            print(f'Validation ACC: {validation_current_acc:.4f}')
+            print(f'Validation F1 Weighted: {validation_f1_weighted:.4f}')
+            print(f'Validation F1 Macro: {validation_f1_macro:.4f}')
+            print(f'Best Validation ACC: {validation_highest_acc:.4f}')
+            print(f'Best Validation F1 Weighted: {best_validation_f1_score_weighted:.4f}')
+            print(f'Best Validation F1 Macro: {best_validation_f1_score_macro:.4f}')
+            print("==============================================")
+    
+    metrics_filename = get_experiment_filename("training_metrics_EEGNet", "csv")
+    pd.DataFrame(metrics).to_csv(metrics_dir / metrics_filename, index=False)
+    return best_validation_f1_score_macro
+
 if __name__ == "__main__":
     train()
