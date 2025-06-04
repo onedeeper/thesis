@@ -46,11 +46,11 @@ class VanillaGraphModel(nn.Module):
         super(VanillaGraphModel, self).__init__()
         self.batch = batch
         self.testmode = testmode
-        
+        self.n_eeg_channels = Config.n_eeg_channels
         self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
 
         self.HC = nn.Sequential(
-            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.Linear(gcn_out_size * self.n_eeg_channels, linear_size),
             nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
@@ -108,6 +108,7 @@ class JointlyTrainModel(nn.Module):
         super(JointlyTrainModel, self).__init__()
         self.batch = batch
         self.testmode = testmode
+        self.n_eeg_channels = Config.n_eeg_channels
         
         _actual_linear_size_hc = linear_size_hc if linear_size_hc is not None else linear_size
         _actual_drop_rate_hc = drop_rate_hc if drop_rate_hc is not None else drop_rate
@@ -115,7 +116,7 @@ class JointlyTrainModel(nn.Module):
         self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
 
         self.HF = nn.Sequential(
-            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.Linear(gcn_out_size * self.n_eeg_channels, linear_size),
             nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
@@ -127,7 +128,7 @@ class JointlyTrainModel(nn.Module):
         )
 
         self.HS = nn.Sequential(
-            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.Linear(gcn_out_size * self.n_eeg_channels, linear_size),
             nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
@@ -139,7 +140,7 @@ class JointlyTrainModel(nn.Module):
         )
         
         self.HC = nn.Sequential(
-            nn.Linear(gcn_out_size * 26, _actual_linear_size_hc),
+            nn.Linear(gcn_out_size * self.n_eeg_channels, _actual_linear_size_hc),
             nn.BatchNorm1d(_actual_linear_size_hc),
             nn.ReLU(inplace=True),
             nn.Dropout(_actual_drop_rate_hc),
@@ -200,13 +201,12 @@ class SelfSupervisedTrain(nn.Module):
     def __init__(self, inchannel, gcn_out_size, batch, K, linear_size, drop_rate, **kwargs):
         super(SelfSupervisedTrain, self).__init__()
         self.batch = batch
-
+        self.n_eeg_channels = Config.n_eeg_channels
         # inchannel = 5 , which is the number of features
         # for each electrode 
         self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
-
         self.HF = nn.Sequential(
-            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.Linear(gcn_out_size * self.n_eeg_channels, linear_size),
             nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
@@ -220,7 +220,7 @@ class SelfSupervisedTrain(nn.Module):
         )
 
         self.HS = nn.Sequential(
-            nn.Linear(gcn_out_size * 26, linear_size),
+            nn.Linear(gcn_out_size * self.n_eeg_channels, linear_size),
             nn.BatchNorm1d(linear_size),
             nn.ReLU(inplace=True),
             nn.Dropout(drop_rate),
@@ -271,11 +271,11 @@ class SelfSupervisedTest(nn.Module):
     def __init__(self, inchannel, gcn_out_size, batch, K, **kwargs):
         super(SelfSupervisedTest, self).__init__()
         self.batch = batch
-
+        self.n_eeg_channels = Config.n_eeg_channels
         self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
 
         self.classifier = nn.Sequential(
-            nn.Linear(gcn_out_size*26, kwargs['classes'])
+            nn.Linear(gcn_out_size*self.n_eeg_channels, kwargs['classes'])
         )
 
     def forward(self, data):
@@ -287,34 +287,53 @@ class SelfSupervisedTest(nn.Module):
         return out
 
 class EEGNet(nn.Module):
-    """EEGNet implementation faithful to Lawhern *et al.*, 2018 (Table 2)fileciteturn1file0.
+    """Implementation of EEGNet architecture from Lawhern et al. (2018).
 
-    Blocks
-    ------
-    1. **Temporal Convolution** – `F1` filters of size ``(1, kernel_length)`` (same‑padding).
-    2. **Depthwise Spatial Convolution** – kernel ``(C, 1)`` with depth multiplier `D`; output ``D·F1`` feature maps.
-    3. **AveragePool(1,4) → Dropout`p`**.
-    4. **Separable Convolution** – depthwise ``(1,16)`` (same‑padding) followed by pointwise ``1×1`` → `F2 = D·F1` maps.
-    5. **AveragePool(1,8) → Dropout`p`**.
-    6. **Classifier** – flatten → dense → ``n_classes``.
+    The model consists of 6 sequential blocks:
 
-    Args
-    ----
+    1. Temporal Convolution Block
+       - Applies F1 temporal filters of size (1, kernel_length)
+       - Uses same padding to preserve signal length
+
+    2. Spatial Convolution Block  
+       - Applies depthwise convolution with kernel (channels, 1)
+       - Uses depth multiplier D to get D*F1 feature maps
+
+    3. First Pooling Block
+       - Average pooling with kernel (1,4)
+       - Followed by dropout with probability p
+
+    4. Separable Convolution Block
+       - Depthwise conv (1,16) with same padding
+       - Pointwise 1x1 conv producing F2=D*F1 maps
+
+    5. Second Pooling Block
+       - Average pooling with kernel (1,8)
+       - Followed by dropout with probability p
+
+    6. Classification Block
+       - Flattens features
+       - Dense layer mapping to n_classes
+
+    Parameters
+    ----------
     n_channels : int
-        Number of EEG channels ``C``.
-    n_timepoints : int
-        Number of temporal samples ``T``.
+        Number of EEG channels in input
+    n_timepoints : int 
+        Number of time samples in input
     n_classes : int
-        Number of output classes ``N``.
-    F1 : int, optional
-        Number of temporal filters (default 8).
-    D : int, optional
-        Depth multiplier, i.e. number of spatial filters per temporal filter (default 2).
-    kernel_length : int, optional
-        Length of temporal kernel (default 64; use 32 for data high‑passed at ≥4 Hz)fileciteturn1file10.
-    dropout_rate : float, optional
-        Dropout probability (0.25 for cross‑subject, 0.5 for within‑subject)fileciteturn1file5.
-
+        Number of output classes
+    F1 : int, default=8
+        Number of temporal filters
+    D : int, default=2
+        Depth multiplier for spatial filters
+    kernel_length : int, default=64
+        Length of temporal convolution kernel
+        Note: Use 32 for data high-passed at ≥4 Hz
+    dropout_rate : float, default=0.25
+        Dropout probability
+        Note: Use 0.25 for cross-subject, 0.5 for within-subject
+        
     WRITTEN BY AI
     INSPECTED AND VERIFIED BY AUTHOR
     """
@@ -326,7 +345,7 @@ class EEGNet(nn.Module):
         self.F1, self.D, self.F2 = F1, D, F1 * D
         self.dropout_rate = dropout_rate
 
-        # ----- Block 1 -----
+        # ----- Block 1 -----
         # Temporal convolution (same padding)
         self.conv_temporal = nn.Conv2d(1, F1,
                                        kernel_size=(1, kernel_length),
@@ -343,7 +362,7 @@ class EEGNet(nn.Module):
         self.pool1 = nn.AvgPool2d(kernel_size=(1, 4))
         self.drop1 = nn.Dropout(dropout_rate)
 
-        # ----- Block 2 (Separable) -----
+        # ----- Block 2 (Separable) -----
         # Depthwise
         self.conv_sep_depth = nn.Conv2d(self.F2, self.F2,
                                         kernel_size=(1, 16),
@@ -371,7 +390,7 @@ class EEGNet(nn.Module):
             return x.numel() // x.size(0)
 
     def _forward_features(self, x: torch.Tensor) -> torch.Tensor:
-        # Block 1
+        # Block 1
         x = self.conv_temporal(x)
         x = self.bn1(x)
         x = self.conv_spatial(x)
@@ -380,7 +399,7 @@ class EEGNet(nn.Module):
         x = self.pool1(x)
         x = self.drop1(x)
 
-        # Block 2
+        # Block 2
         x = self.conv_sep_depth(x)
         x = self.conv_sep_point(x)
         x = self.bn3(x)
