@@ -42,7 +42,7 @@ metrics_dir = Config.metrics_dir / 'baseline'
 ignore_replication_nans = True
 random_seed = Config.RANDOM_SEED
 main_classes = Config.main_classes
-optuna = Config.optuna
+is_optuna_enabled = Config.optuna
 
 
 def train(trial: optuna.Trial = None) -> float:
