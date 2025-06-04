@@ -1,7 +1,12 @@
 """
 Model utilities for EEG graph learning.
 
-Provides functions for data splitting, graph creation, model training and validation.
+This module provides utilities for working with EEG data in a graph learning context.
+It includes functions for:
+- Data splitting and preprocessing
+- Graph creation and manipulation
+- Model training and validation
+- Performance evaluation and metrics
 """
 
 import os
@@ -21,13 +26,16 @@ from sklearn.metrics import f1_score
 
 from torch_geometric.loader import DataLoader
 from eeglearn.config import Config
-from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
+from eeglearn.utils.utils import (get_details_from_file_name, get_labels_dict,
+                                load_preprocessed_data, get_cleaned_data_paths)
 from eeglearn.models.AutoWeight import AutomaticWeightedLoss
 from eeglearn.features.graphs import Graphs
 import pickle
+import multiprocessing
+from tqdm import tqdm
 
 def get_experiment_filename(base_filename: str, extension: str = None) -> str:
-    """Create filename with experiment name prefix if experiment_name is set.
+    """Create a filename with experiment name prefix if experiment_name is set.
     
     Args:
         base_filename: Base filename without extension
@@ -51,13 +59,16 @@ def get_experiment_filename(base_filename: str, extension: str = None) -> str:
             return base_filename
 
 def split_data() -> dict:
-    """Split participants into train/val/test sets using stratified sampling.
+    """Split participants into train/validation/test sets using stratified sampling.
     
-    Args:
-        ignore_replication_nans: Exclude participants with NaN labels or in replication
-        
+    This function handles both regular and Tuur-Smolder datasets, performing
+    stratified sampling to maintain class distribution across splits.
+    
     Returns:
-        Dict with 'train', 'valid', 'test' lists of participant IDs
+        dict: Dictionary containing lists of participant IDs for each split:
+            - 'train': Training set participants
+            - 'valid': Validation set participants
+            - 'test': Test set participants
     """
     labels = get_labels_dict()
     participant_files = os.listdir(Config.cleaned_data_path)
@@ -143,19 +154,19 @@ def split_data() -> dict:
     torch.save(split, Config.data_path / f"{split_save_path}.pt" )
     return split
 
-
-def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_size: int, 
+def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder,
+                        batch_size: int, 
                        drop_last: bool = False):
-    """Load energy objects and convert to labeled graphs.
+    """Load energy objects and convert them to labeled graphs.
     
     Args:
-        files_to_load: Participant files to load
+        files_to_load: List of participant files to load
         label_encoder: Label encoder for psychological labels
         batch_size: Batch size for data loading
         drop_last: Whether to drop last incomplete batch
         
     Returns:
-        PyTorch geometric graph data loader
+        DataLoader: PyTorch geometric graph data loader
     """
     epoched_path = Config.energy_path / "energy_epoched"
     energy_files = os.listdir(epoched_path)
@@ -182,7 +193,6 @@ def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder, batch_
         skip_bads=Config.skip_bads
     )
 
-
 def create_graph_loaders(data_split: str, encoder: LabelEncoder, 
                         batch_size: int,
                         perm_types: list[str | None] = [None, "spatial", "frequency"], 
@@ -198,9 +208,11 @@ def create_graph_loaders(data_split: str, encoder: LabelEncoder,
         batch_size: Batch size for DataLoader
         perm_types: List of permutation types (None=original, spatial, frequency)
         drop_last: Whether to drop last incomplete batch
+        graph_lists: Optional pre-computed graph lists
+        participants: Optional list of participant IDs
         
     Returns:
-        Dict mapping graph types to PyTorch DataLoaders
+        dict: Dictionary mapping graph types to PyTorch DataLoaders
     """
     loaders = {}
     
@@ -507,7 +519,10 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
             'weighted_F1': weighted_f1,
             'macro_F1': macro_f1
         }
-        checkpoint_filename = get_experiment_filename(f"Acc_{ACC:.3f}_weighted_f1_{weighted_f1:.3f}_macro_f1_{macro_f1:.3f}_checkpoint", "pkl")
+        checkpoint_filename = get_experiment_filename(
+    f"Acc_{ACC:.3f}_weighted_f1_{weighted_f1:.3f}_macro_f1_{macro_f1:.3f}_checkpoint",
+            "pkl"
+        )
         torch.save(checkpoint, model_weights_dir / checkpoint_filename)
 
     net.train()
@@ -633,10 +648,101 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
             'val_freq_acc': val_freq_acc,
             'val_spatial_acc': val_spatial_acc
         }
-        checkpoint_filename = get_experiment_filename(f"best_model_val_loss_{val_avg_weighted_loss:.4f}_epoch_{epoch}", "pt")
+        checkpoint_filename = get_experiment_filename(
+            f"best_model_val_loss_{val_avg_weighted_loss:.4f}_epoch_{epoch}", "pt")
         torch.save(checkpoint, model_weights_dir / checkpoint_filename)
-        print(f"🔥 New best model saved at epoch {epoch} with validation loss {val_avg_weighted_loss:.4f}")
+        print(f"🔥 Saved at {epoch} with validation loss {val_avg_weighted_loss:.4f}")
     
     net.train()
     return (best_val_loss, val_avg_weighted_loss, val_freq_acc, val_spatial_acc, 
             val_avg_freq_loss, val_avg_spatial_loss, val_avg_weighted_loss)
+
+
+def get_raw_eeg_data(participants : list[str], 
+                     channels_to_exlcude : list[str] | str = []):
+    """Extract raw EEG data from preprocessed files for a list of participants.
+    
+    This function loads preprocessed EEG data for each participant, reshapes it 
+    into a 2D matrix here each row represents a channel and each column represents 
+    a timepoint across all epochs.
+
+    To ensure consistent length of timepoints for downstream ML, combines epoched 
+    objects instead of returning the raw data. 
+    
+    Args:
+        participants (list[str]) : List of participant IDs to process
+        channels_to_exlcude (list[str] | str, optional): 
+            List of channel names to exclude from the data. Defaults to empty list.
+            'bads' to ignore bad channels.
+            
+    Returns:
+        list[np.ndarray]: List of 2D numpy arrays, one per participant. 
+        Each array has shape
+            (n_channels, n_epochs * n_timepoints) where:
+            - n_channels: Number of EEG channels
+            - n_epochs: Number of epochs in the data
+            - n_timepoints: Number of timepoints per epoch
+            
+    Raises:
+        AssertionError: If no participants were successfully processed
+    """
+    participants_paths_and_file_names  =\
+        get_cleaned_data_paths(participants,Config.cleaned_data_path)[0]
+    
+    args_for_each_func_call = [(item, channels_to_exlcude)
+                for item in participants_paths_and_file_names]
+    
+    processes = multiprocessing.cpu_count() - 1 
+    with multiprocessing.Pool(processes) as p:
+        eeg_each_participant = list(
+            tqdm(p.starmap(load_and_reshape, args_for_each_func_call))
+        )
+    assert len(eeg_each_participant) > 0, "No participants were processed."
+    return eeg_each_participant
+
+def load_and_reshape(participant_file_info : tuple[str, str], 
+                    channels_to_exlcude : list[str] | str) -> np.ndarray:
+    """Load and reshape EEG data for a single participant.
+    
+    Loads preprocessed EEG data for a participant and reshapes it into a 2D matrix
+    where each row represents a channel and each column represents a timepoint
+    across all epochs. The function handles channel exclusion and validates the
+    shape of the resulting matrix.
+    
+    Args:
+        participant_file_info (tuple[str, str]): Tuple containing:
+            - participant_folder_path: Path to participant's data folder
+            - npy_file_name: Name of the .npy file containing preprocessed data
+        channels_to_exlcude (list[str] | str): List of channel names to exclude
+            or 'bads' to exclude bad channels
+            
+    Returns:
+        np.ndarray: 2D matrix of shape (n_channels, n_epochs * n_timepoints)
+            containing the reshaped EEG data
+            
+    Raises:
+        AssertionError: If participant folder doesn't exist
+        AssertionError: If number of channels exceeds 26 (TD-brain limit)
+        AssertionError: If reshaped matrix length exceeds raw data length
+    """
+    participant_folder_path, npy_file_name = participant_file_info
+    assert os.path.exists(participant_folder_path), "Participant folder not found."
+    preprocessed = load_preprocessed_data(participant_folder_path,
+                                          npy_file_name)
+    raw_timepoints = preprocessed.preprocessed_raw.n_times 
+    epochs_channels_timepoints_matrix = preprocessed.preprocessed_epochs.\
+                        load_data().pick_types(eeg=True, 
+                                                exclude =channels_to_exlcude)\
+                        .get_data()
+    channels_epochs_timepoints_matrix = \
+                        np.transpose(epochs_channels_timepoints_matrix, (1,0,2))   
+    n_channels, n_epochs, n_timepoints,  = channels_epochs_timepoints_matrix.shape
+    channels_timepoints_matrix = \
+        channels_epochs_timepoints_matrix\
+                                .reshape(n_channels,n_epochs * n_timepoints)
+    assert channels_timepoints_matrix.shape[0] <= 26,\
+        "Expecting at most all 26 EEG channels in TD-brain. Less if some are exlcuded."
+    assert channels_timepoints_matrix.shape[1] <= raw_timepoints,\
+        "Expecting rebuilt matrix to be atmost as long as raw."
+    return channels_timepoints_matrix
+
