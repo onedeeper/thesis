@@ -103,7 +103,7 @@ def train() -> float:
         participants=train_participants,
         encoder=None,  # No encoder needed for pretext tasks
         batch_size=batch_size,
-        data_split="train",
+        data_split_type="train",
         perm_types=["frequency", "spatial"],
         drop_last=drop_last
     )
@@ -113,7 +113,7 @@ def train() -> float:
         participants=validation_participants,
         encoder=None,  # No encoder needed for pretext tasks
         batch_size=batch_size,
-        data_split="validation", 
+        data_split_type="validation", 
         perm_types=["frequency", "spatial"],
         drop_last= drop_last
     )
@@ -123,7 +123,7 @@ def train() -> float:
         participants=test_participants,
         encoder=None,  # No encoder needed for pretext tasks
         batch_size=batch_size,
-        data_split="test", 
+        data_split_type="test", 
         perm_types=["frequency", "spatial"],
         drop_last= drop_last
     )

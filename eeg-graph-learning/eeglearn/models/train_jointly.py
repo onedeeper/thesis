@@ -107,19 +107,19 @@ def train() -> float:
     train_loaders = create_graph_loaders(participants=train_participants, 
                                    encoder=encoder, 
                                    batch_size=batch_size,
-                                   data_split="train",
+                                   data_split_type="train",
                                    drop_last= True)
     
     validation_loader = create_graph_loaders(participants=validation_participants, 
                                    encoder=encoder, 
                                    batch_size=batch_size,
-                                   data_split="validation",
+                                   data_split_type="validation",
                                    perm_types=[None],
                                    drop_last = not Config.testing_on_sample_data)
     test_loader  = create_graph_loaders(participants=test_participants, 
                                    encoder=encoder, 
                                    batch_size=batch_size,
-                                   data_split="test",
+                                   data_split_type="test",
                                    perm_types=[None],
                                    drop_last=drop_last)
      

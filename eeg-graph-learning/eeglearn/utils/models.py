@@ -25,6 +25,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import f1_score
 
 from torch_geometric.loader import DataLoader
+from torch.utils.data import DataLoader as LoaderForTimeSeriesData
 from eeglearn.config import Config
 from eeglearn.utils.utils import (get_details_from_file_name, get_labels_dict,
                                 load_preprocessed_data, get_cleaned_data_paths)
@@ -193,7 +194,7 @@ def get_graphs_original(files_to_load: list, label_encoder: LabelEncoder,
         skip_bads=Config.skip_bads
     )
 
-def create_graph_loaders(data_split: str, encoder: LabelEncoder, 
+def create_graph_loaders(data_split_type: str, encoder: LabelEncoder, 
                         batch_size: int,
                         perm_types: list[str | None] = [None, "spatial", "frequency"], 
                         drop_last: bool = Config.drop_last,
@@ -220,7 +221,7 @@ def create_graph_loaders(data_split: str, encoder: LabelEncoder,
         graph_lists = create_graph_list(participants=participants, 
                                         encoder=encoder, 
                                         perm_types=perm_types, 
-                                        data_split=data_split)
+                                        data_split=data_split_type)
     
     for graph_type, graphs in graph_lists.items():
         loader = DataLoader(dataset=graphs,
@@ -746,3 +747,20 @@ def load_and_reshape(participant_file_info : tuple[str, str],
         "Expecting rebuilt matrix to be atmost as long as raw."
     return channels_timepoints_matrix
 
+def create_time_series_data_dataloader(participants : list[str],
+                                 encoder: LabelEncoder,
+                                 batch_size : int ,
+                                 drop_last : bool = Config.drop_last,
+                                 channels_to_exlcude : list[str] | str = [],
+                                 ignore_replication_nans : bool = True,
+                                 shuffle : bool = True):
+    eeg_for_each_participant = get_raw_eeg_data(participants, channels_to_exlcude)
+    assert len(eeg_for_each_participant) > 0, "No participants processed."
+    all_labels = get_labels_dict()
+    numeric_participant_labels = [encoder.transform([all_labels[participant]]) 
+                                  for participant in participants]
+    data_and_labels = list(zip(eeg_for_each_participant, numeric_participant_labels))
+    return LoaderForTimeSeriesData(dataset = data_and_labels,
+                                   batch_size = batch_size,
+                                   shuffle= shuffle,
+                                   drop_last = drop_last)

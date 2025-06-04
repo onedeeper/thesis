@@ -163,18 +163,18 @@ def train_classification():
     print("🔄  Building graphs.")
     train_loader = create_graph_loaders(
         participants=train_participants, encoder=encoder, batch_size=batch_size,
-        data_split="train", perm_types=[None], drop_last=drop_last
+        data_split_type="train", perm_types=[None], drop_last=drop_last
     )
     
     validation_loader = create_graph_loaders(
         participants=validation_participants, encoder=encoder, batch_size=batch_size,
-        data_split="validation", perm_types=[None], 
+        data_split_type="validation", perm_types=[None], 
         drop_last= not testing_on_sample_data 
     )
     
     test_loader = create_graph_loaders(
         participants=test_participants, encoder=encoder, batch_size=batch_size,
-        data_split="test", perm_types=[None], drop_last=drop_last
+        data_split_type="test", perm_types=[None], drop_last=drop_last
     )
     
     print("\n📊 Graph Loader Information:")

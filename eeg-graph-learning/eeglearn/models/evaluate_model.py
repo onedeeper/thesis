@@ -48,7 +48,7 @@ def evaluate():
     # Load test data
     test_graphs_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/eeglearn/models/test_original_graph_list.pt"
     test_graphs = torch.load(test_graphs_path)
-    test_loader = create_graph_loaders(data_split="test",
+    test_loader = create_graph_loaders(data_split_type="test",
                                        batch_size=Config.batch_size,
                                        graph_lists={"original" : test_graphs},
                                        encoder=encoder,
