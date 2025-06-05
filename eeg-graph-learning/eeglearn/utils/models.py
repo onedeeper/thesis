@@ -731,32 +731,40 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
 
 def get_raw_eeg_data(participants : list[str], 
                      data_split_type : str, 
-                     channels_to_exlcude : list[str] | str = []):
-    """Extract raw EEG data from preprocessed files for a list of participants.
+                     channels_to_exlcude : list[str] | str = [],
+                     return_data : bool = False):
+    """Extract raw EEG data from preprocessed files and save to disk.
     
     This function loads preprocessed EEG data for each participant, reshapes it 
-    into a 2D matrix here each row represents a channel and each column represents 
-    a timepoint across all epochs.
+    into a 2D matrix where each row represents a channel and each column represents 
+    a timepoint across all epochs. The processed data is saved to disk to avoid 
+    memory issues.
 
-    To ensure consistent length of timepoints for downstream ML, combines epoched 
-    objects instead of returning the raw data. 
-    
     Args:
-        participants (list[str]) : List of participant IDs to process
+        participants (list[str]): List of participant IDs to process
+        data_split_type (str): Type of data split (e.g. 'train', 'test', 'valid')
         channels_to_exlcude (list[str] | str, optional): 
             List of channel names to exclude from the data. Defaults to empty list.
             'bads' to ignore bad channels.
+        return_data (bool, optional): Whether to return the loaded data.
+            If False, only saves to disk. Defaults to False.
             
     Returns:
-        list[np.ndarray]: List of 2D numpy arrays, one per participant. 
-        Each array has shape
-            (n_channels, n_epochs * n_timepoints) where:
+        list[np.ndarray] | None: If return_data is True, returns list of 2D numpy arrays 
+        loaded from disk, one per participant. Each array has shape 
+        (n_channels, n_epochs * n_timepoints) where:
             - n_channels: Number of EEG channels
             - n_epochs: Number of epochs in the data
             - n_timepoints: Number of timepoints per epoch
+        If return_data is False, returns None.
             
     Raises:
         AssertionError: If no participants were successfully processed
+        
+    Notes:
+        - Uses multiprocessing to parallelize data loading and reshaping
+        - Caches processed data to disk at Config.data_path/raw_eeg_{data_split_type}.pt
+        - Loads cached data if available instead of reprocessing
     """
     eeg_each_participant_path = Config.data_path / f"raw_eeg_{data_split_type}.pt"
     if os.path.exists(Config.data_path / f"raw_eeg_{data_split_type}.pt" ):
@@ -779,7 +787,8 @@ def get_raw_eeg_data(participants : list[str],
             )
         assert len(eeg_each_participant) > 0, "No participants were processed."
         torch.save(eeg_each_participant, eeg_each_participant_path)
-    return eeg_each_participant
+        if return_data:
+            return eeg_each_participant
 
 def load_and_reshape(participant_file_info : tuple[str, str], 
                     channels_to_exlcude : list[str] | str) -> np.ndarray:
