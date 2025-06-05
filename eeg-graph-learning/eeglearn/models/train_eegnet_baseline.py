@@ -39,6 +39,7 @@ cleaned_data_path = Config.cleaned_data_path
 energy_path = Config.energy_path
 model_weights_dir = Config.model_weights_dir / 'baseline'
 metrics_dir = Config.metrics_dir / 'baseline'
+eeg_net_data_folder = Config.data_path / "eegnet"
 ignore_replication_nans = True
 random_seed = Config.RANDOM_SEED
 main_classes = Config.main_classes
@@ -57,7 +58,9 @@ def train(trial: optuna.Trial = None) -> float:
     kernel_length = Config.kernel_length
 
     print_training_params()
-    setup_directories(model_weights_dir, metrics_dir)
+    setup_directories({"weights_dir" : model_weights_dir, 
+                       "metrics_dir" : metrics_dir,
+                       "eeg_net_data_dir" : eeg_net_data_folder})
     # Check and print device information
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")

@@ -322,12 +322,12 @@ def print_training_params():
     print()
 
 
-def setup_directories(model_weights_dir: Path, metrics_dir: Path):
+def setup_directories(directories: dict[str, Path]):
     """Create directories and log files for model training.
     
     Args:
-        model_weights_dir: Directory for model weights
-        metrics_dir: Directory for training metrics
+        directories: Dictionary mapping directory names to Path objects
+            Expected keys include 'weights' and 'metrics'
     """
     required_paths = [Config.cleaned_data_path, Config.energy_path, Config.data_path]
     path_descriptions = ["'data/cleaned'", "'data/energy'", "'data'"]
@@ -335,7 +335,7 @@ def setup_directories(model_weights_dir: Path, metrics_dir: Path):
     for path, desc in zip(required_paths, path_descriptions):
         assert path.exists(), f"{desc} folder should exist."
     
-    for dir_path, name in [(model_weights_dir, "weights"), (metrics_dir, "metrics")]:
+    for name, dir_path in directories.items():
         print(f"⚠️  Saving {name} to {dir_path}")
         dir_path.mkdir(exist_ok=True, parents=True)
     
@@ -344,14 +344,16 @@ def setup_directories(model_weights_dir: Path, metrics_dir: Path):
     epoch_log_filename = get_experiment_filename("epoch_log", "txt")
     update_log_filename = get_experiment_filename("update_log", "txt")
     
-    log_files = [
-        (metrics_dir / epoch_log_filename, "batch_size\tepoch\tlr\tdrop_rate\tacc\n"),
-        (metrics_dir / update_log_filename, "epoch\tlr\tbatch_size\tacc\n")
-    ]
-    
-    for log_file, header in log_files:
-        with open(log_file, "w") as f:
-            f.write(header)
+    metrics_dir = directories.get('metrics')
+    if metrics_dir:
+        log_files = [
+            (metrics_dir / epoch_log_filename, "batch_size\tepoch\tlr\tdrop_rate\tacc\n"),
+            (metrics_dir / update_log_filename, "epoch\tlr\tbatch_size\tacc\n")
+        ]
+        
+        for log_file, header in log_files:
+            with open(log_file, "w") as f:
+                f.write(header)
 
 
 def setup_label_encoder(ignore_replication_nans: bool = True):
