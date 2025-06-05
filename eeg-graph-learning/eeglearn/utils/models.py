@@ -18,7 +18,7 @@ import pandas as pd
 import torch
 from torch import nn
 from torch_geometric.data import Batch
-from torch.utils.data import Sampler
+from torch.utils.data import Sampler, Dataset
 from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -35,6 +35,48 @@ import pickle
 import multiprocessing
 from tqdm import tqdm
 
+
+class BalancedGraphSampler(Sampler):
+    """A PyTorch Sampler that balances class distribution in graph datasets.
+    
+    This sampler implements a weighted sampling strategy where the probability
+    of selecting a sample is inversely proportional to its class frequency.
+    This ensures each class is equally likely to be sampled, helping to address
+    class imbalance in the dataset.
+    
+    Args:
+        data_list (list): List of graph data objects, each with a 'y' attribute
+                         containing the class label
+        replacement (bool, optional): Whether to sample with replacement.
+                                    Defaults to True.
+    
+    Attributes:
+        weights (torch.DoubleTensor): Sampling weights for each sample
+        num_nodes (int): Total number of samples in the dataset
+        replacement (bool): Whether sampling is done with replacement
+    
+    WRITTEN BY AI
+    VERIFIED BY AUTHOR
+    """
+    def __init__(self, data_list, replacement=True):
+        labels         = [int(g.y) for g in data_list]
+        freq           = Counter(labels)
+        self.weights   = torch.DoubleTensor([1.0 / freq[l] for l in labels])
+        self.num_nodes = len(data_list)
+        
+        self.replacement = replacement
+        print("⚠️  Class weights:", {l: 1.0 / freq[l] for l in freq})
+
+    def __iter__(self):
+        return iter(torch.multinomial(self.weights,
+                                      self.num_nodes,
+                                      self.replacement).tolist())
+
+    def __len__(self):
+        return self.num_nodes
+    
+
+    
 def get_experiment_filename(base_filename: str, extension: str = None) -> str:
     """Create a filename with experiment name prefix if experiment_name is set.
     
@@ -602,47 +644,6 @@ def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEnco
     return highest_acc, ACC, epoch_loss, weighted_f1, macro_f1
 
 
-
-
-class BalancedGraphSampler(Sampler):
-    """A PyTorch Sampler that balances class distribution in graph datasets.
-    
-    This sampler implements a weighted sampling strategy where the probability
-    of selecting a sample is inversely proportional to its class frequency.
-    This ensures each class is equally likely to be sampled, helping to address
-    class imbalance in the dataset.
-    
-    Args:
-        data_list (list): List of graph data objects, each with a 'y' attribute
-                         containing the class label
-        replacement (bool, optional): Whether to sample with replacement.
-                                    Defaults to True.
-    
-    Attributes:
-        weights (torch.DoubleTensor): Sampling weights for each sample
-        num_nodes (int): Total number of samples in the dataset
-        replacement (bool): Whether sampling is done with replacement
-    
-    WRITTEN BY AI
-    VERIFIED BY AUTHOR
-    """
-    def __init__(self, data_list, replacement=True):
-        labels         = [int(g.y) for g in data_list]
-        freq           = Counter(labels)
-        self.weights   = torch.DoubleTensor([1.0 / freq[l] for l in labels])
-        self.num_nodes = len(data_list)
-        
-        self.replacement = replacement
-        print("⚠️  Class weights:", {l: 1.0 / freq[l] for l in freq})
-
-    def __iter__(self):
-        return iter(torch.multinomial(self.weights,
-                                      self.num_nodes,
-                                      self.replacement).tolist())
-
-    def __len__(self):
-        return self.num_nodes
-    
 def validate_self_supervised_model(net, validation_loaders: dict, epoch: int, 
                                    batch_size: int, lr: float, model_weights_dir: Path, 
                                    metrics_dir: Path, best_val_loss: float):
@@ -730,111 +731,132 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
     return (best_val_loss, val_avg_weighted_loss, val_freq_acc, val_spatial_acc, 
             val_avg_freq_loss, val_avg_spatial_loss, val_avg_weighted_loss)
 
+class EEGNetDataset(Dataset):
+    def __init__(self, eegnet_data_path : Path,
+                 label_encoder : LabelEncoder,
+                 participants : list[str],
+                 data_split_type : str,
+                 channels_to_exlcude : list | str = []):
+        self.eegnet_data_path = eegnet_data_path
+        self.participants = participants
+        self.data_split_type = data_split_type
+        self.channels_to_exlcude = channels_to_exlcude
+        self.label_encoder = label_encoder
+        self.cleaned_data_path = Config.cleaned_data_path
+        self.all_labels = get_labels_dict()
+        self.transform_and_save_eeg_data()
 
-def get_raw_eeg_data(participants : list[str], 
-                     data_split_type : str, 
-                     channels_to_exlcude : list[str] | str = [],
-                     return_data : bool = False):
-    """Extract raw EEG data from preprocessed files and save to disk.
-    
-    This function loads preprocessed EEG data for each participant, reshapes it 
-    into a 2D matrix where each row represents a channel and each column represents 
-    a timepoint across all epochs. The processed data is saved to disk to avoid 
-    memory issues.
+    def __len__(self):
+        return len(self.files_saved_to)
 
-    Args:
-        participants (list[str]): List of participant IDs to process
-        data_split_type (str): Type of data split (e.g. 'train', 'test', 'valid')
-        channels_to_exlcude (list[str] | str, optional): 
-            List of channel names to exclude from the data. Defaults to empty list.
-            'bads' to ignore bad channels.
-        return_data (bool, optional): Whether to return the loaded data.
-            If False, only saves to disk. Defaults to False.
-            
-    Returns:
-        list[np.ndarray] | None: If return_data is True, returns list of 2D numpy arrays 
-        loaded from disk, one per participant. Each array has shape 
-        (n_channels, n_epochs * n_timepoints) where:
-            - n_channels: Number of EEG channels
-            - n_epochs: Number of epochs in the data
-            - n_timepoints: Number of timepoints per epoch
-        If return_data is False, returns None.
-            
-    Raises:
-        AssertionError: If no participants were successfully processed
+    def __getitem__(self, idx):
+        data, label = torch.load(self.files_saved_to[idx])
+        return data, label
+
+    def transform_and_save_eeg_data(self) -> None:
+        """Extract raw EEG data from preprocessed files and save to disk.
         
-    Notes:
-        - Uses multiprocessing to parallelize data loading and reshaping
-        - Caches processed data to disk at Config.data_path/raw_eeg_{data_split_type}.pt
-        - Loads cached data if available instead of reprocessing
-    """
-    eeg_each_participant_path = Config.data_path / f"raw_eeg_{data_split_type}.pt"
-    if os.path.exists(Config.data_path / f"raw_eeg_{data_split_type}.pt" ):
-        print(
-            f"⚠️ Loading previously created EEG data from {eeg_each_participant_path}")
-        eeg_each_participant = torch.load(eeg_each_participant_path)
-    else:
-        print(
-       f"⚠️  Rebuilding raw eeg per parcicipant from epochs")
+        This function loads preprocessed EEG data for each participant, reshapes it 
+        into a 2D matrix where each row represents a channel and each column represents 
+        a timepoint across all epochs. The processed data is saved to disk to avoid 
+        memory issues.
+
+        The method updates `self.files_saved_to` with paths to the saved tensor files.
+                
+        Raises:
+            AssertionError: If no participants were successfully processed 
+            (via underlying calls).
+            
+        Notes:
+            - Uses multiprocessing to parallelize data loading and reshaping.
+            - Caches processed data to disk at 
+                `self.eegnet_data_path / <participant_file_name>`.
+            - Loads cached data if available instead of reprocessing 
+              (done in `process_individual_participant`).
+        """
         participants_paths_and_file_names  =\
-            get_cleaned_data_paths(participants,Config.cleaned_data_path)[0]
+            get_cleaned_data_paths(self.participants, self.cleaned_data_path)[0]
         
-        args_for_each_func_call = [(item, channels_to_exlcude)
-                    for item in participants_paths_and_file_names]
+        is_in_tuple_position = 0
+        subject_ids = [get_details_from_file_name(file_name)[is_in_tuple_position] 
+                       for _, file_name in participants_paths_and_file_names]
+        labels = [self.label_encoder.transform([self.all_labels[subject_id]]) 
+                  for subject_id in subject_ids]
+        args_for_each_func_call = [(item, 
+                                    labels[idx_for_label],
+                                    self.channels_to_exlcude,
+                                    self.eegnet_data_path)
+                for idx_for_label, item in enumerate(participants_paths_and_file_names)]
         
         processes = multiprocessing.cpu_count() - 1 
         with multiprocessing.Pool(processes) as p:
-            eeg_each_participant = list(
-                tqdm(p.starmap(load_and_reshape, args_for_each_func_call))
-            )
-        assert len(eeg_each_participant) > 0, "No participants were processed."
-        torch.save(eeg_each_participant, eeg_each_participant_path)
-        if return_data:
-            return eeg_each_participant
+                list(tqdm(p.starmap(self.process_individual_participant,
+                                     args_for_each_func_call),
+                        total=len(args_for_each_func_call),
+                        desc="Processing participants"))
+        self.files_saved_to = [self.eegnet_data_path / file_name 
+                                for _, file_name in participants_paths_and_file_names]
+        
 
-def load_and_reshape(participant_file_info : tuple[str, str], 
-                    channels_to_exlcude : list[str] | str) -> np.ndarray:
-    """Load and reshape EEG data into a 2D matrix for model input.
-    
-    Args:
-        participant_file_info (tuple[str, str]): Tuple containing:
-            participant_folder_path (str): Path to participant's data folder
-            npy_file_name (str): Name of preprocessed .npy data file
-        channels_to_exlcude (list[str] | str): Channel names to exclude from data.
-            Can be list of channel names or 'bads' to exclude bad channels.
-            
-    Returns:
-        np.ndarray: 2D matrix of shape (n_channels, n_timepoints) where:
-            - n_channels: Number of EEG channels (max 26)
-            - n_timepoints: Fixed length of Config.eeg_net_n_time_steps
-            
-    Raises:
-        AssertionError: If participant folder does not exist
-        AssertionError: If number of channels exceeds 26 (TD-brain maximum)
-        AssertionError: If data cannot be truncated to expected timepoint length
-    """
-    participant_folder_path, npy_file_name = participant_file_info
-    assert os.path.exists(participant_folder_path), "Participant folder not found."
-    preprocessed = load_preprocessed_data(participant_folder_path,
-                                          npy_file_name)
-    raw_data = preprocessed.preprocessed_raw.pick_types(eeg=True, 
-                                                      exclude=channels_to_exlcude)\
-                                          .get_data()
-    channels_timepoints_matrix = raw_data[:, :Config.eeg_net_n_time_steps]
-    
-    assert channels_timepoints_matrix.shape[0] == Config.n_eeg_channels,\
+    def process_individual_participant(self, 
+                        participant_file_info : tuple[str, str],
+                        label : str, 
+                        channels_to_exlcude : list[str] | str,
+                        eeg_net_data_path: Path = None) -> None:
+        """Load, reshape, and save EEG data as a tensor for a single participant.
+        
+        The processed data (a tuple of a tensor and its label) is saved to disk at
+        `eeg_net_data_path / npy_file_name`.
+
+        Args:
+            participant_file_info (tuple[str, str]): Tuple containing:
+                participant_folder_path (str): Path to participant's data folder.
+                npy_file_name (str): Name of preprocessed .npy data file
+            label (str): The label associated with the participant's data.
+            channels_to_exlcude (list[str] | str): Channel names to exclude from data.
+                Can be list of channel names or 'bads' to exclude bad channels.
+            eeg_net_data_path (Path): Path to the directory where the processed tensor 
+                                      should be saved.
+                
+        Raises:
+            AssertionError: If participant folder does not exist.
+            AssertionError: If the number of channels in the processed data does 
+                            not match Config.n_eeg_channels.
+            AssertionError: If the number of timepoints in the processed data does 
+                            not match Config.eeg_net_n_time_steps.
+        """
+        participant_folder_path, npy_file_name = participant_file_info
+        assert os.path.exists(participant_folder_path), "Participant folder not found."
+        save_path = eeg_net_data_path / npy_file_name
+
+        if os.path.exists(save_path):
+            # Load the tuple (data, label)
+            loaded_item = torch.load(save_path)
+            channels_timepoints_matrix, _ = loaded_item
+            assert channels_timepoints_matrix.shape[0] == Config.n_eeg_channels,\
         "Expecting at most all 26 EEG channels in TD-brain. Less if some are excluded."
-    assert channels_timepoints_matrix.shape[1] == Config.eeg_net_n_time_steps,\
-            f"EEGNet expects {Config.eeg_net_n_time_steps} timepoints"
-    return channels_timepoints_matrix
+            assert channels_timepoints_matrix.shape[1] == Config.eeg_net_n_time_steps,\
+                    f"EEGNet expects {Config.eeg_net_n_time_steps} timepoints"
+        else: 
+            preprocessed = load_preprocessed_data(participant_folder_path,
+                                                npy_file_name)
+            raw_data = preprocessed.preprocessed_raw.pick_types(eeg=True, 
+                                                        exclude=channels_to_exlcude)\
+                                            .get_data().astype("float32", copy=False)
+            channels_timepoints_matrix = raw_data[:, :Config.eeg_net_n_time_steps]
+            assert channels_timepoints_matrix.shape[0] == Config.n_eeg_channels,\
+        "Expecting at most all 26 EEG channels in TD-brain. Less if some are excluded."
+            assert channels_timepoints_matrix.shape[1] == Config.eeg_net_n_time_steps,\
+                    f"EEGNet expects {Config.eeg_net_n_time_steps} timepoints"
+            torch.save((torch.from_numpy(channels_timepoints_matrix), label),save_path)
 
 def create_time_series_data_dataloader(participants : list[str],
+                                 eegnet_data_path : Path, 
                                  data_split_type : str , 
-                                 encoder: LabelEncoder,
+                                 label_encoder: LabelEncoder,
                                  batch_size : int ,
                                  drop_last : bool = Config.drop_last,
                                  channels_to_exlcude : list[str] | str = [],
-                                 ignore_replication_nans : bool = True,
                                  shuffle : bool = True):
     """Create a DataLoader for time series EEG data with corresponding labels.
 
@@ -845,31 +867,35 @@ def create_time_series_data_dataloader(participants : list[str],
 
     Args:
         participants (list[str]): List of participant identifiers to process
-        encoder (LabelEncoder): Encoder for converting string labels to numeric values
-        batch_size (int): Number of samples per batch
+        eegnet_data_path (Path): Path to the directory where EEGNet processed data is
+                                 stored or will be saved.
+        data_split_type (str): String identifier for the data split 
+                              (e.g., 'train', 'test').
+        label_encoder (LabelEncoder): Encoder for converting string labels to numeric 
+                                    values.
+        batch_size (int): Number of samples per batch.
         drop_last (bool, optional): Whether to drop the last incomplete batch.
-            Defaults to Config.drop_last
+            Defaults to Config.drop_last.
         channels_to_exlcude (list[str] | str, optional): Channels to exclude from
-            the EEG data. Defaults to empty list
-        ignore_replication_nans (bool, optional): Whether to ignore NaN values
-            in replicated data. Defaults to True
-        shuffle (bool, optional): Whether to shuffle the data. Defaults to True
+            the EEG data. Defaults to empty list.
+        shuffle (bool, optional): Whether to shuffle the data. Defaults to True.
 
     Returns:
-        LoaderForTimeSeriesData: DataLoader yielding batches of (EEG data, label) pairs
+        torch.utils.data.DataLoader: DataLoader yielding batches of (EEG data, label) 
+                                    pairs.
 
     Raises:
-        AssertionError: If no participants were successfully processed
+        AssertionError: If no participants were successfully processed 
     """
-    eeg_for_each_participant = get_raw_eeg_data(participants = participants, 
-                                                data_split_type = data_split_type, 
-                                            channels_to_exlcude = channels_to_exlcude)
-    assert len(eeg_for_each_participant) > 0, "No participants processed."
-    all_labels = get_labels_dict()
-    numeric_participant_labels = [encoder.transform([all_labels[participant]]) 
-                                  for participant in participants]
-    data_and_labels = list(zip(eeg_for_each_participant, numeric_participant_labels))
-    return LoaderForTimeSeriesData(dataset = data_and_labels,
-                                   batch_size = batch_size,
-                                   shuffle= shuffle,
-                                   drop_last = drop_last)
+    dataset = EEGNetDataset(eegnet_data_path = eegnet_data_path,
+                            participants = participants, 
+                            data_split_type = data_split_type, 
+                            channels_to_exlcude = channels_to_exlcude,
+                            label_encoder=label_encoder)
+    
+    dataloader = LoaderForTimeSeriesData(dataset, 
+                            batch_size=batch_size, 
+                            shuffle=shuffle, 
+                            drop_last=drop_last)
+    return dataloader
+    

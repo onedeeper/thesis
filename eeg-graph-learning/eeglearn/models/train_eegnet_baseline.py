@@ -23,7 +23,7 @@ from eeglearn.utils.models import (
     split_data, get_graphs_original, print_training_params,
     setup_directories, setup_label_encoder, calculate_class_weights,
     write_epoch_log, update_log, validate_model, create_graph_loaders,
-    get_experiment_filename, get_raw_eeg_data, create_time_series_data_dataloader,
+    get_experiment_filename, create_time_series_data_dataloader,
     validate_EEGNet_model
 )
 
@@ -90,20 +90,23 @@ def train(trial: optuna.Trial = None) -> float:
                                                      n_classes)
     print("⏳ Loading preprocessed EEG time series data...")
     train_loader = create_time_series_data_dataloader(data_split_type="train",
+                                                eegnet_data_path=eeg_net_data_folder,
                                                       participants=train_participants,
-                                                      encoder=encoder,
+                                                      label_encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
 
     validation_loader = create_time_series_data_dataloader(data_split_type="valid",
+                                                eegnet_data_path=eeg_net_data_folder,
                                                 participants=validation_participants,
-                                                      encoder=encoder,
+                                                      label_encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
     
     test_loader = create_time_series_data_dataloader(data_split_type="test",
                                                       participants=test_participants,
-                                                      encoder=encoder,
+                                                eegnet_data_path=eeg_net_data_folder,
+                                                      label_encoder=encoder,
                                                       batch_size=batch_size,
                                                       drop_last=drop_last)
     print("\n📊 Data Loader Information:")
