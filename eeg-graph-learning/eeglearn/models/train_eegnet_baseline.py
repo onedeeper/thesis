@@ -94,21 +94,24 @@ def train(trial: optuna.Trial = None) -> float:
                                                       participants=train_participants,
                                                       label_encoder=encoder,
                                                       batch_size=batch_size,
-                                                      drop_last=drop_last)
+                                                      drop_last=drop_last,
+                                                      num_workers = num_workers)
 
     validation_loader = create_time_series_data_dataloader(data_split_type="valid",
                                                 eegnet_data_path=eeg_net_data_folder,
                                                 participants=validation_participants,
                                                       label_encoder=encoder,
                                                       batch_size=batch_size,
-                                                      drop_last=drop_last)
+                                                      drop_last=drop_last,
+                                                      num_workers = num_workers)
     
     test_loader = create_time_series_data_dataloader(data_split_type="test",
                                                       participants=test_participants,
                                                 eegnet_data_path=eeg_net_data_folder,
                                                       label_encoder=encoder,
                                                       batch_size=batch_size,
-                                                      drop_last=drop_last)
+                                                      drop_last=drop_last,
+                                                      num_workers=num_workers)
     print("\n📊 Data Loader Information:")
     print(f"\n  • Training loader: {len(train_loader)} batches")
     print(f"\n  • Validation loader: {len(validation_loader)} batches") 

@@ -855,6 +855,7 @@ def create_time_series_data_dataloader(participants : list[str],
                                  data_split_type : str , 
                                  label_encoder: LabelEncoder,
                                  batch_size : int ,
+                                 num_workers : int, 
                                  drop_last : bool = Config.drop_last,
                                  channels_to_exlcude : list[str] | str = [],
                                  shuffle : bool = True):
@@ -896,6 +897,7 @@ def create_time_series_data_dataloader(participants : list[str],
     dataloader = LoaderForTimeSeriesData(dataset, 
                             batch_size=batch_size, 
                             shuffle=shuffle, 
-                            drop_last=drop_last)
+                            drop_last=drop_last,
+                            num_workers=num_workers)
     return dataloader
     
