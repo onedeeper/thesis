@@ -70,7 +70,7 @@ def train() -> float:
     stop_at = Config.stop_at
     
     print_training_params()
-    setup_directories(model_weights_dir, metrics_dir)
+    setup_directories({"weights": model_weights_dir, "metrics": metrics_dir})
     
     # Check and print device information
     if torch.cuda.is_available():

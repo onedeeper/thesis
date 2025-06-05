@@ -58,8 +58,8 @@ def train(trial: optuna.Trial = None) -> float:
     kernel_length = Config.kernel_length
 
     print_training_params()
-    setup_directories({"weights_dir" : model_weights_dir, 
-                       "metrics_dir" : metrics_dir,
+    setup_directories({"weights" : model_weights_dir, 
+                       "metrics" : metrics_dir,
                        "eeg_net_data_dir" : eeg_net_data_folder})
     # Check and print device information
     if torch.cuda.is_available():

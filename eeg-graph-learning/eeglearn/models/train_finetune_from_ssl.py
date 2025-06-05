@@ -126,7 +126,7 @@ def train_classification():
     model_metrics_dir = Config.metrics_dir / "fine_tune"
 
     print_training_params()
-    setup_directories(model_weights_dir, model_metrics_dir)
+    setup_directories({"weights": model_weights_dir, "metrics": model_metrics_dir})
 
     # Check and print device information
     if torch.cuda.is_available():
