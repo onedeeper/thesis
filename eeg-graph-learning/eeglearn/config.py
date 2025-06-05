@@ -53,7 +53,7 @@ class Config:
     K = 1
 
     ## EEG net 
-    eeg_net_n_time_steps = 59700
+    eeg_net_n_time_steps = 45253 # smallest length raw eeg found in the dataset.
     n_eeg_channels = 26
     kernel_length = 64
     
