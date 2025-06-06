@@ -120,7 +120,7 @@ def objective(trial):
     Config.batch_size = trial.suggest_categorical("batch_size", [128, 256])
     
     trainer = importlib.import_module("eeglearn.models.train_jointly")
-    val_metric = trainer.train()   
+    val_metric = trainer.train() 
     return val_metric
 
 
