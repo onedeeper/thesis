@@ -225,12 +225,11 @@ def train() -> float:
         
         validation_highest_acc, validation_current_acc, validation_epoch_loss, \
             validation_f1_weighted, validation_f1_macro = validate_model(
-            net, validation_loader, encoder, validation_highest_acc, 
+            net, validation_loader, encoder, criterion_original, validation_highest_acc,
             best_validation_f1_score_macro,
             epoch, batch_size, lr, model_weights_dir, metrics_dir,
             testing_on_sample_data
         )
-        
         if validation_f1_macro > best_validation_f1_score_macro:
             best_validation_f1_score_macro = validation_f1_macro
             

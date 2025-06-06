@@ -231,7 +231,7 @@ def train() -> float:
         # Validation step
         (best_val_loss, val_weighted_loss, val_freq_acc, val_spatial_acc, 
          val_freq_loss, val_spatial_loss, _) = validate_self_supervised_model(
-            net, validation_loaders, epoch, batch_size, lr, 
+            net, validation_loaders, epoch, criterion, batch_size, lr, 
             model_weights_dir, metrics_dir, best_val_loss
         )
 

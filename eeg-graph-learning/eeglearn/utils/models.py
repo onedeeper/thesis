@@ -482,7 +482,8 @@ def update_log(epoch: int, acc: float, lr: float, batch_size: int, metrics_dir: 
         f.write(log)
 
 
-def validate_model(net, validation_loader: list, label_encoder: LabelEncoder, 
+def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
+                   criterion : nn.CrossEntropyLoss,
                    highest_acc: float, best_macro_f1: float, epoch: int, 
                    batch_size: int, lr: float, model_weights_dir: Path, 
                    metrics_dir: Path, testing_on_sample_data: bool = None):
@@ -492,6 +493,7 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
         net: Neural network model
         validate_data: List of validation participant IDs
         label_encoder: Label encoder for predictions
+        criterion: Loss function to use for validation
         highest_acc: Current highest accuracy
         best_f1_score: Current best F1 score
         epoch: Current epoch number
@@ -506,8 +508,6 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
     """
     if testing_on_sample_data is None:
         testing_on_sample_data = Config.testing_on_sample_data
-        
-    criterion = nn.CrossEntropyLoss().to(Config.device)
     
     net.testmode = True
     net.eval()
@@ -574,7 +574,9 @@ def validate_model(net, validation_loader: list, label_encoder: LabelEncoder,
     net.testmode = False
     return highest_acc, ACC, epoch_loss, weighted_f1, macro_f1
 
-def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEncoder, 
+def validate_EEGNet_model(net, validation_loader: list, 
+                          criterion : nn.CrossEntropyLoss,
+                          label_encoder: LabelEncoder, 
                    highest_acc: float, best_macro_f1: float, epoch: int, 
                    batch_size: int, lr: float, model_weights_dir: Path, 
                    metrics_dir: Path):
@@ -582,7 +584,8 @@ def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEnco
     
     Args:
         net: Neural network model
-        validate_data: List of validation participant IDs
+        validation_loader: Validation data loader
+        criterion: Loss function to use for validation
         label_encoder: Label encoder for predictions
         highest_acc: Current highest accuracy
         best_f1_score: Current best F1 score
@@ -595,8 +598,6 @@ def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEnco
     Returns:
         Tuple of (highest_acc, current_acc, epoch_loss, weighted_f1, macro_f1)
     """ 
-    criterion = nn.CrossEntropyLoss().to(Config.device)
-    
     net.eval()
     
     epoch_loss = 0.0
@@ -644,7 +645,8 @@ def validate_EEGNet_model(net, validation_loader: list, label_encoder: LabelEnco
     return highest_acc, ACC, epoch_loss, weighted_f1, macro_f1
 
 
-def validate_self_supervised_model(net, validation_loaders: dict, epoch: int, 
+def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
+                                   criterion : nn.CrossEntropyLoss, 
                                    batch_size: int, lr: float, model_weights_dir: Path, 
                                    metrics_dir: Path, best_val_loss: float):
     """Evaluate self-supervised model performance on validation data.
@@ -653,6 +655,7 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
         net: Neural network model
         validation_loaders: Dict with 'frequency' and 'spatial' validation loaders
         epoch: Current epoch number
+        criterion: Loss function to use for validation
         batch_size: Batch size for validation
         lr: Learning rate used
         model_weights_dir: Directory to save model weights
@@ -667,7 +670,6 @@ def validate_self_supervised_model(net, validation_loaders: dict, epoch: int,
     INSPECTED AND VERIFIED BY AUTHOR
     """
     device = Config.device
-    criterion = nn.CrossEntropyLoss().to(device)
     awl = AutomaticWeightedLoss(2)
     
     net.eval()

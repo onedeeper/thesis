@@ -194,6 +194,7 @@ def train(trial: optuna.Trial = None) -> float:
          validation_f1_macro) = validate_EEGNet_model(
             net=net,
             validation_loader=validation_loader,
+            criterion=criterion,
             label_encoder=encoder,
             highest_acc=validation_highest_acc,
             best_macro_f1=best_validation_f1_score_macro,

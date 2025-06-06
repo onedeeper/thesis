@@ -282,7 +282,7 @@ def train_classification():
         
         # Validation using the validate_model function to match vanilla training
         validation_highest_acc, validation_current_acc, validation_epoch_loss, validation_f1_weighted, validation_f1_macro = validate_model(
-            net, validation_loader, encoder, validation_highest_acc, 
+            net, validation_loader, encoder, criterion, validation_highest_acc, 
             best_val_f1_macro,
             epoch, batch_size, lr, model_weights_dir, model_metrics_dir,
             testing_on_sample_data
