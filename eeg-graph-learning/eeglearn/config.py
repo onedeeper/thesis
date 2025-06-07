@@ -32,6 +32,7 @@ class Config:
     weight_decay = 0.0005931173538055033
     drop_rate = 0.1360323026782416
     stop_at = 10
+    k_folds = 5
 
     # Data selection
     testing_on_sample_data = True
