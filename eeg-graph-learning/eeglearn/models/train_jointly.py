@@ -421,6 +421,13 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         'val_loss': [],
         'learning_rate': []
     }
+
+    test_loader  = create_graph_loaders(participants=test_participants, 
+                                   encoder=encoder, 
+                                   batch_size=batch_size,
+                                   data_split_type="test",
+                                   perm_types=[None],
+                                   drop_last=drop_last)
     
     for fold, (train_idx, val_idx) in enumerate(skf.split(cv_participants, cv_labels)):
         print(f"\n{'='*50}")
