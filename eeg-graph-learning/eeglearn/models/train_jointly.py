@@ -244,8 +244,7 @@ def train() -> float:
         if trainer.should_terminate:
             print(f"🟢  Early stopping triggered at epoch {epoch}")
             break
-        
-        # Calculate F1 scores for training original task
+    
         train_f1_original_weighted = f1_score(all_train_original_labels, all_train_original_preds, average='weighted', zero_division=0)
         train_f1_original_macro = f1_score(all_train_original_labels, all_train_original_preds, average='macro', zero_division=0)
 
@@ -318,8 +317,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     linear_size = Config.linear_size
     K = Config.K
     stop_at = Config.stop_at
-    
-    # Store model architecture and hyperparameters
+ 
     model_config = {
         'model_type': 'JointlyTrainModel',
         'input_channels': 5,
@@ -355,12 +353,12 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     
     print_training_params()
     
-    # Setup directories with CV suffix
+
     cv_model_weights_dir = Config.model_weights_dir / 'jointly_cv'
     cv_metrics_dir = Config.metrics_dir / 'jointly_cv'
     setup_directories({"weights": cv_model_weights_dir, "metrics": cv_metrics_dir})
     
-    # Check device
+ 
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
     else:
@@ -372,14 +370,14 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     
     all_psych_labels = get_labels_dict()
     
-    # Get data split - we'll use train+valid for CV, keep test separate
+
     if Config.load_data_split_from != "":
         print(f"⚠️  Data split loaded from {Config.data_path / Config.load_data_split_from}")
         split = torch.load(Config.data_path / Config.load_data_split_from)
     else:
         split = split_data()
     
-    # Combine train and validation for CV, keep test separate
+
     cv_participants = split['train'] + split['valid']
     test_participants = split['test']
     cv_labels = [all_psych_labels[p] for p in cv_participants]
@@ -387,7 +385,6 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     print(f"⚠️  Using {len(cv_participants)} participants for {k_folds}-fold CV")
     print(f"⚠️  Test set: {len(test_participants)} participants (held out)")
     
-    # Setup stratified k-fold
     skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=Config.RANDOM_SEED)
     model_config['cv_config'] = {
         'k_folds': k_folds,
@@ -397,7 +394,6 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         'n_test_participants': len(test_participants)
     }
     
-    # Store results for each fold
     fold_results = {
         'fold': [],
         'best_val_acc': [],
@@ -408,7 +404,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         'final_train_f1_macro': []
     }
     
-    # Store full training history for plotting learning curves
+    
     full_training_history = {
         'fold': [],
         'epoch': [],
@@ -431,7 +427,6 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         print(f"🔥 Training Fold {fold + 1}/{k_folds}")
         print(f"{'='*50}")
         
-        # Split participants for this fold
         fold_train_participants = [cv_participants[i] for i in train_idx]
         fold_val_participants = [cv_participants[i] for i in val_idx]
         
@@ -439,12 +434,11 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         print(f"   Training: {len(fold_train_participants)} participants")
         print(f"   Validation: {len(fold_val_participants)} participants")
         
-        # Calculate class weights for this fold
         rescaled_class_weights = calculate_class_weights(
             fold_train_participants, all_psych_labels, encoder, n_classes
         )
         
-        # Build graphs for this fold
+        
         print("🔄  Building graphs for this fold...")
         train_loaders = create_graph_loaders(
             participants=fold_train_participants,
@@ -463,14 +457,14 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             drop_last=not Config.testing_on_sample_data
         )
         
-        # Initialize model for this fold
+        
         net = JointlyTrainModel(
             inchannel=5, gcn_out_size=gcn_out_size, batch=batch_size, K=K,
             linear_size=linear_size, drop_rate=drop_rate, testmode=False,
             HF=120, HS=128, HC=n_classes
         ).to(Config.device)
         
-        # Setup training components
+
         awl = AutomaticWeightedLoss(3)
         criterion_original = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(Config.device)
         if not Config.use_class_weighting:
@@ -483,7 +477,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             threshold_mode='rel', cooldown=1, min_lr=0, eps=1e-8
         )
         
-        # Early stopping for this fold
+        
         trainer = Engine(lambda engine, batch: batch)
         early_stopping = EarlyStopping(
             patience=stop_at,
@@ -492,7 +486,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         )
         trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
         
-        # Training tracking for this fold
+        
         fold_best_val_acc = 0.0
         fold_best_val_f1_macro = 0.0
         fold_best_val_f1_weighted = 0.0
@@ -500,7 +494,6 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         fold_final_train_f1_weighted = 0.0
         fold_final_train_f1_macro = 0.0
         
-        # Training loop for this fold
         for epoch in range(epochs):
             net.train()
             loader = zip(train_loaders['frequency'], train_loaders['spatial'], 
@@ -548,7 +541,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
                 training_epoch_losses['spatial'] += training_loss_spatial.item()
                 training_epoch_losses['original'] += training_loss_original.item()
             
-            # Calculate training metrics for this epoch
+            
             train_acc_original = correct_predictions['original'] / total_samples
             train_f1_weighted_original = f1_score(all_train_original_labels, 
                                                  all_train_original_preds, 
@@ -557,11 +550,11 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
                                               all_train_original_preds, 
                                               average='macro', zero_division=0)
             
-            # Average losses over batches
+            
             for key in training_epoch_losses:
                 training_epoch_losses[key] /= batch_count
             
-            # Validation for this fold
+            
             net.eval()
             validation_highest_acc, validation_current_acc, validation_epoch_loss, \
                 validation_f1_weighted, validation_f1_macro = validate_model(
@@ -570,7 +563,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
                 Config.testing_on_sample_data
             )
             
-            # Store full training history for this epoch
+            
             current_lr = optimizer.param_groups[0]['lr']
             full_training_history['fold'].append(fold + 1)
             full_training_history['epoch'].append(epoch)
@@ -587,17 +580,17 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             full_training_history['val_loss'].append(validation_epoch_loss)
             full_training_history['learning_rate'].append(current_lr)
             
-            # Update fold bests
+            
             fold_best_val_acc = max(fold_best_val_acc, validation_current_acc)
             fold_best_val_f1_macro = max(fold_best_val_f1_macro, validation_f1_macro)
             fold_best_val_f1_weighted = max(fold_best_val_f1_weighted, validation_f1_weighted)
             
-            # Update final training metrics (these will be the last epoch's values)
+            
             fold_final_train_acc = train_acc_original
             fold_final_train_f1_weighted = train_f1_weighted_original
             fold_final_train_f1_macro = train_f1_macro_original
             
-            # Early stopping check
+            
             trainer.state.metrics = {'val_macro_f1': validation_f1_macro}
             trainer.fire_event(Events.EPOCH_COMPLETED)
             
@@ -607,14 +600,14 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             
             scheduler.step(training_epoch_losses['weighted'])
             
-            if epoch % 5 == 0:  # Print every 5 epochs to reduce clutter
+            if epoch % 5 == 0:  
                 print(f'Fold {fold + 1}, Epoch [{epoch}/{epochs}] - '
                       f'Train Acc: {train_acc_original:.4f}, '
                       f'Val Acc: {validation_current_acc:.4f}, '
                       f'Train F1: {train_f1_macro_original:.4f}, '
                       f'Val F1: {validation_f1_macro:.4f}')
         
-        # Store results for this fold
+        
         fold_results['fold'].append(fold + 1)
         fold_results['best_val_acc'].append(fold_best_val_acc)
         fold_results['best_val_f1_weighted'].append(fold_best_val_f1_weighted)
@@ -628,7 +621,6 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         print(f"   Best Val F1 Macro: {fold_best_val_f1_macro:.4f}")
         print(f"   Best Val F1 Weighted: {fold_best_val_f1_weighted:.4f}")
     
-    # Calculate cross-validation statistics
     cv_results = {}
     for metric in ['best_val_acc', 'best_val_f1_weighted', 'best_val_f1_macro',
                    'final_train_acc', 'final_train_f1_weighted', 'final_train_f1_macro']:
@@ -636,29 +628,28 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         cv_results[f'{metric}_mean'] = np.mean(values)
         cv_results[f'{metric}_std'] = np.std(values)
     
-    # Save detailed results
+    
     fold_results_df = pd.DataFrame(fold_results)
     cv_results_filename = get_experiment_filename(f"cv_{k_folds}fold_detailed_results", "csv")
     fold_results_df.to_csv(cv_metrics_dir / cv_results_filename, index=False)
     
-    # Save model configuration
     model_config_filename = get_experiment_filename(f"cv_{k_folds}fold_model_config", "json")
     with open(cv_metrics_dir / model_config_filename, 'w') as f:
         json.dump(model_config, f, indent=4)
     print(f"📝 Model configuration saved to: {model_config_filename}")
     
-    # Save full training history for learning curve plotting
+    
     training_history_df = pd.DataFrame(full_training_history)
     training_history_filename = get_experiment_filename(f"cv_{k_folds}fold_training_history", "csv")
     training_history_df.to_csv(cv_metrics_dir / training_history_filename, index=False)
     print(f"📊 Full training history saved to: {training_history_filename}")
     
-    # Save summary results
+    
     cv_summary = pd.DataFrame([cv_results])
     cv_summary_filename = get_experiment_filename(f"cv_{k_folds}fold_summary", "csv")
     cv_summary.to_csv(cv_metrics_dir / cv_summary_filename, index=False)
     
-    # Print final results
+    
     print(f"\n{'='*60}")
     print(f"🎯 {k_folds}-Fold Cross-Validation Results")
     print(f"{'='*60}")
