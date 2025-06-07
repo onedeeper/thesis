@@ -27,6 +27,7 @@ from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping
 from AutoWeight import AutomaticWeightedLoss
 
+import json
 from eeglearn.config import Config
 from eeglearn.utils.utils import get_details_from_file_name, get_labels_dict
 from eeglearn.models.models import JointlyTrainModel
@@ -318,6 +319,40 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     K = Config.K
     stop_at = Config.stop_at
     
+    # Store model architecture and hyperparameters
+    model_config = {
+        'model_type': 'JointlyTrainModel',
+        'input_channels': 5,
+        'gcn_out_size': gcn_out_size,
+        'batch_size': batch_size,
+        'K': K,
+        'linear_size': linear_size,
+        'drop_rate': drop_rate,
+        'HF': 120,
+        'HS': 128,
+        'training_params': {
+            'epochs': epochs,
+            'learning_rate': lr,
+            'weight_decay': weight_decay,
+            'early_stopping_patience': stop_at,
+            'scheduler': 'ReduceLROnPlateau',
+            'scheduler_params': {
+                'mode': 'min',
+                'factor': 0.1,
+                'patience': 4,
+                'threshold': 0.0001,
+                'threshold_mode': 'rel',
+                'cooldown': 1,
+                'min_lr': 0,
+                'eps': 1e-8
+            },
+            'optimizer': 'Adam',
+            'loss_function': 'CrossEntropyLoss',
+            'use_class_weighting': Config.use_class_weighting,
+            'automatic_loss_weighting': True
+        }
+    }
+    
     print_training_params()
     
     # Setup directories with CV suffix
@@ -333,6 +368,8 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     print(f"📱 Device: {Config.device}")
     
     encoder, n_classes = setup_label_encoder(ignore_replication_nans=True)
+    model_config['n_classes'] = n_classes
+    
     all_psych_labels = get_labels_dict()
     
     # Get data split - we'll use train+valid for CV, keep test separate
@@ -352,6 +389,13 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     
     # Setup stratified k-fold
     skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=Config.RANDOM_SEED)
+    model_config['cv_config'] = {
+        'k_folds': k_folds,
+        'stratified': True,
+        'random_seed': Config.RANDOM_SEED,
+        'n_train_participants': len(cv_participants),
+        'n_test_participants': len(test_participants)
+    }
     
     # Store results for each fold
     fold_results = {
@@ -362,6 +406,24 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         'final_train_acc': [],
         'final_train_f1_weighted': [],
         'final_train_f1_macro': []
+    }
+    
+    # Store full training history for plotting learning curves
+    full_training_history = {
+        'fold': [],
+        'epoch': [],
+        'train_acc_original': [],
+        'train_f1_weighted_original': [],
+        'train_f1_macro_original': [],
+        'train_loss_original': [],
+        'train_loss_freq': [],
+        'train_loss_spatial': [],
+        'train_loss_weighted': [],
+        'val_acc': [],
+        'val_f1_weighted': [],
+        'val_f1_macro': [],
+        'val_loss': [],
+        'learning_rate': []
     }
     
     for fold, (train_idx, val_idx) in enumerate(skf.split(cv_participants, cv_labels)):
@@ -440,6 +502,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         
         # Training loop for this fold
         for epoch in range(epochs):
+            net.train()
             loader = zip(train_loaders['frequency'], train_loaders['spatial'], 
                         cycle(train_loaders['original']))
             
@@ -448,6 +511,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             all_train_original_preds = []
             all_train_original_labels = []
             total_samples = 0
+            batch_count = 0
             
             for ind, (fdata, sdata, gdata) in enumerate(loader):
                 fdata, sdata, gdata = fdata.to(Config.device), sdata.to(Config.device), gdata.to(Config.device)
@@ -455,6 +519,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
                 y_freq, y_spatial, y_original = fdata.y, sdata.y, gdata.y
                 
                 total_samples += len(gdata.y)
+                batch_count += 1
                 predictions = {
                     'freq': torch.argmax(freq_logits, dim=1),
                     'spatial': torch.argmax(spatial_logits, dim=1),
@@ -483,7 +548,21 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
                 training_epoch_losses['spatial'] += training_loss_spatial.item()
                 training_epoch_losses['original'] += training_loss_original.item()
             
+            # Calculate training metrics for this epoch
+            train_acc_original = correct_predictions['original'] / total_samples
+            train_f1_weighted_original = f1_score(all_train_original_labels, 
+                                                 all_train_original_preds, 
+                                                 average='weighted', zero_division=0)
+            train_f1_macro_original = f1_score(all_train_original_labels,
+                                              all_train_original_preds, 
+                                              average='macro', zero_division=0)
+            
+            # Average losses over batches
+            for key in training_epoch_losses:
+                training_epoch_losses[key] /= batch_count
+            
             # Validation for this fold
+            net.eval()
             validation_highest_acc, validation_current_acc, validation_epoch_loss, \
                 validation_f1_weighted, validation_f1_macro = validate_model(
                 net, validation_loader, encoder, criterion_original, fold_best_val_acc,
@@ -491,19 +570,32 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
                 Config.testing_on_sample_data
             )
             
+            # Store full training history for this epoch
+            current_lr = optimizer.param_groups[0]['lr']
+            full_training_history['fold'].append(fold + 1)
+            full_training_history['epoch'].append(epoch)
+            full_training_history['train_acc_original'].append(train_acc_original)
+            full_training_history['train_f1_weighted_original'].append(train_f1_weighted_original)
+            full_training_history['train_f1_macro_original'].append(train_f1_macro_original)
+            full_training_history['train_loss_original'].append(training_epoch_losses['original'])
+            full_training_history['train_loss_freq'].append(training_epoch_losses['freq'])
+            full_training_history['train_loss_spatial'].append(training_epoch_losses['spatial'])
+            full_training_history['train_loss_weighted'].append(training_epoch_losses['weighted'])
+            full_training_history['val_acc'].append(validation_current_acc)
+            full_training_history['val_f1_weighted'].append(validation_f1_weighted)
+            full_training_history['val_f1_macro'].append(validation_f1_macro)
+            full_training_history['val_loss'].append(validation_epoch_loss)
+            full_training_history['learning_rate'].append(current_lr)
+            
             # Update fold bests
             fold_best_val_acc = max(fold_best_val_acc, validation_current_acc)
             fold_best_val_f1_macro = max(fold_best_val_f1_macro, validation_f1_macro)
             fold_best_val_f1_weighted = max(fold_best_val_f1_weighted, validation_f1_weighted)
             
-            # Calculate final training metrics
-            fold_final_train_acc = sum(correct_predictions.values()) / (3 * total_samples)
-            fold_final_train_f1_weighted = f1_score(all_train_original_labels, 
-                                                    all_train_original_preds, 
-                                                    average='weighted', zero_division=0)
-            fold_final_train_f1_macro = f1_score(all_train_original_labels,
-                                                 all_train_original_preds, 
-                                                 average='macro', zero_division=0)
+            # Update final training metrics (these will be the last epoch's values)
+            fold_final_train_acc = train_acc_original
+            fold_final_train_f1_weighted = train_f1_weighted_original
+            fold_final_train_f1_macro = train_f1_macro_original
             
             # Early stopping check
             trainer.state.metrics = {'val_macro_f1': validation_f1_macro}
@@ -517,8 +609,10 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             
             if epoch % 5 == 0:  # Print every 5 epochs to reduce clutter
                 print(f'Fold {fold + 1}, Epoch [{epoch}/{epochs}] - '
+                      f'Train Acc: {train_acc_original:.4f}, '
                       f'Val Acc: {validation_current_acc:.4f}, '
-                      f'Val F1 Macro: {validation_f1_macro:.4f}')
+                      f'Train F1: {train_f1_macro_original:.4f}, '
+                      f'Val F1: {validation_f1_macro:.4f}')
         
         # Store results for this fold
         fold_results['fold'].append(fold + 1)
@@ -547,6 +641,18 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
     cv_results_filename = get_experiment_filename(f"cv_{k_folds}fold_detailed_results", "csv")
     fold_results_df.to_csv(cv_metrics_dir / cv_results_filename, index=False)
     
+    # Save model configuration
+    model_config_filename = get_experiment_filename(f"cv_{k_folds}fold_model_config", "json")
+    with open(cv_metrics_dir / model_config_filename, 'w') as f:
+        json.dump(model_config, f, indent=4)
+    print(f"📝 Model configuration saved to: {model_config_filename}")
+    
+    # Save full training history for learning curve plotting
+    training_history_df = pd.DataFrame(full_training_history)
+    training_history_filename = get_experiment_filename(f"cv_{k_folds}fold_training_history", "csv")
+    training_history_df.to_csv(cv_metrics_dir / training_history_filename, index=False)
+    print(f"📊 Full training history saved to: {training_history_filename}")
+    
     # Save summary results
     cv_summary = pd.DataFrame([cv_results])
     cv_summary_filename = get_experiment_filename(f"cv_{k_folds}fold_summary", "csv")
@@ -572,7 +678,7 @@ if __name__ == "__main__":
     # train()
     
     # For k-fold cross-validation:
-    train_with_kfold_cv(k_folds=5)
+    train_with_kfold_cv(k_folds=2)
     
     # Default: run regular training
     #train()
