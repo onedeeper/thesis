@@ -676,7 +676,7 @@ if __name__ == "__main__":
     # train()
     
     # For k-fold cross-validation:
-    train_with_kfold_cv(k_folds=2)
+    train_with_kfold_cv(k_folds=Config.k_folds)
     
     # Default: run regular training
     #train()
