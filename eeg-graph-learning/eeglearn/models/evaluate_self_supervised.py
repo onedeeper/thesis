@@ -10,7 +10,7 @@ from eeglearn.config import Config
 from eeglearn.models.models import SelfSupervisedTrain
 from eeglearn.utils.models import (setup_label_encoder, create_graph_loaders, 
                                    calculate_class_weights) 
-
+import itertools
 def evaluate():
     """
     Load a trained model, evaluate it on the test set, and generate comprehensive performance metrics and visualizations.
@@ -56,6 +56,15 @@ def evaluate():
         model.load_state_dict(checkpoint)
                            
     print(f"Successfully loaded model weights from {model_path}")
+    
+    # Count trainable parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"\nModel Parameters:")
+    print(f"Total parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+    print(f"Non-trainable parameters: {total_params - trainable_params:,}")
+    
     model.eval()
 
     # Load test data - updated to match training script approach
@@ -207,61 +216,6 @@ def evaluate():
     sns.set_style("white")
     sns.despine()
     
-    # 1. Confusion Matrix - Frequency Task
-    cm_freq = confusion_matrix(all_labels_freq, all_preds_freq)
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(cm_freq, annot=True, fmt='d', cmap='Blues', 
-                xticklabels=class_names_freq, yticklabels=class_names_freq,
-                cbar_kws={'shrink': 0.8}, ax=ax)
-    ax.set_xlabel('Predicted Label')
-    ax.set_ylabel('True Label')
-    sns.despine()
-    plt.tight_layout()
-    plt.savefig('confusion_matrix_frequency.png', dpi=300, bbox_inches='tight', 
-                facecolor='white', edgecolor='none')
-    plt.show()
-    
-    # 2. Confusion Matrix - Spatial Task
-    cm_spatial = confusion_matrix(all_labels_spatial, all_preds_spatial)
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(cm_spatial, annot=True, fmt='d', cmap='Blues', 
-                xticklabels=class_names_spatial, yticklabels=class_names_spatial,
-                cbar_kws={'shrink': 0.8}, ax=ax)
-    ax.set_xlabel('Predicted Label')
-    ax.set_ylabel('True Label')
-    sns.despine()
-    plt.tight_layout()
-    plt.savefig('confusion_matrix_spatial.png', dpi=300, bbox_inches='tight', 
-                facecolor='white', edgecolor='none')
-    plt.show()
-    
-    # 3. Normalized Confusion Matrix - Frequency Task
-    cm_normalized_freq = cm_freq.astype('float') / cm_freq.sum(axis=1)[:, np.newaxis]
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(cm_normalized_freq, annot=True, fmt='.2f', cmap='Blues',
-                xticklabels=class_names_freq, yticklabels=class_names_freq,
-                cbar_kws={'shrink': 0.8}, ax=ax)
-    ax.set_xlabel('Predicted Label')
-    ax.set_ylabel('True Label')
-    sns.despine()
-    plt.tight_layout()
-    plt.savefig('confusion_matrix_normalized_frequency.png', dpi=300, bbox_inches='tight',
-                facecolor='white', edgecolor='none')
-    plt.show()
-    
-    # 4. Normalized Confusion Matrix - Spatial Task
-    cm_normalized_spatial = cm_spatial.astype('float') / cm_spatial.sum(axis=1)[:, np.newaxis]
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(cm_normalized_spatial, annot=True, fmt='.2f', cmap='Blues',
-                xticklabels=class_names_spatial, yticklabels=class_names_spatial,
-                cbar_kws={'shrink': 0.8}, ax=ax)
-    ax.set_xlabel('Predicted Label')
-    ax.set_ylabel('True Label')
-    sns.despine()
-    plt.tight_layout()
-    plt.savefig('confusion_matrix_normalized_spatial.png', dpi=300, bbox_inches='tight',
-                facecolor='white', edgecolor='none')
-    plt.show()
     
     # 5. Per-Class Performance Metrics Comparison
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
@@ -326,7 +280,48 @@ def evaluate():
     plt.savefig('per_class_metrics_comparison.png', dpi=300, bbox_inches='tight',
                 facecolor='white', edgecolor='none')
     plt.show()
-    
+    def _idx_to_perm(idx: int, n_bands: int = 5):
+        return list(itertools.permutations(range(n_bands)))[idx]
+
+    def _build_band_matrix(true_idx, pred_idx, n_bands: int = 5):
+        M = np.zeros((n_bands, n_bands), dtype=int)
+        for t_i, p_i in zip(true_idx, pred_idx):
+            t_perm = _idx_to_perm(int(t_i), n_bands)
+            p_perm = _idx_to_perm(int(p_i), n_bands)
+            for orig_pos, band in enumerate(t_perm):
+                pred_pos = p_perm.index(band)
+                M[band, pred_pos] += 1
+        return (M.T / M.sum(1, keepdims=True)).T
+
+    # Frequency task
+    band_acc_freq = _build_band_matrix(all_labels_freq, all_preds_freq)
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(band_acc_freq, annot=True, fmt=".2f", cmap="Blues",
+                cbar_kws={"shrink": 0.8})
+    plt.xlabel("Predicted position"); plt.ylabel("True band")
+    plt.title("Band relocation accuracy – Frequency")
+    plt.tight_layout()
+    plt.savefig("band_accuracy_frequency.png", dpi=300)
+    plt.show()
+
+    # Spatial task
+    band_acc_spatial = _build_band_matrix(all_labels_spatial, all_preds_spatial)
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(band_acc_spatial, annot=True, fmt=".2f", cmap="Blues",
+                cbar_kws={"shrink": 0.8})
+    plt.xlabel("Predicted position"); plt.ylabel("True band")
+    plt.title("Band relocation accuracy – Spatial")
+    plt.tight_layout()
+    plt.savefig("band_accuracy_spatial.png", dpi=300)
+    plt.show()
+    # =========================================================
+
+    print("\nVisualization files saved:")
+    print("- per_class_metrics_comparison.png")
+    print("- model_performance_summary.png")
+    print("- band_accuracy_frequency.png")
+    print("- band_accuracy_spatial.png")
+
     # 6. Model Performance Summary Comparison
     metrics_summary = {
         'Frequency Accuracy': accuracy_freq,
