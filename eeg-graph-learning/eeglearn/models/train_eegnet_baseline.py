@@ -48,15 +48,52 @@ is_optuna_enabled = Config.optuna
 
 
 def train(trial: optuna.Trial = None) -> float:
+    """Train the EEGNet model with detailed metrics tracking.
+    
+    Parameters:
+        trial (optuna.Trial, optional): Optuna trial for hyperparameter optimization
+        
+    Returns:
+        float: Best validation F1 macro score achieved during training
+    """
     batch_size = Config.batch_size
     epochs = Config.epochs
     lr = Config.lr
     stop_at = Config.stop_at
     weight_decay = Config.weight_decay
-    n_channels =Config.n_eeg_channels
-    n_timepoints=Config.eeg_net_n_time_steps
-    drop_rate= Config.drop_rate
+    n_channels = Config.n_eeg_channels
+    n_timepoints = Config.eeg_net_n_time_steps
+    drop_rate = Config.drop_rate
     kernel_length = Config.kernel_length
+
+    # Model configuration for saving
+    model_config = {
+        'model_type': 'EEGNet',
+        'n_channels': n_channels,
+        'n_timepoints': n_timepoints,
+        'kernel_length': kernel_length,
+        'dropout_rate': drop_rate,
+        'training_params': {
+            'epochs': epochs,
+            'learning_rate': lr,
+            'weight_decay': weight_decay,
+            'early_stopping_patience': stop_at,
+            'scheduler': 'ReduceLROnPlateau',
+            'scheduler_params': {
+                'mode': 'min',
+                'factor': 0.1,
+                'patience': 4,
+                'threshold': 0.0001,
+                'threshold_mode': 'rel',
+                'cooldown': 1,
+                'min_lr': 0,
+                'eps': 1e-8
+            },
+            'optimizer': 'Adam',
+            'loss_function': 'CrossEntropyLoss',
+            'use_class_weighting': Config.use_class_weighting
+        }
+    }
 
     print_training_params()
     setup_directories({"weights" : model_weights_dir, 
@@ -69,6 +106,10 @@ def train(trial: optuna.Trial = None) -> float:
         print(f"📱 Device: {device}")
     encoder, n_classes = \
         setup_label_encoder(ignore_replication_nans=ignore_replication_nans)
+    
+    # Add n_classes to model config
+    model_config['n_classes'] = n_classes
+    
     all_psych_labels = get_labels_dict()
     if Config.load_data_split_from != "":
         print(f"⚠️  Data split loaded from {data_path / Config.load_data_split_from}")
@@ -79,6 +120,14 @@ def train(trial: optuna.Trial = None) -> float:
     train_participants = split['train']
     validation_participants = split['valid']
     test_participants = split['test']
+    
+
+    model_config['data_split'] = {
+        'n_train_participants': len(train_participants),
+        'n_validation_participants': len(validation_participants),
+        'n_test_participants': len(test_participants),
+        'load_data_split_from': Config.load_data_split_from if Config.load_data_split_from != "" else None
+    }
 
     for split_name, participants in [("train", train_participants), 
                                      ("valid", validation_participants),
@@ -121,14 +170,18 @@ def train(trial: optuna.Trial = None) -> float:
 
     metrics = {
         'epoch': [], 
-        'train_loss': [], 'train_acc': [], 
-        'train_f1_weighted': [], 'train_f1_macro': [],
-        'validation_loss': [], 'validation_acc': [], 
-        'validation_f1_weighted': [], 'validation_f1_macro': []
+        'train_loss': [], 
+        'train_acc': [], 
+        'train_f1_weighted': [], 
+        'train_f1_macro': [],
+        'val_loss': [], 
+        'val_acc': [], 
+        'val_f1_weighted': [], 
+        'val_f1_macro': [],
+        'learning_rate': []
     }
 
     print(f"⚠️  Training for epochs: {epochs}")
-
 
     net = EEGNet(
         n_channels=n_channels,  
@@ -166,6 +219,7 @@ def train(trial: optuna.Trial = None) -> float:
         all_train_preds = []
         all_train_labels = []
         total_train_samples = 0
+        batch_count = 0
 
         net.train()
         for ind, data in enumerate(train_loader):
@@ -174,6 +228,7 @@ def train(trial: optuna.Trial = None) -> float:
             
             training_logits = net(X)
             total_train_samples += y.size(0)
+            batch_count += 1
             
             predictions = torch.argmax(training_logits, dim=1)
             correct_predictions += torch.sum(predictions == y).item()
@@ -187,7 +242,14 @@ def train(trial: optuna.Trial = None) -> float:
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()
-        # Validate model and get metrics
+            
+        avg_train_loss = epoch_loss / batch_count
+        train_accuracy = correct_predictions / total_train_samples
+        train_f1_weighted = f1_score(all_train_labels, all_train_preds, 
+                                     average='weighted', zero_division=0)
+        train_f1_macro = f1_score(all_train_labels, all_train_preds, 
+                                  average='macro', zero_division=0)
+        
         (validation_highest_acc, 
          validation_current_acc,
          validation_epoch_loss,
@@ -231,28 +293,19 @@ get_experiment_filename(f"training_metrics_EEGNet_pruned_trial_{trial.number}", 
         write_epoch_log(epoch, batch_size, lr, validation_current_acc, metrics_dir)
         scheduler.step(validation_epoch_loss)
         
-        avg_train_loss = epoch_loss / (ind + 1)
-        train_accuracy = correct_predictions / total_train_samples
+        current_lr = optimizer.param_groups[0]['lr']
         
-        train_f1_weighted = f1_score(all_train_labels, 
-                                     all_train_preds, 
-                                     average='weighted',
-                                     zero_division=0)
-        train_f1_macro = f1_score(all_train_labels,
-                                  all_train_preds,
-                                  average='macro',
-                                  zero_division=0)
-
+        # Store all metrics with consistent naming
         metrics['epoch'].append(epoch)
         metrics['train_loss'].append(avg_train_loss)
         metrics['train_acc'].append(train_accuracy)
         metrics['train_f1_weighted'].append(train_f1_weighted)
         metrics['train_f1_macro'].append(train_f1_macro)
-        
-        metrics['validation_loss'].append(validation_epoch_loss)
-        metrics['validation_acc'].append(validation_current_acc)
-        metrics['validation_f1_weighted'].append(validation_f1_weighted)
-        metrics['validation_f1_macro'].append(validation_f1_macro)
+        metrics['val_loss'].append(validation_epoch_loss)
+        metrics['val_acc'].append(validation_current_acc)
+        metrics['val_f1_weighted'].append(validation_f1_weighted)
+        metrics['val_f1_macro'].append(validation_f1_macro)
+        metrics['learning_rate'].append(current_lr)
         
         if epoch % 1 == 0:
             print(f'\n## Epoch [{epoch}/{epochs}] ##')
@@ -268,10 +321,20 @@ get_experiment_filename(f"training_metrics_EEGNet_pruned_trial_{trial.number}", 
             print(f'Best Validation ACC: {validation_highest_acc:.4f}')
             print(f'Best Validation F1 Weighted: {best_validation_f1_score_weighted:.4f}')
             print(f'Best Validation F1 Macro: {best_validation_f1_score_macro:.4f}')
+            print(f'Learning Rate: {current_lr:.6f}')
             print("==============================================")
     
+    # Save detailed training metrics
     metrics_filename = get_experiment_filename("training_metrics_EEGNet", "csv")
     pd.DataFrame(metrics).to_csv(metrics_dir / metrics_filename, index=False)
+    print(f"📊 Training metrics saved to: {metrics_filename}")
+    
+    # Save model configuration
+    model_config_filename = get_experiment_filename("model_config_EEGNet", "json")
+    with open(metrics_dir / model_config_filename, 'w') as f:
+        json.dump(model_config, f, indent=4)
+    print(f"📝 Model configuration saved to: {model_config_filename}")
+    
     return best_validation_f1_score_macro
 
 
@@ -620,4 +683,5 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
 
 
 if __name__ == "__main__":
-    train_with_kfold_cv(k_folds=Config.k_folds)
+    #train_with_kfold_cv(k_folds=Config.k_folds)
+    train()
