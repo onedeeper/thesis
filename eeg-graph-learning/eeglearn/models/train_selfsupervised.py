@@ -53,10 +53,10 @@ metrics_dir = Config.metrics_dir / 'self_supervised'
 ignore_replication_nans = True
 random_seed = Config.RANDOM_SEED
 main_classes = Config.main_classes
-optuna = Config.optuna
+is_optuna_enabled = Config.optuna
+import optuna
 
-
-def train() -> float:
+def train(trial: optuna.Trial = None) -> float:
     """Train the self-supervised model on frequency and spatial graphs.
     
     Returns:
@@ -241,6 +241,14 @@ def train() -> float:
         trainer.state.metrics = {'val_loss': val_weighted_loss}
         trainer.fire_event(Events.EPOCH_COMPLETED)
         
+        if trial: 
+            trial.report(val_weighted_loss, epoch)
+            if trial.should_prune():
+                metrics_df = pd.DataFrame(metrics)
+                if not metrics_df.empty:
+                    metrics_filename_pruned = get_experiment_filename(f"training_metrics_self_supervised_pruned_trial_{trial.number}", "csv")
+                    metrics_df.to_csv(metrics_dir / metrics_filename_pruned, index=False)
+                raise optuna.TrialPruned()
         if trainer.should_terminate:
             print(f"🟢  Early stopping triggered at epoch {epoch}")
             break
