@@ -87,7 +87,7 @@ if __name__ == "__main__":
     results_filename = f"optuna_results_{timestamp}_pid{pid}.csv"
     
     pruner = optuna.pruners.MedianPruner(n_warmup_steps=3)
-    study  = optuna.create_study(direction="maximize", pruner=pruner)
+    study  = optuna.create_study(direction="minimize", pruner=pruner)
     study.optimize(objective, n_trials=30, timeout=60*60*24)
 
     print("Best trial:", study.best_trial.params)
