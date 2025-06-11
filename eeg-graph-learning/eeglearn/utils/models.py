@@ -36,46 +36,6 @@ import multiprocessing
 from tqdm import tqdm
 
 
-class BalancedGraphSampler(Sampler):
-    """A PyTorch Sampler that balances class distribution in graph datasets.
-    
-    This sampler implements a weighted sampling strategy where the probability
-    of selecting a sample is inversely proportional to its class frequency.
-    This ensures each class is equally likely to be sampled, helping to address
-    class imbalance in the dataset.
-    
-    Args:
-        data_list (list): List of graph data objects, each with a 'y' attribute
-                         containing the class label
-        replacement (bool, optional): Whether to sample with replacement.
-                                    Defaults to True.
-    
-    Attributes:
-        weights (torch.DoubleTensor): Sampling weights for each sample
-        num_nodes (int): Total number of samples in the dataset
-        replacement (bool): Whether sampling is done with replacement
-    
-    WRITTEN BY AI
-    VERIFIED BY AUTHOR
-    """
-    def __init__(self, data_list, replacement=True):
-        labels         = [int(g.y) for g in data_list]
-        freq           = Counter(labels)
-        self.weights   = torch.DoubleTensor([1.0 / freq[l] for l in labels])
-        self.num_nodes = len(data_list)
-        
-        self.replacement = replacement
-        print("⚠️  Class weights:", {l: 1.0 / freq[l] for l in freq})
-
-    def __iter__(self):
-        return iter(torch.multinomial(self.weights,
-                                      self.num_nodes,
-                                      self.replacement).tolist())
-
-    def __len__(self):
-        return self.num_nodes
-    
-
     
 def get_experiment_filename(base_filename: str, extension: str = None) -> str:
     """Create a filename with experiment name prefix if experiment_name is set.
