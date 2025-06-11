@@ -74,7 +74,6 @@ def train() -> float:
     print_training_params()
     setup_directories({"weights": model_weights_dir, "metrics": metrics_dir})
     
-    # Check and print device information
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
     else:
@@ -143,12 +142,13 @@ def train() -> float:
         'train_original_loss': [], 'train_freq_acc': [], 'train_spatial_acc': [], 
         'train_original_acc': [], 'train_original_f1_weighted': [], 'train_original_f1_macro': [],
         'validation_loss': [], 'validation_acc': [], 
-        'validation_f1_weighted': [], 'validation_f1_macro': []
+        'validation_f1_weighted': [], 'validation_f1_macro': [],
+        'awl_freq_weight': [], 'awl_spatial_weight': [], 'awl_original_weight': []  # Added AWL weight tracking
     }
     
     print(f"⚠️  Training for epochs: {epochs}")
     
-    awl = AutomaticWeightedLoss(3)
+    awl = AutomaticWeightedLoss(num=3, training_jointly=True)
     net = JointlyTrainModel(
         inchannel=5, gcn_out_size=gcn_out_size, batch=batch_size, K=K,
         linear_size=linear_size, drop_rate=drop_rate, testmode=False,
@@ -160,7 +160,9 @@ def train() -> float:
         criterion_original = nn.CrossEntropyLoss().to(device)
 
     criterion_permuted = nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(
+            list(net.parameters()) + list(awl.parameters()),
+            lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,
         threshold_mode='rel', cooldown=1, min_lr=0, eps=1e-8
@@ -260,6 +262,11 @@ def train() -> float:
             else:
                 metrics['train_weighted_loss'].append(loss_val)
         
+        # Record AWL weights
+        metrics['awl_freq_weight'].append(awl.params[0].item())
+        metrics['awl_spatial_weight'].append(awl.params[1].item())
+        metrics['awl_original_weight'].append(awl.params[2].item())
+        
         metrics['validation_loss'].append(validation_epoch_loss)
         metrics['validation_acc'].append(validation_current_acc)
         metrics['validation_f1_weighted'].append(validation_f1_weighted)
@@ -290,6 +297,10 @@ def train() -> float:
         print(f'Best Validation ACC [{validation_highest_acc:.4f}]')
         print(f'Best Validation Weighted F1 Score [{best_validation_f1_score_weighted:.4f}]')
         print(f'Best Validation Macro F1 Score [{best_validation_f1_score_macro:.4f}]')
+        print("----------------------------------------------")
+        print(f'AWL Weights - Freq: {awl.params[0].item():.4f}, '
+              f'Spatial: {awl.params[1].item():.4f}, '
+              f'Original: {awl.params[2].item():.4f}')
         print("==============================================")
     
     metrics_filename = get_experiment_filename("training_metrics_jointly", "csv")
@@ -419,7 +430,10 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         'val_f1_weighted': [],
         'val_f1_macro': [],
         'val_loss': [],
-        'learning_rate': []
+        'learning_rate': [],
+        'awl_freq_weight': [], 
+        'awl_spatial_weight': [],
+        'awl_original_weight': []
     }
 
     test_loader  = create_graph_loaders(participants=test_participants, 
@@ -472,13 +486,15 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         ).to(Config.device)
         
 
-        awl = AutomaticWeightedLoss(3)
+        awl = AutomaticWeightedLoss(num=3, training_jointly=True)
         criterion_original = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(Config.device)
         if not Config.use_class_weighting:
             criterion_original = nn.CrossEntropyLoss().to(Config.device)
         
         criterion_permuted = nn.CrossEntropyLoss().to(Config.device)
-        optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+        optimizer = torch.optim.Adam(
+            list(net.parameters()) + list(awl.parameters()),
+            lr=lr, weight_decay=weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,
             threshold_mode='rel', cooldown=1, min_lr=0, eps=1e-8
@@ -586,6 +602,9 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             full_training_history['val_f1_macro'].append(validation_f1_macro)
             full_training_history['val_loss'].append(validation_epoch_loss)
             full_training_history['learning_rate'].append(current_lr)
+            full_training_history['awl_freq_weight'].append(awl.params[0].item())
+            full_training_history['awl_spatial_weight'].append(awl.params[1].item())
+            full_training_history['awl_original_weight'].append(awl.params[2].item())
             
             
             fold_best_val_acc = max(fold_best_val_acc, validation_current_acc)
@@ -676,7 +695,7 @@ if __name__ == "__main__":
     # train()
     
     # For k-fold cross-validation:
-    train_with_kfold_cv(k_folds=Config.k_folds)
+    #train_with_kfold_cv(k_folds=Config.k_folds)
     
     # Default: run regular training
-    #train()
+    train()

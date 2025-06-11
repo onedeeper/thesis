@@ -75,15 +75,12 @@ def train() -> float:
     print_training_params()
     setup_directories({"weights": model_weights_dir, "metrics": metrics_dir})
     
-    # Check and print device information
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
     else:
         print("⚠️ Using CPU for training")
     print(f"📱 Device: {device}")
 
-    # Note: For self-supervised pretext tasks, we don't need label encoder or class weights
-    # But we use the same data split as other training approaches
     if Config.load_data_split_from != "":
         print(f"⚠️  Data split loaded from {data_path / Config.load_data_split_from}")
         split = torch.load(data_path / Config.load_data_split_from)
@@ -101,34 +98,31 @@ def train() -> float:
         print(f"n {split_name}: {len(participants)}")
 
     print("🔄  Building graphs.")
-    # Create training loaders for frequency and spatial permutations
     train_loaders = create_graph_loaders(
         participants=train_participants,
-        encoder=None,  # No encoder needed for pretext tasks
+        encoder=None,
         batch_size=batch_size,
         data_split_type="train",
         perm_types=["frequency", "spatial"],
         drop_last=drop_last
     )
     
-    # Create validation loaders
     validation_loaders = create_graph_loaders(
         participants=validation_participants,
-        encoder=None,  # No encoder needed for pretext tasks
+        encoder=None,
         batch_size=batch_size,
         data_split_type="validation", 
         perm_types=["frequency", "spatial"],
-        drop_last= drop_last
+        drop_last=drop_last
     )
 
-    # Create validation loaders
     test_loaders = create_graph_loaders(
         participants=test_participants,
-        encoder=None,  # No encoder needed for pretext tasks
+        encoder=None,
         batch_size=batch_size,
         data_split_type="test", 
         perm_types=["frequency", "spatial"],
-        drop_last= drop_last
+        drop_last=drop_last
     )
     
     print("\n📊 Graph Loader Information:")
@@ -145,17 +139,18 @@ def train() -> float:
     for loader_type, loader in test_loaders.items():
         print(f"    - {loader_type}: {len(loader)} batches")
     print()
-    # Initialize metrics dictionary to match train_jointly structure
+
     metrics = {
         'epoch': [], 'train_weighted_loss': [], 'train_freq_loss': [], 'train_spatial_loss': [],
         'train_freq_acc': [], 'train_spatial_acc': [],
         'validation_weighted_loss': [], 'validation_freq_loss': [], 'validation_spatial_loss': [],
-        'validation_freq_acc': [], 'validation_spatial_acc': []
+        'validation_freq_acc': [], 'validation_spatial_acc': [],
+        'freq_weight': [], 'spatial_weight': []  
     }
 
     print(f"⚠️  Training for epochs: {epochs}")
     
-    awl = AutomaticWeightedLoss(2)
+    awl = AutomaticWeightedLoss(num=2, training_jointly=False)
     net = SelfSupervisedTrain(
         inchannel=5, 
         gcn_out_size=gcn_out_size, 
@@ -171,17 +166,18 @@ def train() -> float:
     print(f"⚠️ Training on device : {device}")
     
     criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(
+            list(net.parameters()) + list(awl.parameters()),
+            lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,
         threshold_mode='rel', cooldown=1, min_lr=0, eps=1e-8
     )
     
-    # Setup early stopping based on validation loss
     trainer = Engine(lambda engine, batch: batch)
     early_stopping = EarlyStopping(
         patience=stop_at,
-        score_function=lambda engine: -engine.state.metrics['val_loss'],  # Negative because we want to minimize
+        score_function=lambda engine: -engine.state.metrics['val_loss'],
         trainer=trainer
     )
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
@@ -191,7 +187,6 @@ def train() -> float:
     for epoch in range(epochs):
         net.train()
         
-        # Training loop
         train_loader = zip(train_loaders['frequency'], train_loaders['spatial'])
         train_epoch_weighted_loss = 0.0
         train_epoch_loss_freq = 0.0
@@ -224,24 +219,25 @@ def train() -> float:
             train_epoch_loss_spatial += train_loss_spatial.item()
             total_train_samples += y_freq.size(0)
 
-        # Calculate training averages
+    
         train_avg_weighted_loss = train_epoch_weighted_loss / (ind + 1)
         train_avg_freq_loss = train_epoch_loss_freq / (ind + 1)
         train_avg_spatial_loss = train_epoch_loss_spatial / (ind + 1)
         train_freq_acc = train_correct_pred_freq / total_train_samples
         train_spatial_acc = train_correct_pred_spatial / total_train_samples
 
-        # Validation step
+        freq_weight = awl.params[0].item()
+        spatial_weight = awl.params[1].item()
+
         (best_val_loss, val_weighted_loss, val_freq_acc, val_spatial_acc, 
          val_freq_loss, val_spatial_loss, _) = validate_self_supervised_model(
             net, validation_loaders, epoch, criterion, batch_size, lr, 
             model_weights_dir, metrics_dir, best_val_loss
         )
 
-        # Update scheduler with validation loss
         scheduler.step(val_weighted_loss)
         
-        # Update early stopping engine
+   
         trainer.state.metrics = {'val_loss': val_weighted_loss}
         trainer.fire_event(Events.EPOCH_COMPLETED)
         
@@ -249,7 +245,7 @@ def train() -> float:
             print(f"🟢  Early stopping triggered at epoch {epoch}")
             break
 
-        # Log epoch information  
+
         write_epoch_log(epoch, batch_size, lr, val_freq_acc, metrics_dir)
 
         # Save metrics
@@ -264,6 +260,8 @@ def train() -> float:
         metrics['validation_spatial_loss'].append(val_spatial_loss)
         metrics['validation_freq_acc'].append(val_freq_acc)
         metrics['validation_spatial_acc'].append(val_spatial_acc)
+        metrics['freq_weight'].append(freq_weight) 
+        metrics['spatial_weight'].append(spatial_weight)  
 
         # Print epoch results
         print(f'Epoch [{epoch}/{epochs}]')
@@ -273,6 +271,7 @@ def train() -> float:
         print('Training ACC@1:')
         print(f'Training Frequency ACC[{train_freq_acc:.4f}]')
         print(f'Training Spatial ACC[{train_spatial_acc:.4f}]')
+        print(f'AWL Weights - Freq: {freq_weight:.4f}, Spatial: {spatial_weight:.4f}')  
         print("----------------------------------------------")
         print(f'Validation Weighted loss [{val_weighted_loss:.4f}]')
         print(f'Validation Frequency loss[{val_freq_loss:.4f}]')
@@ -404,7 +403,9 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         'val_freq_loss': [],
         'val_spatial_loss': [],
         'val_weighted_loss': [],
-        'learning_rate': []
+        'learning_rate': [],
+        'freq_weight': [],
+        'spatial_weight': []  
     }
     
     test_loaders = create_graph_loaders(
@@ -458,9 +459,11 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             HS=128
         ).to(Config.device)
         
-        awl = AutomaticWeightedLoss(2)
+        awl = AutomaticWeightedLoss(num=2, training_jointly= False)
         criterion = nn.CrossEntropyLoss().to(Config.device)
-        optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+        optimizer = torch.optim.Adam(
+            list(net.parameters()) + list(awl.parameters()),
+            lr=lr, weight_decay=weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode='min', factor=0.1, patience=4, threshold=0.0001,
             threshold_mode='rel', cooldown=1, min_lr=0, eps=1e-8
@@ -469,7 +472,7 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         trainer = Engine(lambda engine, batch: batch)
         early_stopping = EarlyStopping(
             patience=stop_at,
-            score_function=lambda engine: -engine.state.metrics['val_loss'],  # Negative because we want to minimize
+            score_function=lambda engine: -engine.state.metrics['val_loss'],  
             trainer=trainer
         )
         trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
@@ -525,7 +528,11 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             train_freq_acc = train_correct_pred_freq / total_train_samples
             train_spatial_acc = train_correct_pred_spatial / total_train_samples
 
-            # Validation step
+
+            freq_weight = awl.params[0].item()
+            spatial_weight = awl.params[1].item()
+
+
             (best_val_loss, val_weighted_loss, val_freq_acc, val_spatial_acc, 
              val_freq_loss, val_spatial_loss, _) = validate_self_supervised_model(
                 net, validation_loaders, epoch, criterion, batch_size, lr, 
@@ -546,20 +553,17 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
             full_training_history['val_spatial_loss'].append(val_spatial_loss)
             full_training_history['val_weighted_loss'].append(val_weighted_loss)
             full_training_history['learning_rate'].append(current_lr)
+            full_training_history['freq_weight'].append(freq_weight)  
+            full_training_history['spatial_weight'].append(spatial_weight)  
             
-            # Update best metrics
             fold_best_val_loss = min(fold_best_val_loss, val_weighted_loss)
             fold_best_val_freq_acc = max(fold_best_val_freq_acc, val_freq_acc)
             fold_best_val_spatial_acc = max(fold_best_val_spatial_acc, val_spatial_acc)
-            
-            # Update final metrics (last epoch values)
+        
             fold_final_train_freq_acc = train_freq_acc
             fold_final_train_spatial_acc = train_spatial_acc
-            
-            # Update scheduler with validation loss
             scheduler.step(val_weighted_loss)
             
-            # Update early stopping engine
             trainer.state.metrics = {'val_loss': val_weighted_loss}
             trainer.fire_event(Events.EPOCH_COMPLETED)
             
@@ -567,15 +571,15 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
                 print(f"🟢  Early stopping triggered at epoch {epoch} for fold {fold + 1}")
                 break
             
-            if epoch % 5 == 0:  # Print progress every 5 epochs
+            if epoch % 5 == 0:  
                 print(f'Fold {fold + 1}, Epoch [{epoch}/{epochs}] - '
                       f'Train Freq Acc: {train_freq_acc:.4f}, '
                       f'Train Spatial Acc: {train_spatial_acc:.4f}, '
                       f'Val Freq Acc: {val_freq_acc:.4f}, '
                       f'Val Spatial Acc: {val_spatial_acc:.4f}, '
-                      f'Val Loss: {val_weighted_loss:.4f}')
+                      f'Val Loss: {val_weighted_loss:.4f}, '
+                      f'AWL Weights - Freq: {freq_weight:.4f}, Spatial: {spatial_weight:.4f}')
         
-        # Store fold results
         fold_results['fold'].append(fold + 1)
         fold_results['best_val_loss'].append(fold_best_val_loss)
         fold_results['best_val_freq_acc'].append(fold_best_val_freq_acc)
@@ -588,7 +592,6 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         print(f"   Best Val Freq Acc: {fold_best_val_freq_acc:.4f}")
         print(f"   Best Val Spatial Acc: {fold_best_val_spatial_acc:.4f}")
     
-    # Calculate cross-validation summary statistics
     cv_results = {}
     for metric in ['best_val_loss', 'best_val_freq_acc', 'best_val_spatial_acc',
                    'final_train_freq_acc', 'final_train_spatial_acc']:
@@ -596,29 +599,28 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
         cv_results[f'{metric}_mean'] = np.mean(values)
         cv_results[f'{metric}_std'] = np.std(values)
     
-    # Save detailed fold results
+
     fold_results_df = pd.DataFrame(fold_results)
     cv_results_filename = get_experiment_filename(f"cv_{k_folds}fold_detailed_results_self_supervised", "csv")
     fold_results_df.to_csv(cv_metrics_dir / cv_results_filename, index=False)
     
-    # Save model configuration
+
     model_config_filename = get_experiment_filename(f"cv_{k_folds}fold_model_config_self_supervised", "json")
     with open(cv_metrics_dir / model_config_filename, 'w') as f:
         json.dump(model_config, f, indent=4)
     print(f"📝 Model configuration saved to: {model_config_filename}")
     
-    # Save full training history
+
     training_history_df = pd.DataFrame(full_training_history)
     training_history_filename = get_experiment_filename(f"cv_{k_folds}fold_training_history_self_supervised", "csv")
     training_history_df.to_csv(cv_metrics_dir / training_history_filename, index=False)
     print(f"📊 Full training history saved to: {training_history_filename}")
-    
-    # Save CV summary
+
     cv_summary = pd.DataFrame([cv_results])
     cv_summary_filename = get_experiment_filename(f"cv_{k_folds}fold_summary_self_supervised", "csv")
     cv_summary.to_csv(cv_metrics_dir / cv_summary_filename, index=False)
     
-    # Print final results
+ 
     print(f"\n{'='*60}")
     print(f"🎯 {k_folds}-Fold Cross-Validation Results (Self-Supervised)")
     print(f"{'='*60}")
@@ -634,8 +636,8 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
 if __name__ == "__main__":
     # Example usage:
     # For regular training:
-    # train()
+    train()
     
     # For k-fold cross-validation:
-    train_with_kfold_cv(k_folds=Config.k_folds)
+    #train_with_kfold_cv(k_folds=Config.k_folds)
     

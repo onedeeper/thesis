@@ -26,17 +26,17 @@ class AutomaticWeightedLoss(nn.Module):
         >>> awl = AutomaticWeightedLoss(2)
         >>> total_loss = awl(loss1, loss2)
     """
-    def __init__(self, num=2):
+    def __init__(self,training_jointly : bool, num=2):
         super(AutomaticWeightedLoss, self).__init__()
         params = torch.ones(num, requires_grad=True)
+        self.training_jointly = training_jointly
         self.params = torch.nn.Parameter(params)
-        #print(self.params)
 
     def forward(self, *x):
         loss_sum = 0
         length = len(x)-1
         for i, loss in enumerate(x):
-            if i == length:
+            if i == length and self.training_jointly:
                 loss_sum += 1 / (self.params[i] ** 2) * loss + torch.log(self.params[i])
             else:
                 loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(self.params[i])
