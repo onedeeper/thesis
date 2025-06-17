@@ -254,38 +254,6 @@ class SelfSupervisedTrain(nn.Module):
 
         return logits_x1, logits_x2
 
-class SelfSupervisedTest(nn.Module):
-    """Test model for downstream classification using learned representations.
-    
-    Args:
-        inchannel (int): Number of input features per node
-        gcn_out_size (int): Number of output features after graph convolution
-        batch (int): Batch size
-        K (int): Order of Chebyshev polynomials
-        **kwargs: Additional parameters including:
-            - classes (int): Number of output classes for classification
-    
-    Returns:
-        torch.Tensor: Classification probabilities with softmax applied
-    """
-    def __init__(self, inchannel, gcn_out_size, batch, K, **kwargs):
-        super(SelfSupervisedTest, self).__init__()
-        self.batch = batch
-        self.n_eeg_channels = Config.n_eeg_channels
-        self.conv1 = gnn.ChebConv(inchannel, gcn_out_size, K=K)
-
-        self.classifier = nn.Sequential(
-            nn.Linear(gcn_out_size*self.n_eeg_channels, kwargs['classes'])
-        )
-
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        out = F.relu(self.conv1(x, edge_index))
-        out = out.view(self.batch, -1)
-        out = self.classifier(out)
-        out = F.softmax(out, dim=1)
-        return out
-
 class EEGNet(nn.Module):
     """Implementation of EEGNet architecture from Lawhern et al. (2018).
 
