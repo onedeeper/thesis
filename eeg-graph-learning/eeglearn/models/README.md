@@ -7,101 +7,94 @@ This module contains implementations of graph neural network models for EEG clas
 - **Vanilla Model**: Standard graph convolution model for supervised classification
 - **Jointly Trained Model**: Multi-task learning with frequency, spatial, and classification heads
 - **Self-Supervised Model**: Pre-training model using frequency and spatial permutation tasks
+- **Fine-tuned Model**: Fine-tuning pre-trained models on downstream tasks
 - **EEGNet Baseline**: CNN-based baseline model for comparison
 
-## Quick Start: Training the Vanilla Model
+## Training Models
 
-This guide walks you through training and evaluating the vanilla model using the provided example configuration.
+### Quick Start
 
-### 1. Environment Setup
-
-First, ensure your environment is properly set up:
+The fastest way to train a model is to use one of the pre-configured setups:
 
 ```bash
-# Activate the conda environment
-conda activate eeg-graph-learning
+# 1. Navigate to the configs directory
+cd configs/config_files/
 
-# Navigate to the project root
-cd eeg-graph-learning
-```
+# 2. Copy the desired configuration
+all_data_vanilla_experiment_config.py ../../config.py
 
-### 2. Configuration Setup
+Replace the eeglearn/config.py with the desired model config.
 
-The model behavior is controlled through the `Config` class in `eeglearn/config.py`. Here are the key parameters for the vanilla model:
-
-#### Essential Configuration Parameters
-
-```python
-# Training hyperparameters
-epochs = 100                    # Number of training epochs
-batch_size = 5                  # Batch size for training
-lr = 0.0016898579982266685     # Learning rate
-weight_decay = 0.0005931173538055033  # L2 regularization
-drop_rate = 0.1360323026782416  # Dropout rate
-stop_at = 10                    # Early stopping patience
-
-# Model architecture
-gcn_out_size = 64              # GCN output features
-linear_size = 512              # Linear layer size
-K = 1                          # Chebyshev polynomial order
-
-# Data settings
-testing_on_sample_data = True  # Use small sample for testing
-use_class_weighting = False    # Enable class balancing
-main_classes = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]  # Target classes
-```
-
-#### Customizing Configuration
-
-To modify the configuration for your experiment:
-
-1. **Edit `eeglearn/config.py`** directly, or
-2. **Set experiment name** to track different runs:
-   ```python
-   Config.experiment_name = "my_vanilla_experiment"
-   ```
-
-3. **Adjust for your dataset size**:
-   ```python
-   # For full dataset
-   Config.testing_on_sample_data = False
-   Config.use_stratify = True
-   
-   # For quick testing
-   Config.testing_on_sample_data = True
-   Config.use_stratify = False
-   ```
-
-### 3. Running Training
-
-#### Option A: Direct Python Execution (Recommended)
-
-```bash
-# Navigate to the models directory
-cd eeglearn/models
-
-# Run vanilla training
+# 3. Run training
+cd ../../
 python train_vanilla.py
+
+# 4. Evaluate results
+python evaluate_vanilla_model.py
 ```
 
-#### Option B: Import and Run Programmatically
+### Available Pre-configured Experiments
+
+#### Full Dataset Configurations
+- `all_data_vanilla_experiment_config.py` - Vanilla graph model
+- `all_data_self_supervised_experiment_config.py` - Self-supervised pre-training
+- `all_data_jointly_experiment_config.py` - Joint training with multiple tasks
+- `all_data_fine_tune_experiment_config.py` - Fine-tuning from pre-trained model
+- `all_data_baseline_experiment_config.py` - EEGNet baseline
+
+#### Tuur's Dataset Configurations
+- `tuur_data_vanilla_experiment_config.py` - Vanilla model on subset
+- `tuur_data_self_supervised_experiment_config.py` - Self-supervised on subset
+- `tuur_data_jointly_experiment_config.py` - Joint training on subset
+- `tuur_data_fine_tune_experiment_config.py` - Fine-tuning on subset
+- `tuur_data_baseline_experiment_config.py` - EEGNet baseline on subset
+
+### Training Commands
+
+After copying the appropriate configuration file:
+
+```bash
+# For vanilla model
+python train_vanilla.py
+
+# For self-supervised pre-training
+python train_selfsupervised.py
+
+# For jointly trained model
+python train_jointly.py
+
+# For fine-tuning from pre-trained model
+python train_finetune_from_ssl.py
+
+# For EEGNet baseline
+python train_eegnet_baseline.py
+```
+
+### Configuration File Structure
+
+Each configuration file contains optimized hyperparameters and settings:
+
+- **Experiment settings**: Name, reproducibility, data splits
+- **Training hyperparameters**: Learning rate, batch size, epochs, weight decay
+- **Model architecture**: Layer sizes, dropout rates, Chebyshev order
+- **Data selection**: Classes to include, preprocessing options
+- **Hardware settings**: Device selection, number of workers
+
+### Cross-Validation Training
+
+Most models support k-fold cross-validation:
 
 ```python
 from eeglearn.models.train_vanilla import train_with_kfold_cv
-from eeglearn.config import Config
 
-# Optional: modify config before training
-Config.epochs = 50
-Config.experiment_name = "vanilla_test"
-
-# Run 5-fold cross-validation training
+# Run 5-fold cross-validation
 results = train_with_kfold_cv(k_folds=5)
-print(f"Average validation F1: {results['best_val_f1_macro_mean']:.4f}")
+print(f"Average F1: {results['best_val_f1_macro_mean']:.4f}")
 ```
 
-### 4. Understanding Training Output
+### Understanding Training Output
 
-During training, you'll see output like this:
+During training, you'll see progress information:
 
 ```
 🚀 Using GPU: NVIDIA GeForce RTX 4090
@@ -124,43 +117,46 @@ n test: 30
 Fold 1, Epoch [0/100] - Train Acc: 0.2500, Val Acc: 0.3333, Train F1: 0.2000, Val F1: 0.2500
 ```
 
-### 5. Training Outputs
+### Training Outputs
 
-The training process creates several output files in `data/weights/vanilla/` and `data/metrics/vanilla/`:
+Training generates several output files:
 
-#### Model Weights
-- `{experiment_name}_vanilla_best_model_*.pt` - Best model checkpoints
-- Model weights are saved when validation performance improves
+#### Model Weights (`data/weights/`)
+- `{experiment_name}_best_model_*.pt` - Best model checkpoints
+- Organized by model type and cross-validation folds
 
-#### Metrics Files
-- `cv_5fold_summary_vanilla_{timestamp}.csv` - Cross-validation summary
-- `cv_5fold_detailed_results_vanilla_{timestamp}.csv` - Per-fold detailed results  
-- `cv_5fold_training_history_vanilla_{timestamp}.csv` - Complete training history
-- `cv_5fold_model_config_vanilla_{timestamp}.json` - Model configuration used
+#### Metrics (`data/metrics/`)
+- `cv_5fold_summary_{model}_{timestamp}.csv` - Cross-validation summary
+- `cv_5fold_detailed_results_{model}_{timestamp}.csv` - Per-fold results
+- `cv_5fold_training_history_{model}_{timestamp}.csv` - Training history
+- `cv_5fold_model_config_{model}_{timestamp}.json` - Model configuration
 
-### 6. Evaluating Model Performance
+### Evaluating Models
 
-#### Option A: Evaluate Saved Model
+After training, evaluate performance:
 
 ```bash
-# Run evaluation on test set
+# For vanilla model
 python evaluate_vanilla_model.py
+
+# For self-supervised model
+python evaluate_self_supervised.py
+
+# For jointly trained model
+python evaluate_jointly_model.py
+
+# For fine-tuned model
+python evaluate_fine_tuning.py
+
+# For EEGNet baseline
+python evaluate_eegnet_baseline.py
 ```
 
-#### Option B: Evaluate Programmatically
+### Evaluation Outputs
 
-```python
-from eeglearn.models.evaluate_vanilla_model import evaluate
+Evaluation generates comprehensive results:
 
-# This will load the best saved model and evaluate on test set
-evaluate()
-```
-
-#### Evaluation Outputs
-
-The evaluation generates:
-
-1. **Console Output**: Comprehensive metrics including:
+1. **Console Output**:
    ```
    ====================================================
    MODEL EVALUATION RESULTS
@@ -185,120 +181,88 @@ The evaluation generates:
    MDD             0.6667     0.7500     0.7059     12        
    ```
 
-### 7. Model Architecture Details
+## Model Architecture Details
 
-The Vanilla model (`VanillaGraphModel`) consists of:
+### Vanilla Graph Model
 
-1. **Graph Convolution Layer**: ChebConv with configurable K parameter
-2. **Fully Connected Layers**: 
+The vanilla model consists of:
+1. **Graph Convolution Layer**: ChebConv with configurable K parameter  
+2. **Fully Connected Layers**:
    - Linear(gcn_out_size * 26, linear_size)
-   - Linear(linear_size, linear_size // 2)  
+   - Linear(linear_size, linear_size // 2)
    - Linear(linear_size // 2, n_classes)
 3. **Regularization**: Batch normalization, ReLU activation, dropout
 
-#### Input Requirements
+### Self-Supervised Model
+
+Pre-training tasks:
+- **Frequency permutation**: Predicting frequency band order
+- **Spatial permutation**: Predicting electrode permutation
+
+### Jointly Trained Model
+
+Multi-task learning with:
+- **Classification head**: Main psychiatric condition prediction
+- **Frequency head**: Frequency permutation prediction  
+- **Spatial head**: Spatial permutation prediction
+
+### EEGNet Baseline
+
+CNN architecture specifically designed for EEG:
+- **Temporal convolution**: Captures frequency information
+- **Spatial convolution**: Models spatial relationships
+- **Separable convolution**: Reduces parameters
+
+## Input Requirements
+
+All graph models expect:
 - **Node features**: 5 features per EEG channel (26 channels total)
-- **Graph structure**: Adjacency matrix based on EEG electrode positions
-- **Batch size**: Configurable (default: 5)
+- **Graph structure**: Adjacency matrix based on electrode positions
+- **Batch processing**: Configurable batch sizes
 
-### 8. Troubleshooting
+EEGNet expects:
+- **Raw EEG**: Time series data (channels × timepoints)
+- **Preprocessing**: Filtered and epoched data
 
-#### Common Issues
+## Troubleshooting
+
+### Common Issues
 
 **CUDA Out of Memory**:
-```python
-Config.batch_size = 3  # Reduce batch size
-Config.num_workers = 4  # Reduce data loader workers
-```
+- Reduce batch size in configuration file
+- Reduce number of data loader workers
 
 **Poor Performance**:
-- Check class distribution in your data
-- Enable class weighting: `Config.use_class_weighting = True`
-- Adjust learning rate: `Config.lr = 0.001`
-- Increase model capacity: `Config.linear_size = 1024`
+- Try different configuration files
+- Check class distribution in data
+- Consider using class weighting configurations
 
 **Data Loading Errors**:
 - Ensure data preprocessing is complete
-- Check data paths in `Config.data_path`
-- Verify participant metadata file exists
+- Check data paths in configuration
+- Verify all required files exist
 
-#### Debug Mode
+### Hyperparameter Tuning
 
-For detailed debugging, modify the config:
-
-```python
-Config.testing_on_sample_data = True  # Use smaller dataset
-Config.epochs = 5                     # Fewer epochs for testing
-Config.batch_size = 2                 # Smaller batches
-```
-
-### 9. Hyperparameter Tuning
-
-For automated hyperparameter optimization:
+For automated optimization:
 
 ```bash
-# Run Optuna tuning for vanilla model
-python optuna_tuning_vanilla.py
-```
-
-This will automatically search for optimal:
-- Learning rate
-- Weight decay  
-- Dropout rate
-- Model architecture parameters
-
-### 10. Advanced Usage
-
-#### Custom Data Splits
-
-```python
-# Save a custom data split for reproducibility
-from eeglearn.utils.models import split_data
-import torch
-
-custom_split = split_data()
-torch.save(custom_split, "data/my_custom_split.pt")
-
-# Use the custom split
-Config.load_data_split_from = "my_custom_split.pt"
-```
-
-#### Multi-GPU Training
-
-```python
-# The model automatically detects and uses available GPUs
-# For specific GPU selection:
-import torch
-torch.cuda.set_device(0)  # Use GPU 0
-```
-
-## Other Models
-
-### Jointly Trained Model
-```bash
-python train_jointly.py       # Training
-python evaluate_jointly_model.py  # Evaluation
-```
-
-### Self-Supervised Model  
-```bash
-python train_selfsupervised.py    # Pre-training
-python evaluate_self_supervised.py # Evaluation
-```
-
-### EEGNet Baseline
-```bash
-python train_eegnet_baseline.py     # Training
-python evaluate_eegnet_baseline.py  # Evaluation
+# Run Optuna tuning
+python optuna_tuning_vanilla.py      # Vanilla model
+python optuna_tuning_jointly.py      # Joint model
+python optuna_tuning_self_supervised.py  # Self-supervised
+python optuna_tuning_eegnet.py       # EEGNet baseline
+python optuna_tuning_fine_tuning.py  # Fine-tuning
 ```
 
 ## Model Comparison
 
-| Model | Purpose | Input | Output |
-|-------|---------|-------|--------|
-| Vanilla | Standard classification | Original graphs | Class predictions |
-| Jointly | Multi-task learning | Freq + Spatial + Original | 3 prediction heads |
-| Self-Supervised | Pre-training | Freq + Spatial graphs | Permutation predictions |
-| EEGNet | CNN baseline | Raw EEG timeseries | Class predictions |
+| Model | Purpose | Training Script | Evaluation Script |
+|-------|---------|----------------|------------------|
+| Vanilla | Standard classification | `train_vanilla.py` | `evaluate_vanilla_model.py` |
+| Self-Supervised | Pre-training | `train_selfsupervised.py` | `evaluate_self_supervised.py` |
+| Jointly | Multi-task learning | `train_jointly.py` | `evaluate_jointly_model.py` |
+| Fine-tuned | Transfer learning | `train_finetune_from_ssl.py` | `evaluate_fine_tuning.py` |
+| EEGNet | CNN baseline | `train_eegnet_baseline.py` | `evaluate_eegnet_baseline.py` |
 
-For more details about the data preprocessing pipeline and graph construction, see the main project README. 
+For more details about data preprocessing and graph construction, see the main project documentation. 
