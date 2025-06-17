@@ -1,0 +1,14 @@
+VanillaGraphModel(
+  (conv1): ChebConv(5, 16, K=4, normalization=sym)
+  (HC): Sequential(
+    (0): Linear(in_features=416, out_features=1024, bias=True)
+    (1): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): Dropout(p=0.1805815985936346, inplace=False)
+    (4): Linear(in_features=1024, out_features=512, bias=True)
+    (5): BatchNorm1d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (6): ReLU(inplace=True)
+    (7): Dropout(p=0.1805815985936346, inplace=False)
+    (8): Linear(in_features=512, out_features=5, bias=True)
+  )
+)

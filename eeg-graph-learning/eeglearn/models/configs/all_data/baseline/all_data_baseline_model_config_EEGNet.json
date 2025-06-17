@@ -1,0 +1,27 @@
+{
+    "model_type": "EEGNet",
+    "n_channels": 26,
+    "n_timepoints": 45253,
+    "kernel_length": 32,
+    "dropout_rate": 0.25,
+    "training_params": {
+        "epochs": 100,
+        "learning_rate": 0.002715053672,
+        "weight_decay": 7.72e-06,
+        "early_stopping_patience": 10,
+        "scheduler": "ReduceLROnPlateau",
+        "scheduler_params": {
+            "mode": "min",
+            "factor": 0.1,
+            "patience": 4,
+            "threshold": 0.0001,
+            "threshold_mode": "rel",
+            "cooldown": 1,
+            "min_lr": 0,
+            "eps": 1e-08
+        },
+        "optimizer": "Adam",
+        "loss_function": "CrossEntropyLoss",
+        "use_class_weighting": true
+    }
+}

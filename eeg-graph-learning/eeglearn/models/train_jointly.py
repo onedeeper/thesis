@@ -108,7 +108,6 @@ def train() -> float:
     print_training_params()
     setup_directories({"weights": model_weights_dir, "metrics": metrics_dir})
 
-    
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
     else:

@@ -107,25 +107,6 @@ def train(trial: optuna.Trial = None) -> float:
     
     print_training_params()
     setup_directories({"weights": model_weights_dir, "metrics": metrics_dir})
-
-    net = SelfSupervisedTrain(
-            inchannel=5, 
-            gcn_out_size=gcn_out_size, 
-            batch=batch_size, 
-            K=K,
-            linear_size=linear_size,
-            drop_rate=drop_rate,
-            HF=120, 
-            HS=128
-        ).to(device)
-    # Save model configuration
-    print(net)
-    model_config_filename = get_experiment_filename("model_config_self_supervised", "json")
-    with open(metrics_dir / model_config_filename, 'w') as f:
-        json.dump(model_config, f, indent=4)
-    print(f"📝 Model configuration saved to: {model_config_filename}")
-
-    return
     
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")

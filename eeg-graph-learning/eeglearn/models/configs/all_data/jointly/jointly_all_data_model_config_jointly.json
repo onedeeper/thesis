@@ -1,0 +1,32 @@
+{
+    "model_type": "JointlyTrainModel",
+    "input_channels": 5,
+    "gcn_out_size": 16,
+    "batch_size": 256,
+    "K": 1,
+    "linear_size": 256,
+    "drop_rate": 0.28963177462781536,
+    "HF": 120,
+    "HS": 128,
+    "training_params": {
+        "epochs": 100,
+        "learning_rate": 0.0006496044992092125,
+        "weight_decay": 2.5478495567522496e-05,
+        "early_stopping_patience": 10,
+        "scheduler": "ReduceLROnPlateau",
+        "scheduler_params": {
+            "mode": "min",
+            "factor": 0.1,
+            "patience": 4,
+            "threshold": 0.0001,
+            "threshold_mode": "rel",
+            "cooldown": 1,
+            "min_lr": 0,
+            "eps": 1e-08
+        },
+        "optimizer": "Adam",
+        "loss_function": "CrossEntropyLoss",
+        "use_class_weighting": true,
+        "automatic_loss_weighting": true
+    }
+}

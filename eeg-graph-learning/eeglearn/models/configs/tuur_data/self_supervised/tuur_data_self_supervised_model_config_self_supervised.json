@@ -1,0 +1,31 @@
+{
+    "model_type": "SelfSupervisedTrain",
+    "input_channels": 5,
+    "gcn_out_size": 32,
+    "batch_size": 128,
+    "K": 1,
+    "linear_size": 256,
+    "drop_rate": 0.2710446660301302,
+    "HF": 120,
+    "HS": 128,
+    "training_params": {
+        "epochs": 100,
+        "learning_rate": 0.0009429632052678728,
+        "weight_decay": 2.8424273553573905e-05,
+        "early_stopping_patience": 10,
+        "scheduler": "ReduceLROnPlateau",
+        "scheduler_params": {
+            "mode": "min",
+            "factor": 0.1,
+            "patience": 4,
+            "threshold": 0.0001,
+            "threshold_mode": "rel",
+            "cooldown": 1,
+            "min_lr": 0,
+            "eps": 1e-08
+        },
+        "optimizer": "Adam",
+        "loss_function": "CrossEntropyLoss",
+        "automatic_loss_weighting": true
+    }
+}
