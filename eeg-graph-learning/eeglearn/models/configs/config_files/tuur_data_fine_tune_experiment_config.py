@@ -1,0 +1,99 @@
+"""
+Configuration settings for the eeglearn package.
+
+This module provides a central configuration system for the entire package,
+ensuring consistent settings across all components.
+
+Created on: March 2025
+Author: Udesh Habaraduwa
+"""
+import torch
+from pathlib import Path
+class Config:
+    """
+    Central configuration class for eeglearn.
+    
+    This class serves as a single source of truth for configuration settings,
+    particularly focused on reproducibility settings for scientific research.
+    """
+
+    # Development settings
+    experiment_name = "fine_tune_tuur_data"
+    optuna :bool = False
+    load_data_split_from  = "turr_all_data_train_test_valid_split.pt"
+    # Reproducibility settings
+    RANDOM_SEED = 42
+    DETERMINISTIC = True
+    k_folds = 5
+
+    # Training hyperparameters
+    epochs = 100
+    batch_size = 256 # <---- classification head
+    lr = 0.0021038517158496486 # <---- classification head
+    weight_decay = 4.541224884402343e-05 # <---- classification head
+    drop_rate = 0.15616210584529844 # <---- classification head
+    stop_at = 10
+
+    # Data selection
+    testing_on_sample_data = False
+    use_class_weighting = False
+    p_train = 0.8
+    sample_proportion_of_data = 1.0
+    use_tuur_smolder_data = True
+    drop_last = True
+    skip_bads = True
+    main_classes : list[str] = ["ADHD", "HEALTHY", "MDD", "OCD", "SMC"]
+    use_stratify = True
+    if testing_on_sample_data:
+        use_stratify = False
+        main_classes : list[str] = ["ADHD","MDD", "SMC", "OCD"]
+
+    # Linear layers
+    linear_size = 256 
+    n_eeg_channels = 26
+
+    # Parameters for pre-trained GCN feature extractor
+    pretrained_weights_path = "/mnt/disk2/thesis/eeg-graph-learning/data/weights/no_cv/self_supervised/tuur_data/tuur_data_self_supervised_best_model_val_loss_1.4332_epoch_47.pt"
+    pretrained_gcn_out_size = 32  # Example: Must match your actual SSL model
+    pretrained_k = 1              # Example: Must match your actual SSL model
+    pretrained_linear_size = 256  # Example: Must match your actual SSL model's HF/HS linear_size
+    pretrained_drop_rate =  0.2710446660301302     # Example: Must match your actual SSL model's HF/HS drop_rate
+    
+    num_workers = 8
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps'\
+                           if torch.backends.mps.is_available() else 'cpu')
+    
+
+    # Path configurations
+    project_root : Path = Path(__file__).resolve().parent.parent
+    data_path : Path = project_root / 'data'
+    cleaned_data_path : Path = data_path / 'cleaned'
+    energy_path : Path = data_path / 'energy'
+    model_weights_dir : Path = data_path / 'weights'
+    metrics_dir : Path = data_path / 'metrics'    
+
+    # classes from :
+    # https://www.frontiersin.org/journals/aging-neuroscience/articles/10.3389/fnagi.2022.1019869/full#supplementary-material
+    # main_classes : list[str] = [
+    #     "MDD", "UNKNOWN", "ADHD", "SMC", "OCD", "HEALTHY", "INSOMNIA",
+    #     "TINNITUS", "PARKINSON", "Dyslexia", "CHRONIC PAIN", "BURNOUT"
+    # ]
+    @classmethod
+    def set_global_seed(cls, verbose=False):
+        """
+        Set random seed across all libraries from a single source of truth.
+        
+        This method centralizes the seed setting process to ensure consistent
+        reproducibility across the entire codebase.
+        
+        Args:
+            verbose (bool): Whether to print a message when setting the seed.
+                            Set to True only in the main process, not in worker processes.
+                            Default: False
+        
+        Returns:
+            int: The random seed that was set
+        """
+        from eeglearn.utils.seed import set_seed
+        set_seed(cls.RANDOM_SEED, cls.DETERMINISTIC, verbose=verbose)
+        return cls.RANDOM_SEED 
