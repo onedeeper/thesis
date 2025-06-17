@@ -95,10 +95,11 @@ def train(trial: optuna.Trial = None) -> float:
         }
     }
 
-    print_training_params()
+    print_training_params(is_baseline=True)
     setup_directories({"weights" : model_weights_dir, 
                        "metrics" : metrics_dir,
                        "eeg_net_data_dir" : eeg_net_data_folder})
+    
     # Check and print device information
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
@@ -182,14 +183,6 @@ def train(trial: optuna.Trial = None) -> float:
     }
 
     print(f"⚠️  Training for epochs: {epochs}")
-
-    net = EEGNet(
-        n_channels=n_channels,  
-        n_timepoints=n_timepoints,  
-        n_classes=n_classes, 
-        kernel_length=kernel_length,
-        dropout_rate=drop_rate
-    ).to(device)
 
     criterion = nn.CrossEntropyLoss(weight=rescaled_class_weights).to(device)
     if not Config.use_class_weighting:

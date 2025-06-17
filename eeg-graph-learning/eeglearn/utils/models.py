@@ -303,17 +303,25 @@ def create_graph_list(participants: list, encoder: LabelEncoder,
     return graph_lists
 
 
-def print_training_params():
+def print_training_params(is_baseline : bool = False):
     """Print training configuration parameters."""
+    if is_baseline:
+        gcn_out_size = "None"
+        linear_size = "None"
+        K = "None"
+    else:
+        gcn_out_size = Config.gcn_out_size
+        linear_size = Config.linear_size
+        K = Config.K
     params = {
         'Batch Size': Config.batch_size,
         'Epochs': Config.epochs,
         'Learning Rate': Config.lr,
         'Weight Decay': Config.weight_decay,
         'Dropout Rate': Config.drop_rate,
-        'GCN Output Size': Config.gcn_out_size,
-        'Linear Layer Size': Config.linear_size,
-        'Chebyshev Order (K)': Config.K,
+        'GCN Output Size': gcn_out_size,
+        'Linear Layer Size': linear_size,
+        'Chebyshev Order (K)': K,
         'Early Stopping Patience': Config.stop_at,
         'Optuna Mode': Config.optuna
     }

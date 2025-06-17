@@ -428,8 +428,8 @@ class Graphs():
 
         assert len(edge_weight) == len(col) == len(row),\
             "Expected each edge to have a weight."
-        return (torch.Tensor(row).long(), # Ensure row indices are Long
-                torch.Tensor(col).long(), # Ensure col indices are Long
+        return (torch.Tensor(row).long(), 
+                torch.Tensor(col).long(), 
                 torch.Tensor(edge_weight).float())
     
 if __name__ == "__main__":

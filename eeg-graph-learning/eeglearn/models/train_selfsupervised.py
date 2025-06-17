@@ -72,8 +72,60 @@ def train(trial: optuna.Trial = None) -> float:
     K = Config.K
     stop_at = Config.stop_at
     
+    # Model configuration for saving
+    model_config = {
+        'model_type': 'SelfSupervisedTrain',
+        'input_channels': 5,
+        'gcn_out_size': gcn_out_size,
+        'batch_size': batch_size,
+        'K': K,
+        'linear_size': linear_size,
+        'drop_rate': drop_rate,
+        'HF': 120,
+        'HS': 128,
+        'training_params': {
+            'epochs': epochs,
+            'learning_rate': lr,
+            'weight_decay': weight_decay,
+            'early_stopping_patience': stop_at,
+            'scheduler': 'ReduceLROnPlateau',
+            'scheduler_params': {
+                'mode': 'min',
+                'factor': 0.1,
+                'patience': 4,
+                'threshold': 0.0001,
+                'threshold_mode': 'rel',
+                'cooldown': 1,
+                'min_lr': 0,
+                'eps': 1e-8
+            },
+            'optimizer': 'Adam',
+            'loss_function': 'CrossEntropyLoss',
+            'automatic_loss_weighting': True
+        }
+    }
+    
     print_training_params()
     setup_directories({"weights": model_weights_dir, "metrics": metrics_dir})
+
+    net = SelfSupervisedTrain(
+            inchannel=5, 
+            gcn_out_size=gcn_out_size, 
+            batch=batch_size, 
+            K=K,
+            linear_size=linear_size,
+            drop_rate=drop_rate,
+            HF=120, 
+            HS=128
+        ).to(device)
+    # Save model configuration
+    print(net)
+    model_config_filename = get_experiment_filename("model_config_self_supervised", "json")
+    with open(metrics_dir / model_config_filename, 'w') as f:
+        json.dump(model_config, f, indent=4)
+    print(f"📝 Model configuration saved to: {model_config_filename}")
+
+    return
     
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
@@ -90,6 +142,14 @@ def train(trial: optuna.Trial = None) -> float:
     train_participants = split['train']
     validation_participants = split['valid']
     test_participants = split['test']
+    
+    # Add data split info to model config
+    model_config['data_split'] = {
+        'n_train_participants': len(train_participants),
+        'n_validation_participants': len(validation_participants),
+        'n_test_participants': len(test_participants),
+        'load_data_split_from': Config.load_data_split_from if Config.load_data_split_from != "" else None
+    }
     
     print("⚠️  Participants split:")
     for split_name, participants in [("train", train_participants), 
@@ -293,6 +353,13 @@ def train(trial: optuna.Trial = None) -> float:
     # Save metrics
     metrics_filename = get_experiment_filename("training_metrics_self_supervised", "csv")
     pd.DataFrame(metrics).to_csv(metrics_dir / metrics_filename, index=False)
+    print(f"📊 Training metrics saved to: {metrics_filename}")
+    
+    # Save model configuration
+    model_config_filename = get_experiment_filename("model_config_self_supervised", "json")
+    with open(metrics_dir / model_config_filename, 'w') as f:
+        json.dump(model_config, f, indent=4)
+    print(f"📝 Model configuration saved to: {model_config_filename}")
     
     return best_val_loss
 

@@ -92,9 +92,45 @@ def train():
     model_weights_dir = Config.model_weights_dir / "fine_tune"
     model_metrics_dir = Config.metrics_dir / "fine_tune"
 
-    print_training_params()
-    setup_directories({"weights": model_weights_dir, "metrics": model_metrics_dir})
+    # Model configuration for saving
+    model_config = {
+        'model_type': 'JointlyTrainModel_FineTuned',
+        'input_channels': 5,
+        'gcn_out_size': Config.pretrained_gcn_out_size,  # Fixed from pre-trained SSL model
+        'batch_size': batch_size,
+        'K': Config.pretrained_k,  # Fixed from pre-trained SSL model
+        'linear_size': Config.pretrained_linear_size,  # For HF/HS, fixed from pre-trained SSL model
+        'drop_rate': Config.pretrained_drop_rate,  # For HF/HS, fixed from pre-trained SSL model
+        'linear_size_hc': hc_linear_size,  # For HC head
+        'drop_rate_hc': hc_drop_rate,  # For HC head
+        'HF': 120,
+        'HS': 128,
+        'pretrained_weights_path': str(pretrained_weights_path),
+        'training_params': {
+            'epochs': epochs,
+            'learning_rate': lr,
+            'weight_decay': weight_decay,
+            'early_stopping_patience': stop_at,
+            'scheduler': 'ReduceLROnPlateau',
+            'scheduler_params': {
+                'mode': 'min',
+                'factor': 0.1,
+                'patience': 4,
+                'threshold': 0.0001,
+                'threshold_mode': 'rel',
+                'cooldown': 1,
+                'min_lr': 0,
+                'eps': 1e-8
+            },
+            'optimizer': 'Adam',
+            'loss_function': 'CrossEntropyLoss',
+            'use_class_weighting': Config.use_class_weighting
+        }
+    }
 
+    #print_training_params()
+    setup_directories({"weights": model_weights_dir, "metrics": model_metrics_dir})
+    
     # Check and print device information
     if torch.cuda.is_available():
         print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
@@ -105,6 +141,11 @@ def train():
 
     # Setup data
     encoder, n_classes = setup_label_encoder(ignore_replication_nans=True)
+    
+    # Add n_classes to model config
+    model_config['n_classes'] = n_classes
+    model_config['HC'] = n_classes
+    
     all_psych_labels = get_labels_dict()
     
     if Config.load_data_split_from != "":
@@ -116,6 +157,14 @@ def train():
     train_participants = split['train']
     validation_participants = split['valid']
     test_participants = split['test']
+    
+    # Add data split info to model config
+    model_config['data_split'] = {
+        'n_train_participants': len(train_participants),
+        'n_validation_participants': len(validation_participants),
+        'n_test_participants': len(test_participants),
+        'load_data_split_from': Config.load_data_split_from if Config.load_data_split_from != "" else None
+    }
     
     print("⚠️  Participants split:")
     for split_name, participants in [("train", train_participants), 
@@ -306,6 +355,13 @@ def train():
     # Save metrics to CSV
     metrics_filename = get_experiment_filename("training_metrics_fine_tune", "csv")
     pd.DataFrame(metrics).to_csv(model_metrics_dir / metrics_filename, index=False)
+    print(f"📊 Training metrics saved to: {metrics_filename}")
+    
+    # Save model configuration
+    model_config_filename = get_experiment_filename("model_config_fine_tune", "json")
+    with open(model_metrics_dir / model_config_filename, 'w') as f:
+        json.dump(model_config, f, indent=4)
+    print(f"📝 Model configuration saved to: {model_config_filename}")
     
     return best_val_f1_macro
 
@@ -662,4 +718,5 @@ def train_with_kfold_cv(k_folds: int = 5) -> dict:
 
 
 if __name__ == "__main__":
-    train_with_kfold_cv(k_folds=Config.k_folds)
+    #train_with_kfold_cv(k_folds=Config.k_folds)
+    train()
