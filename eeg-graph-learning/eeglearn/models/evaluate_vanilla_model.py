@@ -7,7 +7,7 @@ import seaborn as sns
 from sklearn.metrics import f1_score, confusion_matrix, classification_report, precision_recall_fscore_support
 from eeglearn.config import Config
 from eeglearn.models.models import VanillaGraphModel
-from eeglearn.utils.models import setup_label_encoder
+from eeglearn.utils.models import setup_label_encoder, bootstrap_ci_f1
 from eeglearn.utils.models import create_graph_loaders
 
 def evaluate():
@@ -40,7 +40,7 @@ def evaluate():
     ).to(device)
 
     # Load model weights
-    model_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/best_models/all_data/all_data_best_model_jointly.pkl"
+    model_path = "/mnt/disk2/thesis/eeg-graph-learning/data/weights/best_models/tuur_data/tuur_data_best_model_vanilla.pkl"
     checkpoint = torch.load(model_path, map_location=device)
     
     # Try to load state dict
@@ -64,7 +64,7 @@ def evaluate():
     model.eval()
 
     # Load test data
-    test_graphs_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/graph_list/all_data_class_weighting_jointly_test_original_graph_list.pt"
+    test_graphs_path = "/mnt/disk2/thesis/eeg-graph-learning/data/weights/best_models/testing_data/tuur_data_test_original_graph_list.pt"
     test_graphs = torch.load(test_graphs_path)
     test_loader = create_graph_loaders(data_split_type="test",
                                        batch_size=Config.batch_size,
@@ -110,21 +110,31 @@ def evaluate():
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(data.y.cpu().numpy())
 
+    all_preds_np = np.array(all_preds)
+    all_labels_np = np.array(all_labels)
+
     avg_loss = total_loss / len(test_loader['original'])
-    accuracy = np.mean(np.array(all_preds) == np.array(all_labels))
-    f1_weighted = f1_score(all_labels, all_preds, average='weighted', zero_division=0)
-    f1_macro = f1_score(all_labels, all_preds, average='macro', zero_division=0)
-    f1_micro = f1_score(all_labels, all_preds, average='micro', zero_division=0)
+    accuracy = np.mean(all_preds_np == all_labels_np)
+    f1_weighted = f1_score(all_labels_np, all_preds_np, average='weighted', zero_division=0)
+    f1_macro = f1_score(all_labels_np, all_preds_np, average='macro', zero_division=0)
+    f1_micro = f1_score(all_labels_np, all_preds_np, average='micro', zero_division=0)
     
+    # Bootstrap macro F1
+    print("\nCalculating bootstrapped confidence interval for Macro and Micro F1-score (B=5000)...")
+    f1_macro_both, f1_micro_both = bootstrap_ci_f1(all_labels_np, all_preds_np)
+    f1_macro_mean, f1_macro_ci = f1_macro_both
+    f1_micro_mean, f1_micro_ci = f1_micro_both
+    print("...done.")
+
     # Calculate precision, recall, and F1-score for each class
     precision, recall, f1_per_class, support = precision_recall_fscore_support(
-        all_labels, all_preds, average=None, zero_division=0
+        all_labels_np, all_preds_np, average=None, zero_division=0
     )
     
     # Decode labels back to original classes for reporting
     class_names = list(encoder.classes_)
-    decoded_true = encoder.inverse_transform(all_labels)
-    decoded_pred = encoder.inverse_transform(all_preds)
+    decoded_true = encoder.inverse_transform(all_labels_np)
+    decoded_pred = encoder.inverse_transform(all_preds_np)
     
     # Print comprehensive metrics
     print("\n" + "="*60)
@@ -133,7 +143,9 @@ def evaluate():
     print(f"Test Loss: {avg_loss:.4f}")
     print(f"Accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
     print(f"Macro F1-Score: {f1_macro:.4f}")
+    print(f"  - Bootstrapped Mean (95% CI): {f1_macro_mean:.4f} ({f1_macro_ci[0]:.4f} - {f1_macro_ci[1]:.4f})")
     print(f"Micro F1-Score: {f1_micro:.4f}")
+    print(f"  - Bootstrapped Mean (95% CI): {f1_micro_mean:.4f} ({f1_micro_ci[0]:.4f} - {f1_micro_ci[1]:.4f})")
     print(f"Weighted F1-Score: {f1_weighted:.4f}")
     
     # Calculate macro and weighted precision/recall
@@ -157,14 +169,14 @@ def evaluate():
     # Detailed classification report
     print("\nDetailed Classification Report:")
     print("-" * 80)
-    print(classification_report(all_labels, all_preds, target_names=class_names, zero_division=0))
+    print(classification_report(all_labels_np, all_preds_np, target_names=class_names, zero_division=0))
     
     # Set up seaborn style - white background, no grid
     sns.set_style("white")
     sns.despine()
     
     # 1. Confusion Matrix
-    cm = confusion_matrix(all_labels, all_preds)
+    cm = confusion_matrix(all_labels_np, all_preds_np)
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
                 xticklabels=class_names, yticklabels=class_names,
@@ -227,7 +239,7 @@ def evaluate():
     plt.show()
     
     # 4. Class Distribution in Test Set
-    unique_labels, counts = np.unique(all_labels, return_counts=True)
+    unique_labels, counts = np.unique(all_labels_np, return_counts=True)
     class_distribution = [counts[i] for i in range(len(class_names))]
     
     fig, ax = plt.subplots(figsize=(10, 4))

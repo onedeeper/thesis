@@ -47,7 +47,7 @@ def evaluate():
     ).to(device)
 
     # Load model weights
-    model_path = "/Users/udeshhabaraduwa/thesis _local/thesis/eeg-graph-learning/data/weights/best_models/all_data/all_data_best_model_self_supervised.pt"
+    model_path = "/mnt/disk2/thesis/eeg-graph-learning/data/weights/best_models/tuur_data/tuur_data_best_model_self_supervised.pt"
     checkpoint = torch.load(model_path, map_location=device)
     
     # Try to load state dict

@@ -871,3 +871,34 @@ def create_time_series_data_dataloader(participants : list[str],
                             num_workers=num_workers)
     return dataloader
     
+
+def bootstrap_ci_f1(y_true, y_pred, B=5000, seed=42, alpha=0.05):
+    """Calculate bootstrapped confidence interval for macro F1-score.
+
+    Parameters:
+        y_true (np.ndarray): Array of true labels.
+        y_pred (np.ndarray): Array of predicted labels.
+        B (int): Number of bootstrap samples. Defaults to 5000.
+        seed (int): Random seed for reproducibility. Defaults to 42.
+        alpha (float): Significance level for the confidence interval. Defaults to 0.05.
+
+    Returns:
+        tuple: A tuple containing:
+            - float: The mean of the bootstrapped macro F1-scores.
+            - tuple: A tuple containing the lower and upper bounds of the confidence interval.
+
+    WRITTEN WITH AI 
+    REVIEWED AND VERIFIED BY AUTHOR
+    """
+    rng = np.random.default_rng(seed)
+    n = len(y_true)
+    stats_macro = np.empty(B)
+    stats_micro = np.empty(B)
+    for b in range(B):
+        idx = rng.integers(0, n, n)
+        stats_macro[b] = f1_score(y_true[idx], y_pred[idx], average='macro', zero_division=0)
+        stats_micro[b] = f1_score(y_true[idx], y_pred[idx], average='micro', zero_division=0)
+
+    lower_macro, upper_macro = np.percentile(stats_macro, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    lower_micro, upper_micro = np.percentile(stats_micro, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return ((stats_macro.mean(), (lower_macro, upper_macro)),(stats_micro.mean(), (lower_micro, upper_micro)))
