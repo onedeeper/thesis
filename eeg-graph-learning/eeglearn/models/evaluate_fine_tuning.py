@@ -16,12 +16,11 @@ def evaluate():
     Load a fine-tuned model (where only classification head was trained), 
     evaluate it on the test set, and generate comprehensive performance metrics and visualizations.
     
-    This function evaluates a model that was fine-tuned using the transfer learning approach
-    where self-supervised weights were loaded and only the classification head (HC) was trained
-    while the encoder layers (conv1, HF, HS) were frozen.
-    
     Returns:
         None: Prints metrics and saves visualization plots.
+
+    WRITTEN WITH AI
+    INSPECTED AND VERIFIED BY AUTHOR
     """
     device = Config.device
     encoder, n_classes = setup_label_encoder(ignore_replication_nans=True)

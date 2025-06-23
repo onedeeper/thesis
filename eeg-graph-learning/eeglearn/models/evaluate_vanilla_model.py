@@ -16,6 +16,9 @@ def evaluate():
     
     Returns:
         None: Prints metrics and saves visualization plots.
+
+    WRITTEN WITH AI
+    INSPECTED AND VERIFIED BY AUTHOR
     """
     device = Config.device
     encoder, n_classes = setup_label_encoder(ignore_replication_nans=True)

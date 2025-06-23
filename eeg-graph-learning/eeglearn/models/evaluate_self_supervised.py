@@ -17,6 +17,9 @@ def evaluate():
     
     Returns:
         None: Prints metrics and saves visualization plots.
+
+    WRITTEN WITH AI
+    INSPECTED AND VERIFIED BY AUTHOR
     """
     device = Config.device
     # Note: For self-supervised pretext tasks, we don't need label encoder
